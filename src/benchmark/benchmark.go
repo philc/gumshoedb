@@ -150,21 +150,10 @@ func initByteMatrix() uintptr {
 		}
 	}
 	return uintptr(unsafe.Pointer(&matrix))
-	// slice := make([]int32, ROWS * COLS)
-	// var matrix uintptr = (uintptr)(unsafe.Pointer(&slice[0]))
-	// for i := 0; i < ROWS; i++ {
-	// 	for j := 0; j < COLS; j++ {
-	// 		setValue(matrix, i, j, int32(i))
-	// 	}
-	// }
-	// return matrix
 }
 
 func createArrayMatrix() *[ROWS][COLS]int32 {
 	matrix := *(new([ROWS][COLS]int32))
-	for i := 0; i < len(matrix); i++ {
-		// matrix[i] = new([COLS]int32)
-	}
 	for i := 0; i < len(matrix); i++ {
 		matrix[i][0] = int32(i)
 	}
