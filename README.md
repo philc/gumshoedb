@@ -39,10 +39,10 @@ Result:
 
 {
   results:
-    [{date: "2013-12-01", country: "Japan", clicks: 123, count: 145},
-     {date: "2013-12-01", country: "USA", clicks: 123, count: 145},
-     {date: "2013-12-02", country: "Japan", clicks: 123, count: 145},
-     {date: "2013-12-02", country: "USA", clicks: 123, count: 145}]
+    [{date: "2013-12-01", country: "Japan", clicks: 123, rowCount: 145},
+     {date: "2013-12-01", country: "USA", clicks: 123, rowCount: 145},
+     {date: "2013-12-02", country: "Japan", clicks: 123, rowCount: 145},
+     {date: "2013-12-02", country: "USA", clicks: 123, rowCount: 145}]
 }
 
 Notes:
