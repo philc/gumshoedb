@@ -6,6 +6,7 @@ Implementation plan
 
 Performance ideas
 * Use pointer arithmetic to iterate through arrays of dynamic size (e.g. column filter count)
+* Use vectors instead of hashmaps for low-cardinality group-bys
 
 Performance results
 * Assigning to hashes (for grouping) is much slower than grouping by array.
