@@ -12,24 +12,24 @@ type Cell float32
 type FactRow [COLS]Cell
 
 type FactTable struct {
-	Rows [ROWS]FactRow
+	Rows               [ROWS]FactRow
 	NextInsertPosition int
 	// The number of used rows in the table. This is <= ROWS.
-	Count int
+	Count    int
 	Capacity int
 	// A mapping of column index => column's dimension table.
 	DimensionTables [COLS]*DimensionTable
 }
 
 type DimensionTable struct {
-  Rows []string
+	Rows      []string
 	ValueToId map[string]int32
 }
 
 func NewDimensionTable() *DimensionTable {
-  table := new(DimensionTable)
+	table := new(DimensionTable)
 	table.ValueToId = make(map[string]int32)
-  return table
+	return table
 }
 
 type RowAggregate struct {
@@ -38,19 +38,18 @@ type RowAggregate struct {
 	count        int
 }
 
-type FactTableFilterFunc func(*FactRow) bool;
+type FactTableFilterFunc func(*FactRow) bool
 
 var columnNameToIndex = map[string]int{
-	"at":      0,
-	"country": 1,
+	"at":          0,
+	"country":     1,
 	"impressions": 2,
-	"clicks": 3,
+	"clicks":      3,
 }
 
 var columnIndexToName = []string{
 	"at", "country", "impressions", "clicks",
 }
-
 
 func NewFactTable() *FactTable {
 	table := new(FactTable)
@@ -63,14 +62,14 @@ func NewFactTable() *FactTable {
 
 func populateTableWithTestingData(table *FactTable) {
 	rows := make([]map[string]Untyped, 0, ROWS)
-	countries := map[int]string {
+	countries := map[int]string{
 		0: "Japan",
 		1: "USA",
 	}
 	for i := 0; i < len(table.Rows); i++ {
 		row := make(map[string]Untyped)
 		row["at"] = i
-		row["country"] = countries[i % 2]
+		row["country"] = countries[i%2]
 		rows = append(rows, row)
 	}
 
@@ -87,7 +86,7 @@ func convertRowMapToRowArray(rowMap map[string]Untyped) []Untyped {
 		if !ok {
 			// TODO(philc): Return an error here if there's an unrecognizable column.
 		}
-    result[columnIndex] = value
+		result[columnIndex] = value
 	}
 	return result
 }
@@ -168,7 +167,8 @@ func scanTable(table *FactTable, filters []FactTableFilterFunc, columnIndices []
 	// When the query has no group-by, we tally results into a single RowAggregate.
 	rowAggregate := new(RowAggregate)
 
-	outerLoop: for i, row := range table.Rows {
+outerLoop:
+	for i, row := range table.Rows {
 		if i >= table.Count {
 			break
 		}
@@ -235,7 +235,7 @@ func convertQueryFilterToFilterFunc(queryFilter QueryFilter) FactTableFilterFunc
 	value := Cell(convertUntypedToFloat64(queryFilter.Value))
 	var f FactTableFilterFunc
 	switch queryFilter.Type {
-		// TODO(philc): Add <= and >= once this turns out to be useful.
+	// TODO(philc): Add <= and >= once this turns out to be useful.
 	case "greaterThan", ">":
 		f = func(row *FactRow) bool {
 			return row[columnIndex] > value
