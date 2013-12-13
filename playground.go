@@ -38,6 +38,8 @@ type RowAggregate struct {
 	count        int
 }
 
+type FactTableFilterFunc func(*FactRow) bool;
+
 var columnNameToIndex = map[string]int{
 	"at":      0,
 	"country": 1,
@@ -107,21 +109,21 @@ func isString(value interface{}) bool {
 	return result
 }
 
-func convertUntypedToCell(v Untyped) Cell {
-	var result Cell
+func convertUntypedToFloat64(v Untyped) float64 {
+	var result float64
 	switch v.(type) {
 	case float32:
-		result = Cell(v.(float32))
+		result = float64(v.(float32))
 	case float64:
-		result = Cell(v.(float64))
+		result = v.(float64)
 	case int:
-		result = Cell(v.(int))
+		result = float64(v.(int))
 	case int8:
-		result = Cell(v.(int8))
+		result = float64(v.(int8))
 	case int32:
-		result = Cell(v.(int32))
+		result = float64(v.(int32))
 	case int64:
-		result = Cell(v.(int64))
+		result = float64(v.(int64))
 	}
 	return result
 }
@@ -142,7 +144,7 @@ func normalizeRow(table *FactTable, jsonRow []Untyped) FactRow {
 			}
 			row[columnIndex] = Cell(dimensionRowId)
 		} else {
-			row[columnIndex] = convertUntypedToCell(value)
+			row[columnIndex] = Cell(convertUntypedToFloat64(value))
 		}
 	}
 	return row
@@ -157,7 +159,7 @@ func insertNormalizedRow(table *FactTable, row FactRow) {
 }
 
 // TODO(philc): Can I change this return value to a slice of RowAggregates?
-func runQuery(table *FactTable, filters []func(*FactRow) bool, columnIndices []int,
+func scanTable(table *FactTable, filters []FactTableFilterFunc, columnIndices []int,
 	groupByColumnName string) []RowAggregate {
 	columnIndexToGroupBy, useGrouping := columnNameToIndex[groupByColumnName]
 	// This maps the values of the group-by column => RowAggregate.
@@ -227,20 +229,50 @@ func mapRowAggregatesToJsonResults(query Query, rowAggregates []RowAggregate) []
 	return jsonRows
 }
 
+func convertQueryFilterToFilterFunc(queryFilter QueryFilter) FactTableFilterFunc {
+	columnIndex := columnNameToIndex[queryFilter.Column]
+	// TODO(philc): We're assuming this is a float for now.
+	value := Cell(convertUntypedToFloat64(queryFilter.Value))
+	var f FactTableFilterFunc
+	switch queryFilter.Type {
+		// TODO(philc): Add <= and >= once this turns out to be useful.
+	case "greaterThan", ">":
+		f = func(row *FactRow) bool {
+			return row[columnIndex] > value
+		}
+	case "lessThan", "<":
+		f = func(row *FactRow) bool {
+			return row[columnIndex] < value
+		}
+	case "equal", "=":
+		f = func(row *FactRow) bool {
+			return row[columnIndex] == value
+		}
+	}
+	return f
+}
+
 func invokeQuery(table *FactTable) {
 	jsonString := `{"aggregates": [
   {"type": "sum", "name": "countrySum", "column": "country"},
-  {"type": "sum", "name": "atSum", "column": "at"}
-],
+  {"type": "sum", "name": "atSum", "column": "at"}],
+  "filters": [{"type": "greaterThan", "column": "at", "value": 2}],
  "groupings": [{"column": "country", "name":"country1"}]
 }`
 	query := ParseJsonQuery(jsonString)
+
 	columnIndicies := getColumnIndiciesFromQuery(query)
 	var groupByColumn string
 	if len(query.Groupings) > 0 {
 		groupByColumn = query.Groupings[0].Column
 	}
-	results := runQuery(table, nil, columnIndicies, groupByColumn)
+
+	filterFuncs := make([]FactTableFilterFunc, 0, len(query.Filters))
+	for _, queryFilter := range query.Filters {
+		filterFuncs = append(filterFuncs, convertQueryFilterToFilterFunc(queryFilter))
+	}
+
+	results := scanTable(table, filterFuncs, columnIndicies, groupByColumn)
 	fmt.Println("RowAggregate Results:")
 	for _, result := range results {
 		fmt.Println(result)

@@ -21,18 +21,10 @@ type QueryGrouping struct {
 type QueryFilter struct {
 	Type string
 	Column string
-	value Untyped
+	Value Untyped
 }
 
-// type Query struct {
-// 	Aggregates []QueryAggregate
-// 	Groupings  []QueryGrouping
-// }
-
 type Untyped interface{}
-
-// type JsonQueryGrouping struct {
-// 	timeFunction
 
 type Query struct {
 	Table      string
@@ -49,10 +41,3 @@ func ParseJsonQuery(jsonString string) Query {
 	}
 	return result
 }
-
-// grouppBy []JsonQueryGrouping
-
-// filter [](map[string]
-
-// Goal: Transform the JSON data structure into something that can he deconstructed and passed
-// to the query function
