@@ -76,7 +76,6 @@ func populateTableWithTestingData(table *FactTable) {
 		normalizedRow := normalizeRow(table, convertRowMapToRowArray(row))
 		insertNormalizedRow(table, normalizedRow)
 	}
-
 }
 
 func convertRowMapToRowArray(rowMap map[string]Untyped) []Untyped {
@@ -167,17 +166,14 @@ func runQuery(table *FactTable, filters []func(*FactRow) bool, columnIndices []i
 	// When the query has no group-by, we tally results into a single RowAggregate.
 	rowAggregate := new(RowAggregate)
 
-	for _, row := range table.Rows {
-		filtered := false
+	outerLoop: for i, row := range table.Rows {
+		if i >= table.Count {
+			break
+		}
 		for _, filter := range filters {
 			if !filter(&row) {
-				filtered = true
-				break
+				continue outerLoop
 			}
-		}
-
-		if filtered {
-			continue
 		}
 
 		if useGrouping {
