@@ -1,9 +1,11 @@
-package main
+package core
 
 import (
 	json "encoding/json"
 	"fmt"
 )
+
+type Untyped interface{}
 
 type QueryAggregate struct {
 	Type string
@@ -23,8 +25,6 @@ type QueryFilter struct {
 	Column string
 	Value Untyped
 }
-
-type Untyped interface{}
 
 type Query struct {
 	Table      string
