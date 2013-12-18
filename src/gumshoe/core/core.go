@@ -73,6 +73,11 @@ func populateTableWithTestingData(table *FactTable) {
 		rows = append(rows, row)
 	}
 
+	insertRowsAsMaps(table, rows)
+}
+
+// Inserts the given rows into the table.
+func insertRowsAsMaps(table *FactTable, rows []map[string]Untyped) {
 	for _, row := range rows {
 		normalizedRow := normalizeRow(table, convertRowMapToRowArray(row))
 		insertNormalizedRow(table, normalizedRow)
@@ -127,9 +132,9 @@ func convertUntypedToFloat64(v Untyped) float64 {
 	return result
 }
 
-// Takes a row of mixed types, like strings and ints. For every string column, replaces its value with the
-// matching ID from the dimension table, inserting a row into the dimension table if one doesn't already
-// exist.
+// Takes a row of mixed types, like strings and ints, and converts it to a FactRow. For every string column,
+// replaces its value with the matching ID from the dimension table, inserting a row into the dimension table
+// if one doesn't already exist.
 func normalizeRow(table *FactTable, jsonRow []Untyped) FactRow {
 	var row FactRow
 	for columnIndex, value := range jsonRow {
