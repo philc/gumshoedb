@@ -3,8 +3,8 @@ package core
 import "testing"
 
 func TestEndToEnd(t *testing.T) {
-	table := NewFactTable()
+	table := NewFactTable([]string{"at", "country", "impressions", "clicks"})
 	populateTableWithTestingData(table)
 	invokeQuery(table)
-	t.Errorf("yo")
+	t.Errorf("fail")
 }

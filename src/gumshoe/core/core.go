@@ -18,7 +18,9 @@ type FactTable struct {
 	Count    int
 	Capacity int
 	// A mapping of column index => column's dimension table.
-	DimensionTables [COLS]*DimensionTable
+	DimensionTables   [COLS]*DimensionTable
+	ColumnNameToIndex map[string]int
+	ColumnIndexToName []string
 }
 
 type DimensionTable struct {
@@ -40,23 +42,18 @@ type RowAggregate struct {
 
 type FactTableFilterFunc func(*FactRow) bool
 
-var columnNameToIndex = map[string]int{
-	"at":          0,
-	"country":     1,
-	"impressions": 2,
-	"clicks":      3,
-}
-
-var columnIndexToName = []string{
-	"at", "country", "impressions", "clicks",
-}
-
-func NewFactTable() *FactTable {
+func NewFactTable(columnNames []string) *FactTable {
 	table := new(FactTable)
 	for i, _ := range table.DimensionTables {
 		table.DimensionTables[i] = NewDimensionTable()
 	}
 	table.Capacity = len(table.Rows)
+	table.ColumnIndexToName = make([]string, len(columnNames))
+	table.ColumnNameToIndex = make(map[string]int, len(columnNames))
+	for i, name := range columnNames {
+		table.ColumnIndexToName[i] = name
+		table.ColumnNameToIndex[name] = i
+	}
 	return table
 }
 
@@ -79,15 +76,15 @@ func populateTableWithTestingData(table *FactTable) {
 // Inserts the given rows into the table.
 func insertRowsAsMaps(table *FactTable, rows []map[string]Untyped) {
 	for _, row := range rows {
-		normalizedRow := normalizeRow(table, convertRowMapToRowArray(row))
+		normalizedRow := normalizeRow(table, convertRowMapToRowArray(table, row))
 		insertNormalizedRow(table, normalizedRow)
 	}
 }
 
-func convertRowMapToRowArray(rowMap map[string]Untyped) []Untyped {
+func convertRowMapToRowArray(table *FactTable, rowMap map[string]Untyped) []Untyped {
 	result := make([]Untyped, COLS)
 	for columnName, value := range rowMap {
-		columnIndex, ok := columnNameToIndex[columnName]
+		columnIndex, ok := table.ColumnNameToIndex[columnName]
 		if !ok {
 			// TODO(philc): Return an error here if there's an unrecognizable column.
 		}
@@ -165,7 +162,7 @@ func insertNormalizedRow(table *FactTable, row FactRow) {
 // TODO(philc): Can I change this return value to a slice of RowAggregates?
 func scanTable(table *FactTable, filters []FactTableFilterFunc, columnIndices []int,
 	groupByColumnName string) []RowAggregate {
-	columnIndexToGroupBy, useGrouping := columnNameToIndex[groupByColumnName]
+	columnIndexToGroupBy, useGrouping := table.ColumnNameToIndex[groupByColumnName]
 	// This maps the values of the group-by column => RowAggregate.
 	// For now, we support only one level of grouping.
 	rowAggregatesMap := make(map[Cell]*RowAggregate)
@@ -212,20 +209,21 @@ outerLoop:
 }
 
 // TODO(philc): This function probably be inlined.
-func getColumnIndiciesFromQuery(query Query) []int {
+func getColumnIndiciesFromQuery(query Query, table *FactTable) []int {
 	columnIndicies := make([]int, 0)
 	for _, queryAggregate := range query.Aggregates {
-		columnIndicies = append(columnIndicies, columnNameToIndex[queryAggregate.Column])
+		columnIndicies = append(columnIndicies, table.ColumnNameToIndex[queryAggregate.Column])
 	}
 	return columnIndicies
 }
 
-func mapRowAggregatesToJsonResults(query Query, rowAggregates []RowAggregate) [](map[string]Untyped) {
+func mapRowAggregatesToJsonResults(query Query, table *FactTable,
+	rowAggregates []RowAggregate) [](map[string]Untyped) {
 	jsonRows := make([](map[string]Untyped), 0)
 	for _, rowAggregate := range rowAggregates {
 		jsonRow := make(map[string]Untyped)
 		for _, queryAggregate := range query.Aggregates {
-			columnIndex := columnNameToIndex[queryAggregate.Column]
+			columnIndex := table.ColumnNameToIndex[queryAggregate.Column]
 			jsonRow[queryAggregate.Name] = rowAggregate.sums[columnIndex]
 		}
 		jsonRow["rowCount"] = rowAggregate.count
@@ -234,8 +232,8 @@ func mapRowAggregatesToJsonResults(query Query, rowAggregates []RowAggregate) []
 	return jsonRows
 }
 
-func convertQueryFilterToFilterFunc(queryFilter QueryFilter) FactTableFilterFunc {
-	columnIndex := columnNameToIndex[queryFilter.Column]
+func convertQueryFilterToFilterFunc(queryFilter QueryFilter, table *FactTable) FactTableFilterFunc {
+	columnIndex := table.ColumnNameToIndex[queryFilter.Column]
 	// TODO(philc): We're assuming this is a float for now.
 	value := Cell(convertUntypedToFloat64(queryFilter.Value))
 	var f FactTableFilterFunc
@@ -266,7 +264,7 @@ func invokeQuery(table *FactTable) {
 }`
 	query := ParseJsonQuery(jsonString)
 
-	columnIndicies := getColumnIndiciesFromQuery(query)
+	columnIndicies := getColumnIndiciesFromQuery(query, table)
 	var groupByColumn string
 	if len(query.Groupings) > 0 {
 		groupByColumn = query.Groupings[0].Column
@@ -274,7 +272,7 @@ func invokeQuery(table *FactTable) {
 
 	filterFuncs := make([]FactTableFilterFunc, 0, len(query.Filters))
 	for _, queryFilter := range query.Filters {
-		filterFuncs = append(filterFuncs, convertQueryFilterToFilterFunc(queryFilter))
+		filterFuncs = append(filterFuncs, convertQueryFilterToFilterFunc(queryFilter, table))
 	}
 
 	results := scanTable(table, filterFuncs, columnIndicies, groupByColumn)
@@ -283,12 +281,13 @@ func invokeQuery(table *FactTable) {
 		fmt.Println(result)
 	}
 	fmt.Println("Json Results:")
-	jsonResultRows := mapRowAggregatesToJsonResults(query, results)
+	jsonResultRows := mapRowAggregatesToJsonResults(query, table, results)
 	fmt.Println(jsonResultRows)
 }
 
 func main() {
-	table := NewFactTable()
+	table := NewFactTable([]string{"at", "country", "impressions", "clicks"})
+
 	populateTableWithTestingData(table)
 	invokeQuery(table)
 	// filters := make([](func(*Row) bool), 1)
