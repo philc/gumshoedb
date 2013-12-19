@@ -5,25 +5,25 @@ Implementation plan
 * If I have a pointer to a value and know its type, how can I pick the right operator to use with it?
 
 Performance ideas
-* Use pointer arithmetic to iterate through arrays of dynamic size (e.g. column filter count)
+-----------------
+* Use pointer arithmetic to iterate through rows of variable width
 * Use vectors instead of hashmaps for low-cardinality group-bys
 
-Performance results
+High-level performance observations
+-----------------------------------
 * Assigning to hashes (for grouping) is much slower than grouping by array.
 * Iterating over two-dimensional slices is twice as slow as simple arrays.
 
 
 Query API design
-
+================
 * Table
 * List of filters
 * List of GroupBy columns
 * Selected aggregates, and their names
 
-What should the result set look like?
-
+Inspiration:
 https://github.com/metamx/druid/wiki/Querying
-
 https://github.com/metamx/druid/wiki/GroupByQuery
 
 Representative query:
@@ -44,6 +44,3 @@ Result:
      {date: "2013-12-02", country: "Japan", clicks: 123, rowCount: 145},
      {date: "2013-12-02", country: "USA", clicks: 123, rowCount: 145}]
 }
-
-Notes:
-* Averages can be done by the caller (dividing one column with the count).
