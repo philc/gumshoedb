@@ -70,27 +70,36 @@ func populateTableWithTestingData(table *FactTable) {
 		rows = append(rows, row)
 	}
 
-	insertRowsAsMaps(table, rows)
+	InsertRowMaps(table, rows)
 }
 
 // Inserts the given rows into the table.
-func insertRowsAsMaps(table *FactTable, rows []map[string]Untyped) {
+func InsertRowMaps(table *FactTable, rows []map[string]Untyped) error {
 	for _, row := range rows {
-		normalizedRow := normalizeRow(table, convertRowMapToRowArray(table, row))
+		rowAsArray, error := convertRowMapToRowArray(table, row)
+		if error != nil {
+			return error
+		}
+		normalizedRow := normalizeRow(table, rowAsArray)
 		insertNormalizedRow(table, normalizedRow)
 	}
+	return nil
 }
 
-func convertRowMapToRowArray(table *FactTable, rowMap map[string]Untyped) []Untyped {
+// Takes a map of column names => values, and returns a row with the column values in the correct position
+// according to the table's schema.
+// Returns an error if there are unrecognized columns, or if a column is missing.
+func convertRowMapToRowArray(table *FactTable, rowMap map[string]Untyped) ([]Untyped, error) {
 	result := make([]Untyped, COLS)
 	for columnName, value := range rowMap {
-		columnIndex, ok := table.ColumnNameToIndex[columnName]
-		if !ok {
+		columnIndex, found := table.ColumnNameToIndex[columnName]
+		if !found {
+			return nil, fmt.Errorf("Unrecognized column name: %s", columnName)
 			// TODO(philc): Return an error here if there's an unrecognizable column.
 		}
 		result[columnIndex] = value
 	}
-	return result
+	return result, nil
 }
 
 func addRowToDimensionTable(dimensionTable *DimensionTable, rowValue string) int32 {
