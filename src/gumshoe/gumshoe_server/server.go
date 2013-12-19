@@ -10,6 +10,13 @@ import (
 
 var table = core.NewFactTable([]string{"at", "country", "impression", "clicks"})
 
+func writeJsonResponse(responseWriter http.ResponseWriter, objectToSerialize interface{}) {
+	jsonResult, _ := json.Marshal(objectToSerialize)
+	// TODO(philc): set a json header
+	// responseWriter.Header()["Content-Type"] = "application/json"
+	fmt.Fprint(responseWriter, string(jsonResult))
+}
+
 func handleImportRoute(responseWriter http.ResponseWriter, request *http.Request) {
 	if request.Method != "PUT" {
 		http.Error(responseWriter, "", 404)
@@ -37,13 +44,28 @@ func handleTableRoute(responseWriter http.ResponseWriter, request *http.Request)
 		http.Error(responseWriter, "", 404)
 		return
 	}
-	jsonResult, _ := json.Marshal(table.Rows)
-	fmt.Fprint(responseWriter, string(jsonResult))
+	writeJsonResponse(responseWriter, &table.Rows)
+}
+
+func handleQueryRoute(responseWriter http.ResponseWriter, request *http.Request) {
+	if request.Method != "POST" {
+		http.Error(responseWriter, "", 404)
+		return
+	}
+	requestBody, _ := ioutil.ReadAll(request.Body)
+	query, error := core.ParseJsonQuery(string(requestBody))
+	if error != nil {
+		fmt.Println(error)
+		http.Error(responseWriter, error.Error(), 500)
+	}
+	results := core.InvokeQuery(table, query)
+	writeJsonResponse(responseWriter, results)
 }
 
 func main() {
 	fmt.Println(core.ROWS)
 	http.HandleFunc("/import", handleImportRoute)
-	http.HandleFunc("/tables", handleTableRoute)
+	http.HandleFunc("/tables/fact", handleTableRoute)
+	http.HandleFunc("/tables/fact/query", handleQueryRoute)
 	http.ListenAndServe(":9000", nil)
 }
