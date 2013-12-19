@@ -264,15 +264,7 @@ func convertQueryFilterToFilterFunc(queryFilter QueryFilter, table *FactTable) F
 	return f
 }
 
-func invokeQuery(table *FactTable) {
-	jsonString := `{"aggregates": [
-  {"type": "sum", "name": "countrySum", "column": "country"},
-  {"type": "sum", "name": "atSum", "column": "at"}],
-  "filters": [{"type": "greaterThan", "column": "at", "value": 2}],
- "groupings": [{"column": "country", "name":"country1"}]
-}`
-	query, _ := ParseJsonQuery(jsonString)
-
+func InvokeQuery(table *FactTable, query *Query) []map[string]Untyped{
 	columnIndicies := getColumnIndiciesFromQuery(query, table)
 	var groupByColumn string
 	if len(query.Groupings) > 0 {
@@ -292,17 +284,5 @@ func invokeQuery(table *FactTable) {
 	fmt.Println("Json Results:")
 	jsonResultRows := mapRowAggregatesToJsonResults(query, table, results)
 	fmt.Println(jsonResultRows)
-}
-
-func main() {
-	table := NewFactTable([]string{"at", "country", "impressions", "clicks"})
-
-	populateTableWithTestingData(table)
-	invokeQuery(table)
-	// filters := make([](func(*Row) bool), 1)
-	// filters[0] = func(row *Row) bool { return int32(row[0]) % 2 >= 0 }
-	// filters[0] = func(row *Row) bool { return int32(row[0]) % 2 == 1 }
-	// filters[1] = func(row *Row) bool { return int32(row[0]) % 2 == 0 }
-	// columnIndices := []int{1, 2}
-	// results := runQuery(matrix, filters, columnIndices, -1)
+	return jsonResultRows
 }
