@@ -218,7 +218,7 @@ outerLoop:
 }
 
 // TODO(philc): This function probably be inlined.
-func getColumnIndiciesFromQuery(query Query, table *FactTable) []int {
+func getColumnIndiciesFromQuery(query *Query, table *FactTable) []int {
 	columnIndicies := make([]int, 0)
 	for _, queryAggregate := range query.Aggregates {
 		columnIndicies = append(columnIndicies, table.ColumnNameToIndex[queryAggregate.Column])
@@ -226,7 +226,7 @@ func getColumnIndiciesFromQuery(query Query, table *FactTable) []int {
 	return columnIndicies
 }
 
-func mapRowAggregatesToJsonResults(query Query, table *FactTable,
+func mapRowAggregatesToJsonResults(query *Query, table *FactTable,
 	rowAggregates []RowAggregate) [](map[string]Untyped) {
 	jsonRows := make([](map[string]Untyped), 0)
 	for _, rowAggregate := range rowAggregates {
@@ -271,7 +271,7 @@ func invokeQuery(table *FactTable) {
   "filters": [{"type": "greaterThan", "column": "at", "value": 2}],
  "groupings": [{"column": "country", "name":"country1"}]
 }`
-	query := ParseJsonQuery(jsonString)
+	query, _ := ParseJsonQuery(jsonString)
 
 	columnIndicies := getColumnIndiciesFromQuery(query, table)
 	var groupByColumn string

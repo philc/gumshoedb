@@ -2,7 +2,6 @@ package core
 
 import (
 	json "encoding/json"
-	"fmt"
 )
 
 type Untyped interface{}
@@ -33,11 +32,11 @@ type Query struct {
 	Filters []QueryFilter
 }
 
-func ParseJsonQuery(jsonString string) Query {
-	var result Query
-	err := json.Unmarshal([]byte(jsonString), &result)
+func ParseJsonQuery(jsonString string) (*Query, error) {
+	result := new(Query)
+	err := json.Unmarshal([]byte(jsonString), result)
 	if err != nil {
-		fmt.Println(err)
+		return nil, err
 	}
-	return result
+	return result, nil
 }
