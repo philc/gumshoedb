@@ -4,7 +4,6 @@ import "fmt"
 
 // The size of the fact table is currently a compile time constant, so we can use native arrays instead of
 // ranges.
-
 const ROWS = 5
 const COLS = 4
 
@@ -14,13 +13,11 @@ type FactRow [COLS]Cell
 type FactTable struct {
 	Rows               [ROWS]FactRow
 	NextInsertPosition int
-	// The number of used rows in the table. This is <= ROWS.
-	Count    int
-	Capacity int
-	// A mapping of column index => column's dimension table.
-	DimensionTables   [COLS]*DimensionTable
-	ColumnNameToIndex map[string]int
-	ColumnIndexToName []string
+	Count              int // The number of used rows currently in the table. This is <= ROWS.
+	Capacity           int
+	DimensionTables    [COLS]*DimensionTable // Column index => column's dimension table.
+	ColumnNameToIndex  map[string]int
+	ColumnIndexToName  []string
 }
 
 type DimensionTable struct {
