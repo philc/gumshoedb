@@ -79,10 +79,25 @@ func populateTableWithTestingData(table *FactTable) {
 	InsertRowMaps(table, rows)
 }
 
+// Given a cell from a row vector, returns either the cell if this column isn't already normalized,
+// or the denormalized value. E.g. denormalizeColumnValue(213, 1) => "Japan"
+func denormalizeColumnValue(table *FactTable, columnValue Cell, columnIndex int) Untyped {
+	// TODO(philc): I'm using the implicit condition that if a dimension table is empty, this column isn't a
+	// normalized dimension. This should be represented explicitly by a user-defined schema.
+	dimensionTable := table.DimensionTables[columnIndex]
+	if len(dimensionTable.Rows) > 0 {
+		return dimensionTable.Rows[int(columnValue)]
+	} else {
+		return columnValue
+	}
+}
+
+// Takes a normalized FactRow vector and returns a map consistent of column names and values pulled from
+// the dimension tables.
 func DenormalizeRow(table *FactTable, row *FactRow) map[string]Untyped {
 	result := make(map[string]Untyped)
 	for i := 0; i < table.ColumnCount; i++ {
-		result[table.ColumnIndexToName[i]] = row[i]
+		result[table.ColumnIndexToName[i]] = denormalizeColumnValue(table, row[i], i)
 	}
 	return result
 }
@@ -102,12 +117,16 @@ func convertRowMapToRowArray(table *FactTable, rowMap map[string]Untyped) ([]Unt
 	return result, nil
 }
 
-// Takes a row of mixed types, like strings and ints, and converts it to a FactRow. For every string column,
-// replaces its value with the matching ID from the dimension table, inserting a row into the dimension table
-// if one doesn't already exist.
-func normalizeRow(table *FactTable, jsonRow []Untyped) FactRow {
+// Takes a row of mixed types, like strings and ints, and converts it to a vector FactRow. For every string
+// column, replaces its value with the matching ID from the dimension table, inserting a row into the
+// dimension table if one doesn't already exist.
+func normalizeRow(table *FactTable, rowMap map[string]Untyped) (*FactRow, error) {
+	rowAsArray, error := convertRowMapToRowArray(table, rowMap)
+	if error != nil {
+		return nil, error
+	}
 	var row FactRow
-	for columnIndex, value := range jsonRow {
+	for columnIndex, value := range rowAsArray {
 		usesDimensionTable := isString(value)
 		if usesDimensionTable {
 			stringValue := value.(string)
@@ -121,11 +140,11 @@ func normalizeRow(table *FactTable, jsonRow []Untyped) FactRow {
 			row[columnIndex] = Cell(convertUntypedToFloat64(value))
 		}
 	}
-	return row
+	return &row, nil
 }
 
-func insertNormalizedRow(table *FactTable, row FactRow) {
-	table.Rows[table.NextInsertPosition] = row
+func insertNormalizedRow(table *FactTable, row *FactRow) {
+	table.Rows[table.NextInsertPosition] = *row
 	table.NextInsertPosition = (table.NextInsertPosition + 1) % table.Capacity
 	if table.Count < table.Capacity {
 		table.Count++
@@ -134,12 +153,11 @@ func insertNormalizedRow(table *FactTable, row FactRow) {
 
 // Inserts the given rows into the table.
 func InsertRowMaps(table *FactTable, rows []map[string]Untyped) error {
-	for _, row := range rows {
-		rowAsArray, error := convertRowMapToRowArray(table, row)
+	for _, rowMap := range rows {
+		normalizedRow, error := normalizeRow(table, rowMap)
 		if error != nil {
 			return error
 		}
-		normalizedRow := normalizeRow(table, rowAsArray)
 		insertNormalizedRow(table, normalizedRow)
 	}
 	return nil
@@ -248,6 +266,11 @@ func mapRowAggregatesToJsonResultsFormat(query *Query, table *FactTable,
 			columnIndex := table.ColumnNameToIndex[queryAggregate.Column]
 			jsonRow[queryAggregate.Name] = rowAggregate.sums[columnIndex]
 		}
+		// TODO(philc): This code does not handle multiple groupings.
+		for _, grouping := range query.Groupings {
+			columnIndex := table.ColumnNameToIndex[grouping.Column]
+			jsonRow[grouping.Name] = denormalizeColumnValue(table, rowAggregate.groupByValue, columnIndex)
+		}
 		jsonRow["rowCount"] = rowAggregate.count
 		jsonRows = append(jsonRows, jsonRow)
 	}
@@ -291,7 +314,7 @@ func InvokeQuery(table *FactTable, query *Query) map[string]Untyped {
 
 	results := scanTable(table, filterFuncs, columnIndicies, groupByColumn)
 	jsonResultRows := mapRowAggregatesToJsonResultsFormat(query, table, results)
-	return map[string]Untyped {
+	return map[string]Untyped{
 		"results": jsonResultRows,
 	}
 }
