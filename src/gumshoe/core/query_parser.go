@@ -8,29 +8,29 @@ import (
 type Untyped interface{}
 
 type QueryAggregate struct {
-	Type string
-	Column        string
-	Name    string
+	Type   string
+	Column string
+	Name   string
 }
 
 type QueryGrouping struct {
 	TimeFunction string
 	Column       string
-	Name   string
+	Name         string
 }
 
 // TODO(philc): This needs to wait for join tables.
 type QueryFilter struct {
-	Type string
+	Type   string
 	Column string
-	Value Untyped
+	Value  Untyped
 }
 
 type Query struct {
 	Table      string
 	Aggregates []QueryAggregate
-	Groupings []QueryGrouping
-	Filters []QueryFilter
+	Groupings  []QueryGrouping
+	Filters    []QueryFilter
 }
 
 func isValidColumn(table *FactTable, columnName string) bool {
