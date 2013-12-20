@@ -237,7 +237,7 @@ func getColumnIndiciesFromQuery(query *Query, table *FactTable) []int {
 	return columnIndicies
 }
 
-func mapRowAggregatesToJsonResults(query *Query, table *FactTable,
+func mapRowAggregatesToJsonResultsFormat(query *Query, table *FactTable,
 	rowAggregates []RowAggregate) [](map[string]Untyped) {
 	jsonRows := make([](map[string]Untyped), 0)
 	for _, rowAggregate := range rowAggregates {
@@ -275,7 +275,7 @@ func convertQueryFilterToFilterFunc(queryFilter QueryFilter, table *FactTable) F
 	return f
 }
 
-func InvokeQuery(table *FactTable, query *Query) []map[string]Untyped {
+func InvokeQuery(table *FactTable, query *Query) map[string]Untyped {
 	columnIndicies := getColumnIndiciesFromQuery(query, table)
 	var groupByColumn string
 	if len(query.Groupings) > 0 {
@@ -288,6 +288,8 @@ func InvokeQuery(table *FactTable, query *Query) []map[string]Untyped {
 	}
 
 	results := scanTable(table, filterFuncs, columnIndicies, groupByColumn)
-	jsonResultRows := mapRowAggregatesToJsonResults(query, table, results)
-	return jsonResultRows
+	jsonResultRows := mapRowAggregatesToJsonResultsFormat(query, table, results)
+	return map[string]Untyped {
+		"results": jsonResultRows,
+	}
 }
