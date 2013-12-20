@@ -6,6 +6,7 @@ import (
 	"gumshoe/core"
 	"io/ioutil"
 	"net/http"
+	"time"
 )
 
 var table = core.NewFactTable([]string{"at", "country", "bid", "impression", "click", "install"})
@@ -52,6 +53,7 @@ func handleTableRoute(responseWriter http.ResponseWriter, request *http.Request)
 }
 
 func handleQueryRoute(responseWriter http.ResponseWriter, request *http.Request) {
+	start := time.Now()
 	if request.Method != "POST" {
 		http.Error(responseWriter, "", 404)
 		return
@@ -69,6 +71,7 @@ func handleQueryRoute(responseWriter http.ResponseWriter, request *http.Request)
 		return
 	}
 	results := core.InvokeQuery(table, query)
+	results["duration"] = (time.Since(start)).Nanoseconds() / (1000.0 * 1000.0)
 	writeJsonResponse(responseWriter, results)
 }
 
@@ -76,7 +79,7 @@ func main() {
 	fmt.Println(core.ROWS)
 	// TODO(philc): Make these REST routes more thoughtful & consistent.
 	http.HandleFunc("/insert", handleInsertRoute)
-	http.HandleFunc("/tables/fact", handleTableRoute)
-	http.HandleFunc("/tables/fact/query", handleQueryRoute)
+	http.HandleFunc("/tables/facts", handleTableRoute)
+	http.HandleFunc("/tables/facts/query", handleQueryRoute)
 	http.ListenAndServe(":9000", nil)
 }
