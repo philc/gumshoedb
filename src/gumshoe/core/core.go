@@ -288,12 +288,6 @@ func InvokeQuery(table *FactTable, query *Query) []map[string]Untyped {
 	}
 
 	results := scanTable(table, filterFuncs, columnIndicies, groupByColumn)
-	fmt.Println("RowAggregate Results:")
-	for _, result := range results {
-		fmt.Println(result)
-	}
-	fmt.Println("Json Results:")
 	jsonResultRows := mapRowAggregatesToJsonResults(query, table, results)
-	fmt.Println(jsonResultRows)
 	return jsonResultRows
 }
