@@ -75,6 +75,59 @@ func populateTableWithTestingData(table *FactTable) {
 	InsertRowMaps(table, rows)
 }
 
+func DenormalizeRow(table *FactTable, row *FactRow) map[string]Untyped {
+	result := make(map[string]Untyped)
+	for i, value := range row {
+		result[table.ColumnIndexToName[i]] = value
+	}
+	return result
+}
+
+// Takes a map of column names => values, and returns a vector with the map's values in the correct column
+// position according to the table's schema.
+// Returns an error if there are unrecognized columns, or if a column is missing.
+func convertRowMapToRowArray(table *FactTable, rowMap map[string]Untyped) ([]Untyped, error) {
+	result := make([]Untyped, COLS)
+	for columnName, value := range rowMap {
+		columnIndex, found := table.ColumnNameToIndex[columnName]
+		if !found {
+			return nil, fmt.Errorf("Unrecognized column name: %s", columnName)
+		}
+		result[columnIndex] = value
+	}
+	return result, nil
+}
+
+// Takes a row of mixed types, like strings and ints, and converts it to a FactRow. For every string column,
+// replaces its value with the matching ID from the dimension table, inserting a row into the dimension table
+// if one doesn't already exist.
+func normalizeRow(table *FactTable, jsonRow []Untyped) FactRow {
+	var row FactRow
+	for columnIndex, value := range jsonRow {
+		usesDimensionTable := isString(value)
+		if usesDimensionTable {
+			stringValue := value.(string)
+			dimensionTable := table.DimensionTables[columnIndex]
+			dimensionRowId, ok := dimensionTable.ValueToId[stringValue]
+			if !ok {
+				dimensionRowId = addRowToDimensionTable(dimensionTable, stringValue)
+			}
+			row[columnIndex] = Cell(dimensionRowId)
+		} else {
+			row[columnIndex] = Cell(convertUntypedToFloat64(value))
+		}
+	}
+	return row
+}
+
+func insertNormalizedRow(table *FactTable, row FactRow) {
+	table.Rows[table.NextInsertPosition] = row
+	table.NextInsertPosition = (table.NextInsertPosition + 1) % table.Capacity
+	if table.Count < table.Capacity {
+		table.Count++
+	}
+}
+
 // Inserts the given rows into the table.
 func InsertRowMaps(table *FactTable, rows []map[string]Untyped) error {
 	for _, row := range rows {
@@ -86,22 +139,6 @@ func InsertRowMaps(table *FactTable, rows []map[string]Untyped) error {
 		insertNormalizedRow(table, normalizedRow)
 	}
 	return nil
-}
-
-// Takes a map of column names => values, and returns a row with the column values in the correct position
-// according to the table's schema.
-// Returns an error if there are unrecognized columns, or if a column is missing.
-func convertRowMapToRowArray(table *FactTable, rowMap map[string]Untyped) ([]Untyped, error) {
-	result := make([]Untyped, COLS)
-	for columnName, value := range rowMap {
-		columnIndex, found := table.ColumnNameToIndex[columnName]
-		if !found {
-			return nil, fmt.Errorf("Unrecognized column name: %s", columnName)
-			// TODO(philc): Return an error here if there's an unrecognizable column.
-		}
-		result[columnIndex] = value
-	}
-	return result, nil
 }
 
 func addRowToDimensionTable(dimensionTable *DimensionTable, rowValue string) int32 {
@@ -138,36 +175,6 @@ func convertUntypedToFloat64(v Untyped) float64 {
 		result = float64(v.(int64))
 	}
 	return result
-}
-
-// Takes a row of mixed types, like strings and ints, and converts it to a FactRow. For every string column,
-// replaces its value with the matching ID from the dimension table, inserting a row into the dimension table
-// if one doesn't already exist.
-func normalizeRow(table *FactTable, jsonRow []Untyped) FactRow {
-	var row FactRow
-	for columnIndex, value := range jsonRow {
-		usesDimensionTable := isString(value)
-		if usesDimensionTable {
-			stringValue := value.(string)
-			dimensionTable := table.DimensionTables[columnIndex]
-			dimensionRowId, ok := dimensionTable.ValueToId[stringValue]
-			if !ok {
-				dimensionRowId = addRowToDimensionTable(dimensionTable, stringValue)
-			}
-			row[columnIndex] = Cell(dimensionRowId)
-		} else {
-			row[columnIndex] = Cell(convertUntypedToFloat64(value))
-		}
-	}
-	return row
-}
-
-func insertNormalizedRow(table *FactTable, row FactRow) {
-	table.Rows[table.NextInsertPosition] = row
-	table.NextInsertPosition = (table.NextInsertPosition + 1) % table.Capacity
-	if table.Count < table.Capacity {
-		table.Count++
-	}
 }
 
 // TODO(philc): Can I change this return value to a slice of RowAggregates?
@@ -266,7 +273,7 @@ func convertQueryFilterToFilterFunc(queryFilter QueryFilter, table *FactTable) F
 	return f
 }
 
-func InvokeQuery(table *FactTable, query *Query) []map[string]Untyped{
+func InvokeQuery(table *FactTable, query *Query) []map[string]Untyped {
 	columnIndicies := getColumnIndiciesFromQuery(query, table)
 	var groupByColumn string
 	if len(query.Groupings) > 0 {

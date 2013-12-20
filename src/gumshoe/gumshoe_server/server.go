@@ -38,13 +38,16 @@ func handleInsertRoute(responseWriter http.ResponseWriter, request *http.Request
 	}
 }
 
-// TODO(philc): Make this return JSON maps of rows, rather than denormalized vectors.
 func handleTableRoute(responseWriter http.ResponseWriter, request *http.Request) {
 	if request.Method != "GET" {
 		http.Error(responseWriter, "", 404)
 		return
 	}
-	writeJsonResponse(responseWriter, &table.Rows)
+	results := make([]map[string]core.Untyped, 0, len(table.Rows))
+	for _, row := range table.Rows {
+		results = append(results, core.DenormalizeRow(table, &row))
+	}
+	writeJsonResponse(responseWriter, &results)
 }
 
 func handleQueryRoute(responseWriter http.ResponseWriter, request *http.Request) {
