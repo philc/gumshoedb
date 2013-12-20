@@ -33,10 +33,20 @@ type Query struct {
 	Filters []QueryFilter
 }
 
+func isValidColumn(table *FactTable, columnName string) bool {
+	_, ok := table.ColumnNameToIndex[columnName]
+	return ok
+}
+
 func ValidateQuery(table *FactTable, query *Query) error {
 	for _, queryAggregate := range query.Aggregates {
-		if _, ok := table.ColumnNameToIndex[queryAggregate.Column]; !ok {
-			return fmt.Errorf("Unrecognized column name: %s", queryAggregate.Column)
+		if !isValidColumn(table, queryAggregate.Column) {
+			return fmt.Errorf("Unrecognized column name in aggregates clause: %s", queryAggregate.Column)
+		}
+	}
+	for _, grouping := range query.Groupings {
+		if !isValidColumn(table, grouping.Column) {
+			return fmt.Errorf("Unrecognized column name in grouping clause: %s", grouping.Column)
 		}
 	}
 	return nil
