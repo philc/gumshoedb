@@ -34,6 +34,7 @@ func NewDimensionTable(name string) *DimensionTable {
 	return table
 }
 
+// TODO(philc): Capitalize these field names.
 type RowAggregate struct {
 	groupByValue Cell
 	sums         [COLS]float64
@@ -264,7 +265,13 @@ func mapRowAggregatesToJsonResultsFormat(query *Query, table *FactTable,
 		jsonRow := make(map[string]Untyped)
 		for _, queryAggregate := range query.Aggregates {
 			columnIndex := table.ColumnNameToIndex[queryAggregate.Column]
-			jsonRow[queryAggregate.Name] = rowAggregate.sums[columnIndex]
+			// TODO(philc): Change this to an enum
+			sums := rowAggregate.sums[columnIndex]
+			if queryAggregate.Type == "sum" {
+				jsonRow[queryAggregate.Name] = sums
+			} else if queryAggregate.Type == "average" {
+				jsonRow[queryAggregate.Name] = sums / float64(rowAggregate.count)
+			}
 		}
 		// TODO(philc): This code does not handle multiple groupings.
 		for _, grouping := range query.Groupings {
