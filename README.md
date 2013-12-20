@@ -30,10 +30,13 @@ Representative query:
 
 {
   table: "events",
-  filters: [{type:"greaterThan", column:"time_bucket", value: 22}],
-  groupBy: [{timeFunction:"day", column:"time_bucket", name: "date"}, {column:"country"}],
-  aggregates: [{type: "sum", name: "clicks", column: "click"}]
+  "aggregates":[
+      {"type": "sum", "name": "countrySum", "column": "country"},
+      {"type": "sum", "name": "atSum", "column": "at"}],
+  "filters": [{"type": "greaterThan", "column": "at", "value": 2}],
+  "groupings": [{"column": "country", "name":"Japan"}]
 }
+
 
 Result:
 
