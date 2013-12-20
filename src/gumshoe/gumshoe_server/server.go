@@ -44,7 +44,8 @@ func handleTableRoute(responseWriter http.ResponseWriter, request *http.Request)
 		return
 	}
 	results := make([]map[string]core.Untyped, 0, len(table.Rows))
-	for _, row := range table.Rows {
+	for i := 0; i < table.Count; i++ {
+		row := table.Rows[i]
 		results = append(results, core.DenormalizeRow(table, &row))
 	}
 	writeJsonResponse(responseWriter, &results)
