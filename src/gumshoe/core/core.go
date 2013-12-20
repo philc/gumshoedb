@@ -14,7 +14,7 @@ type FactTable struct {
 	Rows               [ROWS]FactRow
 	NextInsertPosition int
 	Count              int // The number of used rows currently in the table. This is <= ROWS.
-	ColumnCount           int // The number of columns in use in the table. This is <= COLS.
+	ColumnCount        int // The number of columns in use in the table. This is <= COLS.
 	Capacity           int
 	DimensionTables    [COLS]*DimensionTable // Column index => column's dimension table.
 	ColumnNameToIndex  map[string]int
@@ -22,12 +22,14 @@ type FactTable struct {
 }
 
 type DimensionTable struct {
+	Name      string
 	Rows      []string
 	ValueToId map[string]int32
 }
 
-func NewDimensionTable() *DimensionTable {
+func NewDimensionTable(name string) *DimensionTable {
 	table := new(DimensionTable)
+	table.Name = name
 	table.ValueToId = make(map[string]int32)
 	return table
 }
@@ -47,8 +49,8 @@ func NewFactTable(columnNames []string) *FactTable {
 	}
 
 	table := new(FactTable)
-	for i, _ := range table.DimensionTables {
-		table.DimensionTables[i] = NewDimensionTable()
+	for i, name := range columnNames {
+		table.DimensionTables[i] = NewDimensionTable(name)
 	}
 	table.Capacity = len(table.Rows)
 	table.ColumnCount = len(columnNames)

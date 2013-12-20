@@ -39,7 +39,7 @@ func handleInsertRoute(responseWriter http.ResponseWriter, request *http.Request
 	}
 }
 
-func handleTableRoute(responseWriter http.ResponseWriter, request *http.Request) {
+func handleFactTableRoute(responseWriter http.ResponseWriter, request *http.Request) {
 	if request.Method != "GET" {
 		http.Error(responseWriter, "", 404)
 		return
@@ -48,6 +48,25 @@ func handleTableRoute(responseWriter http.ResponseWriter, request *http.Request)
 	for i := 0; i < table.Count; i++ {
 		row := table.Rows[i]
 		results = append(results, core.DenormalizeRow(table, &row))
+	}
+	writeJsonResponse(responseWriter, &results)
+}
+
+// Returns the contents of the all of the dimensions tables, for debugging purposes.
+func handleDimensionsTableRoute(responseWriter http.ResponseWriter, request *http.Request) {
+	if request.Method != "GET" {
+		http.Error(responseWriter, "", 404)
+		return
+	}
+	// Assembles {dimensionTableName => [ [0 value0] [1 value1] ... ]
+	results := make(map[string][][2]core.Untyped)
+	for _, dimensionTable := range(table.DimensionTables[:table.ColumnCount]) {
+		rows := make([][2]core.Untyped, 0, table.ColumnCount)
+		for i, value := range dimensionTable.Rows {
+			row := [2]core.Untyped{i, value}
+			rows = append(rows, row)
+		}
+		results[dimensionTable.Name] = rows
 	}
 	writeJsonResponse(responseWriter, &results)
 }
@@ -79,7 +98,8 @@ func main() {
 	fmt.Println(core.ROWS)
 	// TODO(philc): Make these REST routes more thoughtful & consistent.
 	http.HandleFunc("/insert", handleInsertRoute)
-	http.HandleFunc("/tables/facts", handleTableRoute)
+	http.HandleFunc("/tables/facts", handleFactTableRoute)
+	http.HandleFunc("/tables/dimensions", handleDimensionsTableRoute)
 	http.HandleFunc("/tables/facts/query", handleQueryRoute)
 	http.ListenAndServe(":9000", nil)
 }
