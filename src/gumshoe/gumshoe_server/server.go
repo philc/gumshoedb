@@ -17,7 +17,7 @@ func writeJsonResponse(responseWriter http.ResponseWriter, objectToSerialize int
 	fmt.Fprint(responseWriter, string(jsonResult))
 }
 
-func handleImportRoute(responseWriter http.ResponseWriter, request *http.Request) {
+func handleInsertRoute(responseWriter http.ResponseWriter, request *http.Request) {
 	if request.Method != "PUT" {
 		http.Error(responseWriter, "", 404)
 		return
@@ -64,7 +64,8 @@ func handleQueryRoute(responseWriter http.ResponseWriter, request *http.Request)
 
 func main() {
 	fmt.Println(core.ROWS)
-	http.HandleFunc("/import", handleImportRoute)
+	// TODO(philc): Make these REST routes more thoughtful & consistent.
+	http.HandleFunc("/insert", handleInsertRoute)
 	http.HandleFunc("/tables/fact", handleTableRoute)
 	http.HandleFunc("/tables/fact/query", handleQueryRoute)
 	http.ListenAndServe(":9000", nil)
