@@ -40,6 +40,11 @@ type RowAggregate struct {
 type FactTableFilterFunc func(*FactRow) bool
 
 func NewFactTable(columnNames []string) *FactTable {
+	if len(columnNames) > COLS {
+		panic(fmt.Sprintf("You provided %d columns, but this table is configured to have only %d columns.",
+			len(columnNames), COLS))
+	}
+
 	table := new(FactTable)
 	for i, _ := range table.DimensionTables {
 		table.DimensionTables[i] = NewDimensionTable()
