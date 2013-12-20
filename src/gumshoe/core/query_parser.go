@@ -2,6 +2,7 @@ package core
 
 import (
 	json "encoding/json"
+	"fmt"
 )
 
 type Untyped interface{}
@@ -30,6 +31,15 @@ type Query struct {
 	Aggregates []QueryAggregate
 	Groupings []QueryGrouping
 	Filters []QueryFilter
+}
+
+func ValidateQuery(table *FactTable, query *Query) error {
+	for _, queryAggregate := range query.Aggregates {
+		if _, ok := table.ColumnNameToIndex[queryAggregate.Column]; !ok {
+			return fmt.Errorf("Unrecognized column name: %s", queryAggregate.Column)
+		}
+	}
+	return nil
 }
 
 func ParseJsonQuery(jsonString string) (*Query, error) {

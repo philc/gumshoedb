@@ -60,6 +60,12 @@ func handleQueryRoute(responseWriter http.ResponseWriter, request *http.Request)
 	if error != nil {
 		fmt.Println(error)
 		http.Error(responseWriter, error.Error(), 500)
+		return
+	}
+	if error = core.ValidateQuery(table, query); error != nil {
+		fmt.Println(error)
+		http.Error(responseWriter, error.Error(), 500)
+		return
 	}
 	results := core.InvokeQuery(table, query)
 	writeJsonResponse(responseWriter, results)
