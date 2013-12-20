@@ -8,7 +8,7 @@ import (
 	"net/http"
 )
 
-var table = core.NewFactTable([]string{"at", "country", "impression", "clicks"})
+var table = core.NewFactTable([]string{"at", "country", "bid", "impression", "click", "install"})
 
 func writeJsonResponse(responseWriter http.ResponseWriter, objectToSerialize interface{}) {
 	jsonResult, _ := json.Marshal(objectToSerialize)

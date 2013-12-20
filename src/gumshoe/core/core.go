@@ -5,7 +5,7 @@ import "fmt"
 // The size of the fact table is currently a compile time constant, so we can use native arrays instead of
 // ranges.
 const ROWS = 5
-const COLS = 4
+const COLS = 6
 
 type Cell float32
 type FactRow [COLS]Cell
