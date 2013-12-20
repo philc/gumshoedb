@@ -34,7 +34,7 @@ Representative query:
       {"type": "sum", "name": "countrySum", "column": "country"},
       {"type": "sum", "name": "atSum", "column": "at"}],
   "filters": [{"type": "greaterThan", "column": "at", "value": 2}],
-  "groupings": [{"column": "country", "name":"Japan"}]
+  "groupings": [{"column": "country", "name":"country"}]
 }
 
 
