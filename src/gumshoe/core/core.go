@@ -14,6 +14,7 @@ type FactTable struct {
 	Rows               [ROWS]FactRow
 	NextInsertPosition int
 	Count              int // The number of used rows currently in the table. This is <= ROWS.
+	ColumnCount           int // The number of columns in use in the table. This is <= COLS.
 	Capacity           int
 	DimensionTables    [COLS]*DimensionTable // Column index => column's dimension table.
 	ColumnNameToIndex  map[string]int
@@ -50,6 +51,7 @@ func NewFactTable(columnNames []string) *FactTable {
 		table.DimensionTables[i] = NewDimensionTable()
 	}
 	table.Capacity = len(table.Rows)
+	table.ColumnCount = len(columnNames)
 	table.ColumnIndexToName = make([]string, len(columnNames))
 	table.ColumnNameToIndex = make(map[string]int, len(columnNames))
 	for i, name := range columnNames {
@@ -77,8 +79,8 @@ func populateTableWithTestingData(table *FactTable) {
 
 func DenormalizeRow(table *FactTable, row *FactRow) map[string]Untyped {
 	result := make(map[string]Untyped)
-	for i, value := range row {
-		result[table.ColumnIndexToName[i]] = value
+	for i := 0; i < table.ColumnCount; i++ {
+		result[table.ColumnIndexToName[i]] = row[i]
 	}
 	return result
 }
