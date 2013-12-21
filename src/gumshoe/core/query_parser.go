@@ -19,7 +19,6 @@ type QueryGrouping struct {
 	Name         string
 }
 
-// TODO(philc): This needs to wait for join tables.
 type QueryFilter struct {
 	Type   string
 	Column string
