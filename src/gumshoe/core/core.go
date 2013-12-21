@@ -1,6 +1,8 @@
 package core
 
-import "fmt"
+import (
+	"fmt"
+)
 
 // The size of the fact table is currently a compile time constant, so we can use native arrays instead of
 // ranges.
@@ -284,24 +286,65 @@ func mapRowAggregatesToJsonResultsFormat(query *Query, table *FactTable,
 	return jsonRows
 }
 
+// Given a list of values, looks up the corresponding row IDs for those values. If those values don't
+// exist in the dimension table, they're omitted.
+func getDimensionRowIdsForValues(dimensionTable *DimensionTable, values []string) []Cell {
+	rowIds := make([]Cell, 0)
+	fmt.Println(dimensionTable)
+	fmt.Println("values:")
+	fmt.Println(values)
+	for _, value := range values {
+		if id, ok := dimensionTable.ValueToId[value]; ok {
+			rowIds = append(rowIds, Cell(id))
+		}
+	}
+	return rowIds
+}
+
+
 func convertQueryFilterToFilterFunc(queryFilter QueryFilter, table *FactTable) FactTableFilterFunc {
 	columnIndex := table.ColumnNameToIndex[queryFilter.Column]
 	// TODO(philc): We're assuming this is a float for now.
-	value := Cell(convertUntypedToFloat64(queryFilter.Value))
 	var f FactTableFilterFunc
+	var valueAsCell Cell
+	if queryFilter.Type != "in" {
+		valueAsCell = Cell(convertUntypedToFloat64(queryFilter.Value))
+	}
+
 	switch queryFilter.Type {
 	// TODO(philc): Add <= and >= once this turns out to be useful.
 	case "greaterThan", ">":
 		f = func(row *FactRow) bool {
-			return row[columnIndex] > value
+			return row[columnIndex] > valueAsCell
 		}
 	case "lessThan", "<":
 		f = func(row *FactRow) bool {
-			return row[columnIndex] < value
+			return row[columnIndex] < valueAsCell
 		}
 	case "equal", "=":
 		f = func(row *FactRow) bool {
-			return row[columnIndex] == value
+			return row[columnIndex] == valueAsCell
+		}
+  case "in":
+		// Convert this slice of untyped objects to []string. We encounter a panic if we try to cast straight
+		// to []string.
+		queryValues := queryFilter.Value.([]interface{})
+		queryValuesAstrings := make([]string, 0, len(queryValues))
+		for _, element := range queryValues {
+			queryValuesAstrings = append(queryValuesAstrings, element.(string))
+		}
+
+		dimensionTable := table.DimensionTables[columnIndex]
+		matchingColumnIds := getDimensionRowIdsForValues(dimensionTable, queryValuesAstrings)
+		count := len(matchingColumnIds)
+		f = func(row *FactRow) bool {
+			columnValue := row[columnIndex]
+			for i := 0; i < count; i++ {
+				if columnValue == matchingColumnIds[i] {
+					return true
+				}
+			}
+			return false
 		}
 	}
 	return f
