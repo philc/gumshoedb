@@ -17,6 +17,8 @@ run_web: build_web
 	bin/gumshoe_server
 
 # Runs all benhcmarks appearing in any *_test.go files.
-benchmark: build
-	GOPATH=$(GOPATH) go install gumshoe/benchmark
+benchmark: build_benchmark
 	bin/benchmark
+
+build_benchmark: build
+	GOPATH=$(GOPATH) go install ...gumshoe/benchmark
