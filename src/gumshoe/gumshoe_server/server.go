@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"gumshoe/core"
 	"io/ioutil"
+	"math"
 	"net/http"
 	"time"
 )
@@ -39,13 +40,17 @@ func handleInsertRoute(responseWriter http.ResponseWriter, request *http.Request
 	}
 }
 
+// A debugging route to list the contents of a table. Returns up to 1000 rows.
 func handleFactTableRoute(responseWriter http.ResponseWriter, request *http.Request) {
 	if request.Method != "GET" {
 		http.Error(responseWriter, "", 404)
 		return
 	}
-	results := make([]map[string]core.Untyped, 0, len(table.Rows))
-	for i := 0; i < table.Count; i++ {
+	// For now, only return up to 1000 rows. We can't serialize the entire table unless we stream the response,
+	// and for debugging, we only need a few rows to inspect that importing is working correctly.
+	rowCount := int(math.Min(float64(table.Count), 1000))
+	results := make([]map[string]core.Untyped, 0, rowCount)
+	for i := 0; i < rowCount; i++ {
 		row := table.Rows[i]
 		results = append(results, core.DenormalizeRow(table, &row))
 	}
