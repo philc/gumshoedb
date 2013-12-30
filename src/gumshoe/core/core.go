@@ -120,9 +120,9 @@ func convertRowMapToRowArray(table *FactTable, rowMap map[string]Untyped) ([]Unt
 	return result, nil
 }
 
-// Takes a row of mixed types, like strings and ints, and converts it to a vector FactRow. For every string
-// column, replaces its value with the matching ID from the dimension table, inserting a row into the
-// dimension table if one doesn't already exist.
+// Takes a row of mixed types, like strings and ints, and converts it to a FactRow (a vector of ints). For
+// every string column, replaces its value with the matching ID from the dimension table, inserting a row into
+// the dimension table if one doesn't already exist.
 func normalizeRow(table *FactTable, rowMap map[string]Untyped) (*FactRow, error) {
 	rowAsArray, error := convertRowMapToRowArray(table, rowMap)
 	if error != nil {
@@ -211,14 +211,17 @@ func scanTable(table *FactTable, filters []FactTableFilterFunc, columnIndices []
 	rowAggregatesMap := make(map[Cell]*RowAggregate)
 	// When the query has no group-by, we tally results into a single RowAggregate.
 	rowAggregate := new(RowAggregate)
+	rows := &table.Rows
+
+	rowCount := table.Count
+	columnCountInQuery := len(columnIndices)
+	filterCount := len(filters)
 
 outerLoop:
-	for i, row := range table.Rows {
-		if i >= table.Count {
-			break
-		}
-		for _, filter := range filters {
-			if !filter(&row) {
+	for i := 0; i < rowCount; i++ {
+		row := &rows[i]
+		for filterIndex := 0; filterIndex < filterCount; filterIndex++ {
+			if !filters[filterIndex](row) {
 				continue outerLoop
 			}
 		}
@@ -234,7 +237,8 @@ outerLoop:
 			}
 		}
 
-		for _, columnIndex := range columnIndices {
+		for j := 0; j < columnCountInQuery; j++ {
+			columnIndex := columnIndices[j]
 			(*rowAggregate).sums[columnIndex] += float64(row[columnIndex])
 		}
 		(*rowAggregate).count++
