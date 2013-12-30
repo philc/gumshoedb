@@ -1,8 +1,6 @@
 package core
 
-import (
-	"fmt"
-)
+import "fmt"
 
 // The size of the fact table is currently a compile time constant, so we can use native arrays instead of
 // ranges.
@@ -294,9 +292,6 @@ func mapRowAggregatesToJsonResultsFormat(query *Query, table *FactTable,
 // exist in the dimension table, they're omitted.
 func getDimensionRowIdsForValues(dimensionTable *DimensionTable, values []string) []Cell {
 	rowIds := make([]Cell, 0)
-	fmt.Println(dimensionTable)
-	fmt.Println("values:")
-	fmt.Println(values)
 	for _, value := range values {
 		if id, ok := dimensionTable.ValueToId[value]; ok {
 			rowIds = append(rowIds, Cell(id))
@@ -304,7 +299,6 @@ func getDimensionRowIdsForValues(dimensionTable *DimensionTable, values []string
 	}
 	return rowIds
 }
-
 
 func convertQueryFilterToFilterFunc(queryFilter QueryFilter, table *FactTable) FactTableFilterFunc {
 	columnIndex := table.ColumnNameToIndex[queryFilter.Column]
@@ -329,7 +323,7 @@ func convertQueryFilterToFilterFunc(queryFilter QueryFilter, table *FactTable) F
 		f = func(row *FactRow) bool {
 			return row[columnIndex] == valueAsCell
 		}
-  case "in":
+	case "in":
 		// Convert this slice of untyped objects to []string. We encounter a panic if we try to cast straight
 		// to []string.
 		queryValues := queryFilter.Value.([]interface{})
