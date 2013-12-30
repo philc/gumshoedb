@@ -3,9 +3,10 @@ package main
 import "fmt"
 import "unsafe"
 import "testing"
+import "flag"
 
 // const ROWS = 4
-const ROWS = 1000000
+const ROWS = 100000
 const COLS = 50
 var COL_SIZE int = typeSizes["float32"]
 var ROW_SIZE int = COL_SIZE * COLS
@@ -21,8 +22,6 @@ var typeSizes map[string]int = map[string]int {
 	"float32": asInt(unsafe.Sizeof(*new(float32))),
 	"float64": asInt(unsafe.Sizeof(*new(float64))),
 }
-
-var input = make([]*[COLS]Cell, ROWS)
 
 func SumArrayMatrix(matrix *[ROWS][COLS]Cell) int {
 	length := len(matrix)
@@ -100,21 +99,21 @@ func SumUsingInlineFilterFn(matrix []*[COLS]Cell) int {
 	return int(sum)
 }
 
-func SumGroupBy() int {
-	sum := 0
-	l := len(input)
-	// countGroup := make(map[int]int)
-	countGroup := make([]int, COLS)
-
-	for i := 0; i < l; i += 8 {
-		row := input[i]
-		countGroup[i % 5] += int(row[0])
-	}
-	for _, v := range countGroup {
-		sum += v
-	}
-	return sum
-}
+// TODO(philc): Re-enable this.
+// func SumGroupBy() int {
+// 	sum := 0
+// 	l := len(input)
+// 	// countGroup := make(map[int]int)
+// 	countGroup := make([]int, COLS)
+// 	for i := 0; i < l; i += 8 {
+// 		row := input[i]
+// 		countGroup[i % 5] += int(row[0])
+// 	}
+// 	for _, v := range countGroup {
+// 		sum += v
+// 	}
+// 	return sum
+// }
 
 func asUint(p uintptr) uint {
 	return *(*uint)(unsafe.Pointer(&p))
@@ -130,15 +129,25 @@ func setValue(matrix uintptr, row int, col int, value Cell) {
 	*a = value
 }
 
-func runBenchmarkFunction(name string, f func() int) {
-	functionReturnValue := 0
+func runBenchmarkFunction(displayName string, f func()) {
 	benchmarkHandler := func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
-			functionReturnValue = f()
+			f()
 		}
 	}
 	result := testing.Benchmark(benchmarkHandler)
-	fmt.Printf("%-25s %-3.2f ms Result: %d\n", name, float32(result.NsPerOp()) / 1000000.0, functionReturnValue)
+	fmt.Printf("%-25s %-3.2f ms\n", displayName, float32(result.NsPerOp()) / 1000000.0)
+}
+
+func runBenchmarkFunctionWithReturnValue(displayName string, f func() int) {
+	returnValue := 0
+	benchmarkHandler := func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			returnValue = f()
+		}
+	}
+	result := testing.Benchmark(benchmarkHandler)
+	fmt.Printf("%-25s %-3.2f ms Result: %d\n", displayName, float32(result.NsPerOp()) / 1000000.0, returnValue)
 }
 
 func initByteMatrix() uintptr {
@@ -182,23 +191,45 @@ func initSliceOfSliceMatrix() [][]Cell {
 	return matrix
 }
 
+type BenchmarkFlags struct {
+	cpuprofile *string
+	minimalSet *bool
+}
+
+func parseCliFlags() BenchmarkFlags {
+	flags := BenchmarkFlags{}
+	flags.cpuprofile = flag.String("cpuprofile", "",
+		"Enable profiling for the non-synthetic benchmarks and write results to the given file")
+	// TODO(philc): This flag is just for convenience while developing. This should instead be a regexp filter
+	// like with `go test`.
+	flags.minimalSet = flag.Bool("minimal-set", false, "Run only the minimal set of benchmarks")
+	flag.Parse()
+	return flags
+}
+
 func main() {
-	// byteMatrix := initByteMatrix()
-	// fmt.Println(SumByteMatrix(byteMatrix))
-	// runBenchmarkFunction("SumByteMatrix", func() int { return SumByteMatrix(byteMatrix) })
+	flags := parseCliFlags()
+	runCoreBenchmarks(flags)
 
-	sliceMatrix := initSliceMatrix()
-	// arrayMatrix := createArrayMatrix()
-	// sliceOfSliceMatrix := initSliceOfSliceMatrix()
-	runBenchmarkFunction("SumOneRolledLoop", func() int { return SumOneRolledLoop(sliceMatrix) })
-	// runBenchmarkFunction("SumOneUnrolledLoop", func() int { return SumOneUnrolledLoop(sliceMatrix) })
-	// runBenchmarkFunction("SumArrayMatrix", func() int { return SumArrayMatrix(arrayMatrix) })
-	// runBenchmarkFunction("SumSliceOfSliceMatrix", func() int { return SumSliceOfSliceMatrix(sliceOfSliceMatrix) })
-	// runBenchmarkFunction("SumMany", func() { SumMany() })
-	// runBenchmarkFunction("SumGroupBy", func() { SumGroupBy() })
+	arrayMatrix := createArrayMatrix()
 
-	filterFunction := func(row *[COLS]Cell) bool { return row[0] >= 0 }
-	runBenchmarkFunction("SumUsingFilterFn", func() int { return SumUsingFilterFn(sliceMatrix, filterFunction) })
-	runBenchmarkFunction("SumUsingInlineFilterFn", func() int { return SumUsingInlineFilterFn(sliceMatrix) })
-	// runBenchmarkFunction("SumUsingFilter2", func() { SumUsingFilter2(filterFunction) })
+	runBenchmarkFunctionWithReturnValue("SumArrayMatrix", func() int { return SumArrayMatrix(arrayMatrix) })
+
+	if *flags.minimalSet {
+		sliceMatrix := initSliceMatrix()
+		byteMatrix := initByteMatrix()
+		sliceOfSliceMatrix := initSliceOfSliceMatrix()
+		runBenchmarkFunctionWithReturnValue("SumOneRolledLoop", func() int { return SumOneRolledLoop(sliceMatrix) })
+		runBenchmarkFunctionWithReturnValue("SumOneUnrolledLoop", func() int { return SumOneUnrolledLoop(sliceMatrix) })
+		runBenchmarkFunctionWithReturnValue("SumByteMatrix", func() int { return SumByteMatrix(byteMatrix) })
+		runBenchmarkFunctionWithReturnValue("SumSliceOfSliceMatrix",
+			func() int { return SumSliceOfSliceMatrix(sliceOfSliceMatrix) })
+		// runBenchmarkFunctionWithReturnValue("SumGroupBy", func() { SumGroupBy() })
+
+		filterFunction := func(row *[COLS]Cell) bool { return row[0] >= 0 }
+		runBenchmarkFunctionWithReturnValue("SumUsingFilterFn",
+			func() int { return SumUsingFilterFn(sliceMatrix, filterFunction) })
+		runBenchmarkFunctionWithReturnValue("SumUsingInlineFilterFn",
+			func() int { return SumUsingInlineFilterFn(sliceMatrix) })
+	}
 }
