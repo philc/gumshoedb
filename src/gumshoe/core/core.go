@@ -36,9 +36,9 @@ func NewDimensionTable(name string) *DimensionTable {
 
 // TODO(philc): Capitalize these field names.
 type RowAggregate struct {
-	groupByValue Cell
-	sums         [COLS]float64
-	count        int
+	GroupByValue Cell
+	Sums         [COLS]float64
+	Count        int
 }
 
 type FactTableFilterFunc func(*FactRow) bool
@@ -230,16 +230,16 @@ outerLoop:
 			rowAggregate, ok = rowAggregatesMap[groupByValue]
 			if !ok {
 				rowAggregate = new(RowAggregate)
-				(*rowAggregate).groupByValue = groupByValue
+				(*rowAggregate).GroupByValue = groupByValue
 				rowAggregatesMap[groupByValue] = rowAggregate
 			}
 		}
 
 		for j := 0; j < columnCountInQuery; j++ {
 			columnIndex := columnIndices[j]
-			(*rowAggregate).sums[columnIndex] += float64(row[columnIndex])
+			(*rowAggregate).Sums[columnIndex] += float64(row[columnIndex])
 		}
-		(*rowAggregate).count++
+		(*rowAggregate).Count++
 	}
 
 	results := make([]RowAggregate, 0)
@@ -270,19 +270,19 @@ func mapRowAggregatesToJsonResultsFormat(query *Query, table *FactTable,
 		for _, queryAggregate := range query.Aggregates {
 			columnIndex := table.ColumnNameToIndex[queryAggregate.Column]
 			// TODO(philc): Change this to an enum
-			sums := rowAggregate.sums[columnIndex]
+			sums := rowAggregate.Sums[columnIndex]
 			if queryAggregate.Type == "sum" {
 				jsonRow[queryAggregate.Name] = sums
 			} else if queryAggregate.Type == "average" {
-				jsonRow[queryAggregate.Name] = sums / float64(rowAggregate.count)
+				jsonRow[queryAggregate.Name] = sums / float64(rowAggregate.Count)
 			}
 		}
 		// TODO(philc): This code does not handle multiple groupings.
 		for _, grouping := range query.Groupings {
 			columnIndex := table.ColumnNameToIndex[grouping.Column]
-			jsonRow[grouping.Name] = denormalizeColumnValue(table, rowAggregate.groupByValue, columnIndex)
+			jsonRow[grouping.Name] = denormalizeColumnValue(table, rowAggregate.GroupByValue, columnIndex)
 		}
-		jsonRow["rowCount"] = rowAggregate.count
+		jsonRow["rowCount"] = rowAggregate.Count
 		jsonRows = append(jsonRows, jsonRow)
 	}
 	return jsonRows
