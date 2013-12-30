@@ -43,12 +43,41 @@ func createQueryAggregates(columns []string) []core.QueryAggregate {
 	return queryAggregates
 }
 
-// Runs a query which only sums aggregates.
+// A query which only sums aggregates.
 func runAggregateQuery(table *core.FactTable) {
 	query := &core.Query{
 		"tableName",
 		createQueryAggregates([]string{"column1"}),
 		nil,
+		nil}
+	error := core.ValidateQuery(table, query)
+	if error != nil {
+		panic(error)
+	}
+	core.InvokeQuery(table, query)
+}
+
+// A query which filters rows by a single simple filter function.
+func runFilterQuery(table *core.FactTable) {
+	query := &core.Query{
+		"tableName",
+		createQueryAggregates([]string{"column1"}),
+		nil,
+		[]core.QueryFilter{core.QueryFilter{">", "column2", 5}}}
+
+	error := core.ValidateQuery(table, query)
+	if error != nil {
+		panic(error)
+	}
+	core.InvokeQuery(table, query)
+}
+
+// A query which sums aggregates and groups by a column. Each column has 10 possible values.
+func runGroupByQuery(table *core.FactTable) {
+	query := &core.Query{
+		"tableName",
+		createQueryAggregates([]string{"column1"}),
+		[]core.QueryGrouping{core.QueryGrouping{"", "column2", "column2"}},
 		nil}
 	error := core.ValidateQuery(table, query)
 	if error != nil {
@@ -71,4 +100,6 @@ func runCoreBenchmarks(flags BenchmarkFlags) {
 
 	populateTableWithTestingData(table)
 	runBenchmarkFunction("aggregateQuery", func() { runAggregateQuery(table) })
+	runBenchmarkFunction("groupByQuery", func() { runGroupByQuery(table) })
+	runBenchmarkFunction("filterQuery", func() { runFilterQuery(table) })
 }
