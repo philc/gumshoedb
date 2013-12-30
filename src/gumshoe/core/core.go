@@ -210,11 +210,9 @@ func scanTable(table *FactTable, filters []FactTableFilterFunc, columnIndices []
 	// When the query has no group-by, we tally results into a single RowAggregate.
 	rowAggregate := new(RowAggregate)
 	rows := &table.Rows
-
 	rowCount := table.Count
 	columnCountInQuery := len(columnIndices)
 	filterCount := len(filters)
-
 outerLoop:
 	for i := 0; i < rowCount; i++ {
 		row := &rows[i]
@@ -325,7 +323,7 @@ func convertQueryFilterToFilterFunc(queryFilter QueryFilter, table *FactTable) F
 		}
 	case "in":
 		// Convert this slice of untyped objects to []string. We encounter a panic if we try to cast straight
-		// to []string.
+		// to []string; I'm not sure why.
 		queryValues := queryFilter.Value.([]interface{})
 		queryValuesAstrings := make([]string, 0, len(queryValues))
 		for _, element := range queryValues {
@@ -335,6 +333,8 @@ func convertQueryFilterToFilterFunc(queryFilter QueryFilter, table *FactTable) F
 		dimensionTable := table.DimensionTables[columnIndex]
 		matchingColumnIds := getDimensionRowIdsForValues(dimensionTable, queryValuesAstrings)
 		count := len(matchingColumnIds)
+		// TODO(philc): At some threshold, indexing into a query set of a given size will be more efficiently done
+		// as a hash table lookup. We should figure out what that threshold is and use a hash table in that case.
 		f = func(row *FactRow) bool {
 			columnValue := row[columnIndex]
 			for i := 0; i < count; i++ {
