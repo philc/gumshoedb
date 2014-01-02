@@ -13,7 +13,7 @@ func setupFactTable() *core.FactTable {
 	for i := 0; i < core.COLS; i++ {
 		columnNames = append(columnNames, fmt.Sprintf("column%d", i))
 	}
-	return core.NewFactTable(columnNames)
+	return core.NewFactTable("./benchmark", columnNames)
 }
 
 // Populates a table with representative test data. The columns are named "column1", "column2".
@@ -90,6 +90,8 @@ func runGroupByQuery(table *core.FactTable) {
 // These exercise the main core query pipeline in a representative way.
 func runCoreBenchmarks(flags BenchmarkFlags) {
 	table := setupFactTable()
+	populateTableWithTestingData(table)
+
 	profileFilename := *flags.cpuprofile
 	if profileFilename != "" {
 		fmt.Println("Profiling enabled and will be written to ", profileFilename)
@@ -98,7 +100,6 @@ func runCoreBenchmarks(flags BenchmarkFlags) {
 		defer pprof.StopCPUProfile()
 	}
 
-	populateTableWithTestingData(table)
 	runBenchmarkFunction("aggregateQuery", func() { runAggregateQuery(table) })
 	runBenchmarkFunction("groupByQuery", func() { runGroupByQuery(table) })
 	runBenchmarkFunction("filterQuery", func() { runFilterQuery(table) })

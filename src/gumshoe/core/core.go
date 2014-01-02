@@ -1,18 +1,24 @@
 package core
 
-import "fmt"
+import (
+	"fmt"
+	"gommap"
+)
 
 // The size of the fact table is currently a compile time constant, so we can use native arrays instead of
 // ranges.
-const ROWS = 1000000
+const ROWS = 100000
 const COLS = 42
 
 type Cell float32
 type FactRow [COLS]Cell
 
 type FactTable struct {
-	// This is unexported so we don't serialize it when using gobs.
+	// We serialize this struct usin gobs. The unexported fields are fields we don't want to serialize.
 	rows               *[ROWS]FactRow
+	FilePath string        // Path to this db on disk, where we should periodically snapshot it to.
+	// The memory map bookkeeping object which contains the file descriptor we are mapping the table rows into.
+	memoryMap *gommap.MMap
 	NextInsertPosition int
 	Count              int // The number of used rows currently in the table. This is <= ROWS.
 	ColumnCount        int // The number of columns in use in the table. This is <= COLS.
@@ -48,7 +54,9 @@ type RowAggregate struct {
 
 type FactTableFilterFunc func(*FactRow) bool
 
-func NewFactTable(columnNames []string) *FactTable {
+// Allocates a new fact table. The table is immediately provisioned to disk. An empty filePath causes the
+// table to exist only in memory.
+func NewFactTable(filePath string, columnNames []string) *FactTable {
 	if len(columnNames) > COLS {
 		panic(fmt.Sprintf("You provided %d columns, but this table is configured to have only %d columns.",
 			len(columnNames), COLS))
@@ -58,7 +66,13 @@ func NewFactTable(columnNames []string) *FactTable {
 	for i, name := range columnNames {
 		table.DimensionTables[i] = NewDimensionTable(name)
 	}
-	table.rows = new([ROWS]FactRow)
+	table.FilePath = filePath
+	if filePath == "" {
+		// Create an in-memory database only, without a file backing.
+		table.rows = new([ROWS]FactRow)
+	}	else {
+		table.memoryMap, table.rows = CreateMemoryMappedFactTableStorage(table.FilePath, ROWS)
+	}
 	table.Capacity = len(table.rows)
 	table.ColumnCount = len(columnNames)
 	table.ColumnIndexToName = make([]string, len(columnNames))

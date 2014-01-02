@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-var table = core.NewFactTable([]string{"at", "country", "bid", "impression", "click", "install"})
+var table = core.NewFactTable("", []string{"at", "country", "bid", "impression", "click", "install"})
 
 func writeJsonResponse(responseWriter http.ResponseWriter, objectToSerialize interface{}) {
 	jsonResult, _ := json.Marshal(objectToSerialize)
@@ -48,10 +48,12 @@ func handleFactTableRoute(responseWriter http.ResponseWriter, request *http.Requ
 	}
 	// For now, only return up to 1000 rows. We can't serialize the entire table unless we stream the response,
 	// and for debugging, we only need a few rows to inspect that importing is working correctly.
-	rowCount := int(math.Min(float64(table.Count), 1000))
+	maxRowsToReturn := 1000
+	rowCount := int(math.Min(float64(table.Count), float64(maxRowsToReturn)))
 	results := make([]map[string]core.Untyped, 0, rowCount)
+	rows := table.Rows()
 	for i := 0; i < rowCount; i++ {
-		row := table.Rows[i]
+		row := rows[i]
 		results = append(results, core.DenormalizeRow(table, &row))
 	}
 	writeJsonResponse(responseWriter, &results)
