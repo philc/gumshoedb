@@ -47,3 +47,7 @@ Result:
      {date: "2013-12-02", country: "Japan", clicks: 123, rowCount: 145},
      {date: "2013-12-02", country: "USA", clicks: 123, rowCount: 145}]
 }
+
+Resources
+
+[Memory mapped files API]([http://www.gnu.org/software/libc/manual/html_node/Memory_002dmapped-I_002fO.html)
