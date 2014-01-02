@@ -11,7 +11,8 @@ type Cell float32
 type FactRow [COLS]Cell
 
 type FactTable struct {
-	Rows               [ROWS]FactRow
+	// This is unexported so we don't serialize it when using gobs.
+	rows               [ROWS]FactRow
 	NextInsertPosition int
 	Count              int // The number of used rows currently in the table. This is <= ROWS.
 	ColumnCount        int // The number of columns in use in the table. This is <= COLS.
@@ -19,6 +20,10 @@ type FactTable struct {
 	DimensionTables    [COLS]*DimensionTable // Column index => column's dimension table.
 	ColumnNameToIndex  map[string]int
 	ColumnIndexToName  []string
+}
+
+func (table *FactTable) Rows() *[ROWS]FactRow {
+	return &table.rows
 }
 
 type DimensionTable struct {
@@ -53,7 +58,7 @@ func NewFactTable(columnNames []string) *FactTable {
 	for i, name := range columnNames {
 		table.DimensionTables[i] = NewDimensionTable(name)
 	}
-	table.Capacity = len(table.Rows)
+	table.Capacity = len(table.rows)
 	table.ColumnCount = len(columnNames)
 	table.ColumnIndexToName = make([]string, len(columnNames))
 	table.ColumnNameToIndex = make(map[string]int, len(columnNames))
@@ -70,7 +75,7 @@ func populateTableWithTestingData(table *FactTable) {
 		0: "Japan",
 		1: "USA",
 	}
-	for i := 0; i < len(table.Rows); i++ {
+	for i := 0; i < len(table.rows); i++ {
 		row := make(map[string]Untyped)
 		row["at"] = i
 		row["country"] = countries[i%2]
@@ -145,7 +150,7 @@ func normalizeRow(table *FactTable, rowMap map[string]Untyped) (*FactRow, error)
 }
 
 func insertNormalizedRow(table *FactTable, row *FactRow) {
-	table.Rows[table.NextInsertPosition] = *row
+	table.rows[table.NextInsertPosition] = *row
 	table.NextInsertPosition = (table.NextInsertPosition + 1) % table.Capacity
 	if table.Count < table.Capacity {
 		table.Count++
@@ -209,7 +214,7 @@ func scanTable(table *FactTable, filters []FactTableFilterFunc, columnIndices []
 	rowAggregatesMap := make(map[Cell]*RowAggregate)
 	// When the query has no group-by, we tally results into a single RowAggregate.
 	rowAggregate := new(RowAggregate)
-	rows := &table.Rows
+	rows := &table.rows
 	rowCount := table.Count
 	columnCountInQuery := len(columnIndices)
 	filterCount := len(filters)
