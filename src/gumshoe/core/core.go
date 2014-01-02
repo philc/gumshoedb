@@ -12,7 +12,7 @@ type FactRow [COLS]Cell
 
 type FactTable struct {
 	// This is unexported so we don't serialize it when using gobs.
-	rows               [ROWS]FactRow
+	rows               *[ROWS]FactRow
 	NextInsertPosition int
 	Count              int // The number of used rows currently in the table. This is <= ROWS.
 	ColumnCount        int // The number of columns in use in the table. This is <= COLS.
@@ -23,7 +23,7 @@ type FactTable struct {
 }
 
 func (table *FactTable) Rows() *[ROWS]FactRow {
-	return &table.rows
+	return table.rows
 }
 
 type DimensionTable struct {
@@ -58,6 +58,7 @@ func NewFactTable(columnNames []string) *FactTable {
 	for i, name := range columnNames {
 		table.DimensionTables[i] = NewDimensionTable(name)
 	}
+	table.rows = new([ROWS]FactRow)
 	table.Capacity = len(table.rows)
 	table.ColumnCount = len(columnNames)
 	table.ColumnIndexToName = make([]string, len(columnNames))
@@ -214,7 +215,7 @@ func scanTable(table *FactTable, filters []FactTableFilterFunc, columnIndices []
 	rowAggregatesMap := make(map[Cell]*RowAggregate)
 	// When the query has no group-by, we tally results into a single RowAggregate.
 	rowAggregate := new(RowAggregate)
-	rows := &table.rows
+	rows := table.rows
 	rowCount := table.Count
 	columnCountInQuery := len(columnIndices)
 	filterCount := len(filters)
