@@ -4,9 +4,6 @@ GOPATH := $$PWD
 build:
 	GOPATH=$(GOPATH) go install gumshoe/core
 
-run: build
-	./go_playground
-
 test: build
 	GOPATH=$(GOPATH) go test ...gumshoe/core
 
@@ -18,7 +15,7 @@ run_web: build_web
 
 # Runs all benhcmarks appearing in any *_test.go files.
 benchmark: build_benchmark
-	bin/benchmark
+	bin/benchmark -minimal-set=true
 
 build_benchmark: build
 	GOPATH=$(GOPATH) go install ...gumshoe/benchmark
