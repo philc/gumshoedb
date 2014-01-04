@@ -6,15 +6,15 @@ import (
 )
 
 func tableFixture() *FactTable {
-	return NewFactTable([]string{"col1", "col2"})
+	return NewFactTable("", []string{"col1", "col2"})
 }
 
 func TestEndToEnd(t *testing.T) {
+	// TODO(philc): Make this a valid test.
 	t.Skip()
-	// table := NewFactTable([]string{"at", "country", "impressions", "clicks"})
 	table := tableFixture()
 	populateTableWithTestingData(table)
-	invokeQuery(table)
+	// InvokeQuery(table)
 	t.Errorf("fail")
 }
 
