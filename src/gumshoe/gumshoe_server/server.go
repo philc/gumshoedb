@@ -1,16 +1,22 @@
+// A web server which exposes routes for ingesting rows and executing queries.
+// TODO(philc): Periodically save the fact table to disk.
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"encoding/gob"
 	"gumshoe/core"
 	"io/ioutil"
 	"math"
 	"net/http"
+	"os"
 	"time"
 )
 
-var table = core.NewFactTable("", []string{"at", "country", "bid", "impression", "click", "install"})
+// This table is reference by all of the routes.
+var table *core.FactTable
 
 func writeJsonResponse(responseWriter http.ResponseWriter, objectToSerialize interface{}) {
 	jsonResult, _ := json.Marshal(objectToSerialize)
@@ -38,6 +44,15 @@ func handleInsertRoute(responseWriter http.ResponseWriter, request *http.Request
 		fmt.Println(error)
 		http.Error(responseWriter, error.Error(), 500)
 	}
+}
+
+// Force the save of the database.
+func handleSaveRoute(responseWriter http.ResponseWriter, request *http.Request) {
+	if request.Method != "POST" {
+		http.Error(responseWriter, "", 404)
+		return
+	}
+	table.SaveToDisk()
 }
 
 // A debugging route to list the contents of a table. Returns up to 1000 rows.
@@ -104,6 +119,7 @@ func handleQueryRoute(responseWriter http.ResponseWriter, request *http.Request)
 func main() {
 	fmt.Println(core.ROWS)
 	// TODO(philc): Make these REST routes more thoughtful & consistent.
+	http.HandleFunc("/save", handleSaveRoute)
 	http.HandleFunc("/insert", handleInsertRoute)
 	http.HandleFunc("/tables/facts", handleFactTableRoute)
 	http.HandleFunc("/tables/dimensions", handleDimensionsTableRoute)
