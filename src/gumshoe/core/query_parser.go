@@ -26,7 +26,7 @@ type QueryFilter struct {
 }
 
 type Query struct {
-	Table      string
+	TableName  string
 	Aggregates []QueryAggregate
 	Groupings  []QueryGrouping
 	Filters    []QueryFilter
