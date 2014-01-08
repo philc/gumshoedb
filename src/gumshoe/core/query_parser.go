@@ -48,6 +48,11 @@ func ValidateQuery(table *FactTable, query *Query) error {
 			return fmt.Errorf("Unrecognized column name in grouping clause: %s", grouping.Column)
 		}
 	}
+	for _, filter := range query.Filters {
+		if !isValidColumn(table, filter.Column) {
+			return fmt.Errorf("Unrecognized column name in filter clause: %s", filter.Column)
+		}
+	}
 	return nil
 }
 
