@@ -304,11 +304,45 @@ func getDimensionRowIdsForValues(dimensionTable *DimensionTable, values []string
 
 func convertQueryFilterToFilterFunc(queryFilter QueryFilter, table *FactTable) FactTableFilterFunc {
 	columnIndex := table.ColumnNameToIndex[queryFilter.Column]
-	// TODO(philc): We're assuming this is a float for now.
 	var f FactTableFilterFunc
+
+	// The query value can either be a single value (in the case of =, >, < queries) or an array of values (in
+	// the case of "in", "not in" queries.
 	var valueAsCell Cell
-	if queryFilter.Type != "in" {
-		valueAsCell = Cell(convertUntypedToFloat64(queryFilter.Value))
+	var valueAsCells []Cell
+
+	queryValueIsList := queryFilter.Type == "in"
+
+	if queryValueIsList {
+		untypedQueryValues := queryFilter.Value.([]interface{})
+		shouldTranslateToDimensionColumnIds := len(untypedQueryValues) > 0 && isString(untypedQueryValues[0])
+		if shouldTranslateToDimensionColumnIds {
+			// Convert this slice of untyped objects to []string. We encounter a panic if we try to cast straight
+			// to []string; I'm not sure why.
+			queryValuesAstrings := make([]string, 0, len(untypedQueryValues))
+			for _, value := range untypedQueryValues {
+				queryValuesAstrings = append(queryValuesAstrings, value.(string))
+			}
+			dimensionTable := table.DimensionTables[columnIndex]
+			valueAsCells = getDimensionRowIdsForValues(dimensionTable, queryValuesAstrings)
+		} else {
+			valueAsCells = make([]Cell, 0, len(untypedQueryValues))
+			for _, value := range untypedQueryValues {
+				valueAsCells = append(valueAsCells, (Cell(convertUntypedToFloat64(value))))
+			}
+		}
+	} else {
+		if isString(queryFilter.Value) {
+     	dimensionTable := table.DimensionTables[columnIndex]
+			matchingRowIds := getDimensionRowIdsForValues(dimensionTable, []string{queryFilter.Value.(string)})
+			if len(matchingRowIds) == 0 {
+				return func(row *FactRow) bool { return false; }
+			} else {
+				valueAsCell = matchingRowIds[0]
+			}
+	  } else {
+			valueAsCell = Cell(convertUntypedToFloat64(queryFilter.Value))
+		}
 	}
 
 	switch queryFilter.Type {
@@ -326,23 +360,13 @@ func convertQueryFilterToFilterFunc(queryFilter QueryFilter, table *FactTable) F
 			return row[columnIndex] == valueAsCell
 		}
 	case "in":
-		// Convert this slice of untyped objects to []string. We encounter a panic if we try to cast straight
-		// to []string; I'm not sure why.
-		queryValues := queryFilter.Value.([]interface{})
-		queryValuesAstrings := make([]string, 0, len(queryValues))
-		for _, element := range queryValues {
-			queryValuesAstrings = append(queryValuesAstrings, element.(string))
-		}
-
-		dimensionTable := table.DimensionTables[columnIndex]
-		matchingColumnIds := getDimensionRowIdsForValues(dimensionTable, queryValuesAstrings)
-		count := len(matchingColumnIds)
+		count := len(valueAsCells)
 		// TODO(philc): At some threshold, indexing into a query set of a given size will be more efficiently done
 		// as a hash table lookup. We should figure out what that threshold is and use a hash table in that case.
 		f = func(row *FactRow) bool {
 			columnValue := row[columnIndex]
 			for i := 0; i < count; i++ {
-				if columnValue == matchingColumnIds[i] {
+				if columnValue == valueAsCells[i] {
 					return true
 				}
 			}
