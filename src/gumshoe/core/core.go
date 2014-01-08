@@ -84,22 +84,6 @@ func NewFactTable(filePath string, columnNames []string) *FactTable {
 	return table
 }
 
-func populateTableWithTestingData(table *FactTable) {
-	rows := make([]map[string]Untyped, 0, ROWS)
-	countries := map[int]string{
-		0: "Japan",
-		1: "USA",
-	}
-	for i := 0; i < len(table.rows); i++ {
-		row := make(map[string]Untyped)
-		row["at"] = i
-		row["country"] = countries[i%2]
-		rows = append(rows, row)
-	}
-
-	InsertRowMaps(table, rows)
-}
-
 // Given a cell from a row vector, returns either the cell if this column isn't already normalized,
 // or the denormalized value. E.g. denormalizeColumnValue(213, 1) => "Japan"
 func denormalizeColumnValue(table *FactTable, columnValue Cell, columnIndex int) Untyped {
