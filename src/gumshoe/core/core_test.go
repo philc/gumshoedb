@@ -110,4 +110,16 @@ func TestInvokeQuery(t *testing.T) {
 		So(result[0], ShouldHaveEqualJson, map[string]Untyped{"groupbykey": 2, "rowCount": 2, "col1": 4})
 		So(result[1], ShouldHaveEqualJson, map[string]Untyped{"groupbykey": 5, "rowCount": 1, "col1": 5})
 	})
+
+	Convey("Grouping with a time transform function works", t, func() {
+		table := tableFixture()
+		// col1 will be truncated into minutes when we group by it, so these rows represent 0 and 2 minutes
+		// respectively.
+		insertRow(table, 0, "")
+		insertRow(table, 120, "")
+		insertRow(table, 150, "")
+		result := runWithGroupBy(table, QueryGrouping{"minute", "col1", "groupbykey"})
+		So(result[0], ShouldHaveEqualJson, map[string]Untyped{"groupbykey": 0, "rowCount": 1, "col1": 0})
+		So(result[1], ShouldHaveEqualJson, map[string]Untyped{"groupbykey": 120, "rowCount": 2, "col1": 270})
+	})
 }

@@ -204,9 +204,8 @@ func convertUntypedToFloat64(v Untyped) float64 {
 	return result
 }
 
-// TODO(philc): Can I change this return value to a slice of RowAggregates?
 func scanTable(table *FactTable, filters []FactTableFilterFunc, columnIndices []int,
-	groupByColumnName string) []RowAggregate {
+	groupByColumnName string, groupByColumnTransformFn func(Cell) Cell) []RowAggregate {
 	columnIndexToGroupBy, useGrouping := table.ColumnNameToIndex[groupByColumnName]
 	// This maps the values of the group-by column => RowAggregate.
 	// For now, we support only one level of grouping.
@@ -228,6 +227,9 @@ outerLoop:
 
 		if useGrouping {
 			groupByValue := row[columnIndexToGroupBy]
+			if groupByColumnTransformFn != nil {
+				groupByValue = groupByColumnTransformFn(groupByValue)
+			}
 			var ok bool
 			rowAggregate, ok = rowAggregatesMap[groupByValue]
 			if !ok {
@@ -383,11 +385,36 @@ func convertQueryFilterToFilterFunc(queryFilter QueryFilter, table *FactTable) F
 	return f
 }
 
+// Returns a function which, given a cell, performs a date-truncation transformation.
+// - transformFunctionName: one of [minute, hour, day].
+func convertTimeTransformToFunc(transformFunctionName string) func(Cell) Cell {
+	var divisor int
+	switch transformFunctionName {
+	case "minute":
+		divisor = 60
+  case "hour":
+		divisor = 60 * 60
+  case "day":
+		divisor = 60 * 60 * 24
+	}
+	return func(cell Cell) Cell {
+		cellInt := int(cell)
+		remainder := cellInt % divisor
+		return Cell(cellInt - remainder)
+	}
+}
+
 func InvokeQuery(table *FactTable, query *Query) map[string]Untyped {
 	columnIndicies := getColumnIndiciesFromQuery(query, table)
 	var groupByColumn string
+	var groupByTransformFunc func(Cell) Cell
+	// NOTE(philc): For now, only support one level of grouping. We intend to support multiple levels.
 	if len(query.Groupings) > 0 {
-		groupByColumn = query.Groupings[0].Column
+		grouping := query.Groupings[0]
+		groupByColumn = grouping.Column
+		if grouping.TimeTransform != "" {
+			groupByTransformFunc = convertTimeTransformToFunc(grouping.TimeTransform)
+		}
 	}
 
 	filterFuncs := make([]FactTableFilterFunc, 0, len(query.Filters))
@@ -395,7 +422,7 @@ func InvokeQuery(table *FactTable, query *Query) map[string]Untyped {
 		filterFuncs = append(filterFuncs, convertQueryFilterToFilterFunc(queryFilter, table))
 	}
 
-	results := scanTable(table, filterFuncs, columnIndicies, groupByColumn)
+	results := scanTable(table, filterFuncs, columnIndicies, groupByColumn, groupByTransformFunc)
 	jsonResultRows := mapRowAggregatesToJsonResultsFormat(query, table, results)
 	return map[string]Untyped{
 		"results": jsonResultRows,

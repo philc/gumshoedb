@@ -14,9 +14,11 @@ type QueryAggregate struct {
 }
 
 type QueryGrouping struct {
-	TimeFunction string
-	Column       string
-	Name         string
+	// This provides a means of specifying an optional date truncation function, assuming the column is a
+	// timestamp. It makes it posisble to group by time intervals (minute, hour, day).
+	TimeTransform string
+	Column        string
+	Name          string
 }
 
 type QueryFilter struct {
@@ -46,6 +48,11 @@ func ValidateQuery(table *FactTable, query *Query) error {
 	for _, grouping := range query.Groupings {
 		if !isValidColumn(table, grouping.Column) {
 			return fmt.Errorf("Unrecognized column name in grouping clause: %s", grouping.Column)
+		}
+		if grouping.TimeTransform != "" && grouping.TimeTransform != "minute" &&
+			grouping.TimeTransform != "hour" && grouping.TimeTransform != "day" {
+			return fmt.Errorf("Unrecogized time transform function: %s. Use one of {minute, hour, day}.",
+				grouping.TimeTransform)
 		}
 	}
 	for _, filter := range query.Filters {
