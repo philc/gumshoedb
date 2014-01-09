@@ -123,9 +123,12 @@ func loadFactTable() *core.FactTable {
 func main() {
 	table = loadFactTable()
 	m := martini.Classic()
+	// Use a specific set of middlewares instead of the defaults. Note that we've removed panic recovery.
+	m.Handlers(martini.Logger(), martini.Static("public"))
+
 	// TODO(philc): Make these REST routes more thoughtful & consistent.
   m.Post("/save", handleSaveRoute)
-  m.Post("/insert", handleInsertRoute)
+  m.Put("/insert", handleInsertRoute)
 	m.Get("/tables/facts", handleFactTableRoute)
 	m.Get("/tables/dimensions", handleDimensionsTableRoute)
 	m.Post("/tables/facts/query", handleQueryRoute)
