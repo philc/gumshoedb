@@ -47,5 +47,4 @@ func main() {
 	flags := parseCliFlags()
 	runCoreBenchmarks(flags)
 	runSyntheticBenchmarks(flags)
-
 }

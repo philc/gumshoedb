@@ -64,7 +64,6 @@ func runFilterQuery(table *core.FactTable) {
 		createQueryAggregates([]string{"column1"}),
 		nil,
 		[]core.QueryFilter{core.QueryFilter{">", "column2", 5}}}
-
 	error := core.ValidateQuery(table, query)
 	if error != nil {
 		panic(error)
@@ -72,7 +71,7 @@ func runFilterQuery(table *core.FactTable) {
 	core.InvokeQuery(table, query)
 }
 
-// A query which sums aggregates and groups by a column. Each column has 10 possible values.
+// A query which groups by a column. Each column has 10 possible values.
 func runGroupByQuery(table *core.FactTable) {
 	query := &core.Query{
 		"tableName",
@@ -83,7 +82,20 @@ func runGroupByQuery(table *core.FactTable) {
 	if error != nil {
 		panic(error)
 	}
+	core.InvokeQuery(table, query)
+}
 
+// A query which groups by a column that is transformed using a time transform function.
+func runGroupByWithTimeTransformQuery(table *core.FactTable) {
+	query := &core.Query{
+		"tableName",
+		createQueryAggregates([]string{"column1"}),
+		[]core.QueryGrouping{core.QueryGrouping{"hour", "column2", "column2"}},
+		nil}
+	error := core.ValidateQuery(table, query)
+	if error != nil {
+		panic(error)
+	}
 	core.InvokeQuery(table, query)
 }
 
@@ -101,6 +113,7 @@ func runCoreBenchmarks(flags BenchmarkFlags) {
 	}
 
 	runBenchmarkFunction("aggregateQuery", func() { runAggregateQuery(table) })
-	runBenchmarkFunction("groupByQuery", func() { runGroupByQuery(table) })
 	runBenchmarkFunction("filterQuery", func() { runFilterQuery(table) })
+	runBenchmarkFunction("groupByQuery", func() { runGroupByQuery(table) })
+	runBenchmarkFunction("groupByWithTimeTransformQuery", func() { runGroupByWithTimeTransformQuery(table) })
 }
