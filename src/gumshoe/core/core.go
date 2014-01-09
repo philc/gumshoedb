@@ -346,14 +346,21 @@ func convertQueryFilterToFilterFunc(queryFilter QueryFilter, table *FactTable) F
 	}
 
 	switch queryFilter.Type {
-	// TODO(philc): Add <= and >= once this turns out to be useful.
 	case "greaterThan", ">":
 		f = func(row *FactRow) bool {
 			return row[columnIndex] > valueAsCell
 		}
+	case "greaterThanOrEqualTo", ">=":
+		f = func(row *FactRow) bool {
+			return row[columnIndex] >= valueAsCell
+		}
 	case "lessThan", "<":
 		f = func(row *FactRow) bool {
 			return row[columnIndex] < valueAsCell
+		}
+	case "lessThanOrEqualTo", "<=":
+		f = func(row *FactRow) bool {
+			return row[columnIndex] <= valueAsCell
 		}
 	case "equal", "=":
 		f = func(row *FactRow) bool {
