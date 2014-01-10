@@ -7,7 +7,7 @@ import (
 
 // The size of the fact table is currently a compile time constant, so we can use native arrays instead of
 // ranges.
-const ROWS = 100000
+const ROWS = 10000000
 const COLS = 42
 
 type Cell float32

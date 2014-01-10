@@ -1,10 +1,13 @@
 package main
 
 import (
+	core "gumshoe/core"
 	"flag"
 	"testing"
 	"fmt"
 )
+
+const BENCHMARK_ROWS = 100000 // The row count to use in these benchmarks.
 
 func runBenchmarkFunction(displayName string, f func()) {
 	benchmarkHandler := func(b *testing.B) {
@@ -45,6 +48,9 @@ func parseCliFlags() BenchmarkFlags {
 
 func main() {
 	flags := parseCliFlags()
+	if BENCHMARK_ROWS > core.ROWS {
+		panic("Benchmark.ROWS is larger than core.ROWS.")
+	}
 	runCoreBenchmarks(flags)
 	runSyntheticBenchmarks(flags)
 }

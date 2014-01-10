@@ -6,8 +6,6 @@ import core "gumshoe/core"
 import "runtime/pprof"
 import "os"
 
-const BENCHMARK_ROWS = core.ROWS // The row count to use in these benchmarks.
-
 func setupFactTable() *core.FactTable {
 	columnNames := make([]string, 0, core.COLS)
 	for i := 0; i < core.COLS; i++ {
