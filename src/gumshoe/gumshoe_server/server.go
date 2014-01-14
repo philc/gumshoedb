@@ -41,6 +41,7 @@ func handleInsertRoute(responseWriter http.ResponseWriter, request *http.Request
 	if error != nil {
 		fmt.Println(error)
 		http.Error(responseWriter, error.Error(), 500)
+		return
 	}
 	fmt.Printf("Inserting %d rows\n", len(jsonBody))
 
@@ -48,10 +49,11 @@ func handleInsertRoute(responseWriter http.ResponseWriter, request *http.Request
 	if error != nil {
 		fmt.Println(error)
 		http.Error(responseWriter, error.Error(), 500)
+		return
 	}
 }
 
-// Force the save of the database.
+// Save the database to disk, blocking until it's written.
 func handleSaveRoute(request *http.Request) () {
 	table.SaveToDisk()
 }
