@@ -14,13 +14,13 @@ import (
 	"time"
 )
 
-// TODO(philc): Make these settings configurable via a config file.
+// TODO(philc): Add the ability to specify schema and persistence settings via a config file.
 const tableFilePath = "data/table"
 
 // How often to persist tables to disk.
 const saveDurationInSecs = 10
 
-// This table is reference by all of the routes.
+// This table is referenced by all of the routes.
 var table *core.FactTable
 
 func writeJsonResponse(responseWriter http.ResponseWriter, objectToSerialize interface{}) {
@@ -29,6 +29,7 @@ func writeJsonResponse(responseWriter http.ResponseWriter, objectToSerialize int
 	fmt.Fprint(responseWriter, string(jsonResult))
 }
 
+// Given an array of JSON rows, insert them.
 func handleInsertRoute(responseWriter http.ResponseWriter, request *http.Request) {
 	if request.Method != "PUT" {
 		http.Error(responseWriter, "", 404)
@@ -73,9 +74,9 @@ func handleFactTableRoute(responseWriter http.ResponseWriter, request *http.Requ
 	writeJsonResponse(responseWriter, &results)
 }
 
-// Returns the contents of the all of the dimensions tables, for debugging purposes.
+// Returns the contents of the all of the dimensions tables, for use when debugging.
 func handleDimensionsTableRoute(responseWriter http.ResponseWriter, request *http.Request) {
-	// Assembles {dimensionTableName => [ [0 value0] [1 value1] ... ]
+	// Assembles the map: {dimensionTableName => [ [0 value0] [1 value1] ... ]}
 	results := make(map[string][][2]core.Untyped)
 	for _, dimensionTable := range(table.DimensionTables[:table.ColumnCount]) {
 		rows := make([][2]core.Untyped, 0, table.ColumnCount)
@@ -88,6 +89,8 @@ func handleDimensionsTableRoute(responseWriter http.ResponseWriter, request *htt
 	writeJsonResponse(responseWriter, &results)
 }
 
+// Evaluate a query and returns an aggregated result set.
+// See the README for the query JSON structure and the structure of the reuslts.
 func handleQueryRoute(responseWriter http.ResponseWriter, request *http.Request) {
 	start := time.Now()
 	requestBody, _ := ioutil.ReadAll(request.Body)
@@ -107,6 +110,7 @@ func handleQueryRoute(responseWriter http.ResponseWriter, request *http.Request)
 	writeJsonResponse(responseWriter, results)
 }
 
+// Loads the fact table from disk if it exists, or creates a new one.
 func loadFactTable() *core.FactTable {
 	var table *core.FactTable
   if _, err := os.Stat(tableFilePath + ".json"); os.IsNotExist(err) {
@@ -123,7 +127,7 @@ func loadFactTable() *core.FactTable {
 }
 
 func main() {
-	// Use all available cores
+	// Use all available cores for servicing requests in parallel.
 	if os.Getenv("GOMAXPROCS") == "" {
 		runtime.GOMAXPROCS(runtime.NumCPU())
 	}
@@ -133,7 +137,7 @@ func main() {
 	// Use a specific set of middlewares instead of the defaults. Note that we've removed panic recovery.
 	m.Handlers(martini.Logger(), martini.Static("public"))
 
-	// TODO(philc): Make these REST routes more thoughtful & consistent.
+	// TODO(philc): Make these REST routes more consistent.
   m.Post("/save", handleSaveRoute)
   m.Put("/insert", handleInsertRoute)
 	m.Get("/tables/facts", handleFactTableRoute)
