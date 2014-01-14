@@ -10,6 +10,7 @@ import (
 	"math"
 	"net/http"
 	"os"
+	"runtime"
 	"time"
 )
 
@@ -121,6 +122,11 @@ func loadFactTable() *core.FactTable {
 }
 
 func main() {
+	// Use all available cores
+	if os.Getenv("GOMAXPROCS") == "" {
+		runtime.GOMAXPROCS(runtime.NumCPU())
+	}
+
 	table = loadFactTable()
 	m := martini.Classic()
 	// Use a specific set of middlewares instead of the defaults. Note that we've removed panic recovery.
