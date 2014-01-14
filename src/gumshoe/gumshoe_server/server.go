@@ -25,8 +25,7 @@ var table *core.FactTable
 
 func writeJsonResponse(responseWriter http.ResponseWriter, objectToSerialize interface{}) {
 	jsonResult, _ := json.Marshal(objectToSerialize)
-	// TODO(philc): set a json header
-	// responseWriter.Header()["Content-Type"] = "application/json"
+	responseWriter.Header().Set("Content-Type", "application/json")
 	fmt.Fprint(responseWriter, string(jsonResult))
 }
 
