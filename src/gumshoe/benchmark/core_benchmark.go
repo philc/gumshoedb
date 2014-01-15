@@ -26,7 +26,7 @@ func populateTableWithTestingData(table *core.FactTable) {
 		rows = append(rows, row)
 	}
 
-	error := core.InsertRowMaps(table, rows)
+	error := table.InsertRowMaps(rows)
 	if error != nil {
 		panic(error)
 	}
@@ -52,7 +52,7 @@ func runAggregateQuery(table *core.FactTable) {
 	if error != nil {
 		panic(error)
 	}
-	core.InvokeQuery(table, query)
+	table.InvokeQuery(query)
 }
 
 // A query which filters rows by a single, simple filter function.
@@ -66,7 +66,7 @@ func runFilterQuery(table *core.FactTable) {
 	if error != nil {
 		panic(error)
 	}
-	core.InvokeQuery(table, query)
+	table.InvokeQuery(query)
 }
 
 // A query which groups by a column. Each column has 10 possible values, so the result set will contain 10 row
@@ -81,7 +81,7 @@ func runGroupByQuery(table *core.FactTable) {
 	if error != nil {
 		panic(error)
 	}
-	core.InvokeQuery(table, query)
+	table.InvokeQuery(query)
 }
 
 // A query which groups by a column that is transformed using a time transform function.
@@ -95,7 +95,7 @@ func runGroupByWithTimeTransformQuery(table *core.FactTable) {
 	if error != nil {
 		panic(error)
 	}
-	core.InvokeQuery(table, query)
+	table.InvokeQuery(query)
 }
 
 // Run benchmarks which exercise the core query pipeline in a representative way.

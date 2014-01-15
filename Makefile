@@ -19,5 +19,5 @@ benchmark: build
 	go install ...gumshoe/benchmark
 
 # Runs all benhcmarks appearing in any *_test.go files.
-run-benchmark: build_benchmark
+run-benchmark: benchmark
 	bin/benchmark -minimal-set=true
