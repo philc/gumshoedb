@@ -42,18 +42,16 @@ func handleInsertRoute(responseWriter http.ResponseWriter, request *http.Request
 
 	requestBody, _ := ioutil.ReadAll(request.Body)
 	jsonBody := make([](map[string]gumshoe.Untyped), 0)
-	error := json.Unmarshal([]byte(requestBody), &jsonBody)
-	if error != nil {
-		fmt.Println(error)
-		http.Error(responseWriter, error.Error(), 500)
+	if err := json.Unmarshal([]byte(requestBody), &jsonBody); err != nil {
+		log.Print(err)
+		http.Error(responseWriter, err.Error(), 500)
 		return
 	}
-	fmt.Printf("Inserting %d rows\n", len(jsonBody))
+	log.Printf("Inserting %d rows", len(jsonBody))
 
-	error = table.InsertRowMaps(jsonBody)
-	if error != nil {
-		fmt.Println(error)
-		http.Error(responseWriter, error.Error(), 500)
+	if err := table.InsertRowMaps(jsonBody); err != nil {
+		log.Print(err)
+		http.Error(responseWriter, err.Error(), 500)
 		return
 	}
 }
@@ -98,15 +96,15 @@ func handleDimensionsTableRoute(responseWriter http.ResponseWriter, request *htt
 func handleQueryRoute(responseWriter http.ResponseWriter, request *http.Request) {
 	start := time.Now()
 	requestBody, _ := ioutil.ReadAll(request.Body)
-	query, error := gumshoe.ParseJsonQuery(string(requestBody))
-	if error != nil {
-		fmt.Println(error)
-		http.Error(responseWriter, error.Error(), 500)
+	query, err := gumshoe.ParseJsonQuery(string(requestBody))
+	if err != nil {
+		log.Print(err)
+		http.Error(responseWriter, err.Error(), 500)
 		return
 	}
-	if error = gumshoe.ValidateQuery(table, query); error != nil {
-		fmt.Println(error)
-		http.Error(responseWriter, error.Error(), 500)
+	if err = gumshoe.ValidateQuery(table, query); err != nil {
+		log.Print(err)
+		http.Error(responseWriter, err.Error(), 500)
 		return
 	}
 	results := table.InvokeQuery(query)
@@ -118,14 +116,14 @@ func handleQueryRoute(responseWriter http.ResponseWriter, request *http.Request)
 func loadFactTable() *gumshoe.FactTable {
 	var table *gumshoe.FactTable
 	if _, err := os.Stat(tableFilePath + ".json"); os.IsNotExist(err) {
-		fmt.Printf("Table \"%s\" does not exist, creating... ", tableFilePath)
+		log.Printf("Table \"%s\" does not exist, creating... ", tableFilePath)
 		table = gumshoe.NewFactTable(tableFilePath, columnNames)
 		table.SaveToDisk()
-		fmt.Println("done.")
+		log.Print("done.")
 	} else {
-		fmt.Printf("Loading \"%s\"... ", tableFilePath)
+		log.Printf("Loading \"%s\"... ", tableFilePath)
 		table = gumshoe.LoadFactTableFromDisk(tableFilePath)
-		fmt.Printf("loaded %d rows.\n", table.Count)
+		log.Printf("loaded %d rows.", table.Count)
 	}
 	return table
 }
