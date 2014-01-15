@@ -1,6 +1,6 @@
 export GOPATH=$(PWD):$(PWD)/vendor
 
-build:
+build: deps
 	go install gumshoe/core
 
 deps:
