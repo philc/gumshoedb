@@ -56,7 +56,7 @@ func handleInsertRoute(responseWriter http.ResponseWriter, request *http.Request
 }
 
 // Save the database to disk, blocking until it's written.
-func handleSaveRoute(request *http.Request) () {
+func handleSaveRoute(request *http.Request) {
 	table.SaveToDisk()
 }
 
@@ -79,7 +79,7 @@ func handleFactTableRoute(responseWriter http.ResponseWriter, request *http.Requ
 func handleDimensionsTableRoute(responseWriter http.ResponseWriter, request *http.Request) {
 	// Assembles the map: {dimensionTableName => [ [0 value0] [1 value1] ... ]}
 	results := make(map[string][][2]core.Untyped)
-	for _, dimensionTable := range(table.DimensionTables[:table.ColumnCount]) {
+	for _, dimensionTable := range table.DimensionTables[:table.ColumnCount] {
 		rows := make([][2]core.Untyped, 0, table.ColumnCount)
 		for i, value := range dimensionTable.Rows {
 			row := [2]core.Untyped{i, value}
@@ -114,7 +114,7 @@ func handleQueryRoute(responseWriter http.ResponseWriter, request *http.Request)
 // Loads the fact table from disk if it exists, or creates a new one.
 func loadFactTable() *core.FactTable {
 	var table *core.FactTable
-  if _, err := os.Stat(tableFilePath + ".json"); os.IsNotExist(err) {
+	if _, err := os.Stat(tableFilePath + ".json"); os.IsNotExist(err) {
 		fmt.Printf("Table \"%s\" does not exist, creating... ", tableFilePath)
 		table = core.NewFactTable(tableFilePath, columnNames)
 		table.SaveToDisk()
@@ -139,8 +139,8 @@ func main() {
 	m.Handlers(martini.Logger(), martini.Static("public"))
 
 	// TODO(philc): Make these REST routes more consistent.
-  m.Post("/save", handleSaveRoute)
-  m.Put("/insert", handleInsertRoute)
+	m.Post("/save", handleSaveRoute)
+	m.Put("/insert", handleInsertRoute)
 	m.Get("/tables/facts", handleFactTableRoute)
 	m.Get("/tables/dimensions", handleDimensionsTableRoute)
 	m.Post("/tables/facts/query", handleQueryRoute)

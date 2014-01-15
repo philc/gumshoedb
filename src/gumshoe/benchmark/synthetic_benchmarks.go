@@ -8,19 +8,21 @@ import "unsafe"
 
 const ROWS = 100000
 const COLS = 50
+
 // The "Cell" type and COL_SIZE are compile time constants, but they can be changed by hand to observe the
 // the effect column size and thus row size has on scan speed.
 var COL_SIZE int = typeSizes["float32"]
 var ROW_SIZE int = COL_SIZE * COLS
+
 type Cell float32
 type SumType float32
 
-var typeSizes map[string]int = map[string]int {
-	"int": asInt(unsafe.Sizeof(*new(int))),
-	"int8": asInt(unsafe.Sizeof(*new(int8))),
-	"int16": asInt(unsafe.Sizeof(*new(int16))),
-	"int32": asInt(unsafe.Sizeof(*new(int32))),
-	"uint32": asInt(unsafe.Sizeof(*new(uint32))),
+var typeSizes map[string]int = map[string]int{
+	"int":     asInt(unsafe.Sizeof(*new(int))),
+	"int8":    asInt(unsafe.Sizeof(*new(int8))),
+	"int16":   asInt(unsafe.Sizeof(*new(int16))),
+	"int32":   asInt(unsafe.Sizeof(*new(int32))),
+	"uint32":  asInt(unsafe.Sizeof(*new(uint32))),
 	"float32": asInt(unsafe.Sizeof(*new(float32))),
 	"float64": asInt(unsafe.Sizeof(*new(float64))),
 }
@@ -32,14 +34,14 @@ func SumArrayMatrix(matrix *[ROWS][COLS]Cell) int {
 	for i := 0; i < length; i++ {
 		sum += SumType(matrix[i][0])
 	}
-  return int(sum)
+	return int(sum)
 }
 
 // Sum columns over a slice of arrays.
 func SumOneRolledLoop(matrix []*[COLS]Cell) int {
 	var sum SumType = 0.0
 	length := len(matrix)
-	for i := 0; i < length; i+=1 {
+	for i := 0; i < length; i += 1 {
 		sum += SumType(matrix[i][0])
 	}
 	return int(sum)
@@ -49,7 +51,7 @@ func SumOneRolledLoop(matrix []*[COLS]Cell) int {
 func SumOneUnrolledLoop(matrix []*[COLS]Cell) int {
 	var sum SumType = 0
 	length := len(matrix)
-	for i := 0; i < length; i+=5 {
+	for i := 0; i < length; i += 5 {
 		sum += SumType(matrix[i][0])
 		sum += SumType(matrix[i+1][0])
 		sum += SumType(matrix[i+2][0])
@@ -134,7 +136,7 @@ func asInt(p uintptr) int {
 
 func setValue(matrix uintptr, row int, col int, value Cell) {
 	matrix += uintptr((ROW_SIZE * row) + (COL_SIZE * col))
-	a := (* Cell)(unsafe.Pointer(matrix))
+	a := (*Cell)(unsafe.Pointer(matrix))
 	*a = value
 }
 

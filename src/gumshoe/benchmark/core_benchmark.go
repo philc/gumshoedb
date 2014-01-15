@@ -61,7 +61,7 @@ func runFilterQuery(table *core.FactTable) {
 		"tableName",
 		createQueryAggregates([]string{"column1"}),
 		nil,
-		[]core.QueryFilter{core.QueryFilter{">", "column2", 5}}}
+		[]core.QueryFilter{{">", "column2", 5}}}
 	error := core.ValidateQuery(table, query)
 	if error != nil {
 		panic(error)
@@ -75,7 +75,7 @@ func runGroupByQuery(table *core.FactTable) {
 	query := &core.Query{
 		"tableName",
 		createQueryAggregates([]string{"column1"}),
-		[]core.QueryGrouping{core.QueryGrouping{"", "column2", "column2"}},
+		[]core.QueryGrouping{{"", "column2", "column2"}},
 		nil}
 	error := core.ValidateQuery(table, query)
 	if error != nil {
@@ -89,7 +89,7 @@ func runGroupByWithTimeTransformQuery(table *core.FactTable) {
 	query := &core.Query{
 		"tableName",
 		createQueryAggregates([]string{"column1"}),
-		[]core.QueryGrouping{core.QueryGrouping{"hour", "column2", "column2"}},
+		[]core.QueryGrouping{{"hour", "column2", "column2"}},
 		nil}
 	error := core.ValidateQuery(table, query)
 	if error != nil {

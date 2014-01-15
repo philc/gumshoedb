@@ -15,7 +15,7 @@ func insertRow(table *FactTable, column1Value Untyped, column2Value Untyped) {
 }
 
 func createQuery() Query {
-	query := Query{"", []QueryAggregate{QueryAggregate{"sum", "col1", "col1"}}, nil, nil}
+	query := Query{"", []QueryAggregate{{"sum", "col1", "col1"}}, nil, nil}
 	return query
 }
 
@@ -30,7 +30,7 @@ func convertToJsonAndBack(o interface{}) interface{} {
 }
 
 // A variant of DeepEquals which is less finicky about which numeric type you're using in maps.
-func HasEqualJson(args... interface{}) (ok bool, message string) {
+func HasEqualJson(args ...interface{}) (ok bool, message string) {
 	o1 := convertToJsonAndBack(args[0])
 	o2 := convertToJsonAndBack(args[1])
 	return DeepEquals(o1, o2)

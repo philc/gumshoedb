@@ -2,10 +2,10 @@
 package main
 
 import (
-	core "gumshoe/core"
 	"flag"
-	"testing"
 	"fmt"
+	core "gumshoe/core"
+	"testing"
 )
 
 const BENCHMARK_ROWS = 100000 // The row count to use in these benchmarks.
@@ -17,7 +17,7 @@ func runBenchmarkFunction(displayName string, f func()) {
 		}
 	}
 	result := testing.Benchmark(benchmarkHandler)
-	fmt.Printf("%-25s %-3.2f ms\n", displayName, float32(result.NsPerOp()) / 1000000.0)
+	fmt.Printf("%-25s %-3.2f ms\n", displayName, float32(result.NsPerOp())/1000000.0)
 }
 
 func runBenchmarkFunctionWithReturnValue(displayName string, f func() int) {
@@ -28,7 +28,7 @@ func runBenchmarkFunctionWithReturnValue(displayName string, f func() int) {
 		}
 	}
 	result := testing.Benchmark(benchmarkHandler)
-	fmt.Printf("%-25s %-3.2f ms Result: %d\n", displayName, float32(result.NsPerOp()) / 1000000.0, returnValue)
+	fmt.Printf("%-25s %-3.2f ms Result: %d\n", displayName, float32(result.NsPerOp())/1000000.0, returnValue)
 }
 
 type BenchmarkFlags struct {
