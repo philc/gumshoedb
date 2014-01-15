@@ -3,6 +3,9 @@ export GOPATH=$(PWD)
 build:
 	go install gumshoe/core
 
+deps:
+	git submodule update --init
+
 run-test: build
 	go test ...gumshoe/core
 

@@ -1,0 +1,12 @@
+[submodule "vendor/src/github.com/cespare/a"]
+	path = vendor/src/github.com/cespare/a
+	url = https://github.com/cespare/a.git
+[submodule "vendor/src/github.com/edsrzf/mmap-go"]
+	path = vendor/src/github.com/edsrzf/mmap-go
+	url = https://github.com/edsrzf/mmap-go.git
+[submodule "vendor/src/github.com/codegangsta/inject"]
+	path = vendor/src/github.com/codegangsta/inject
+	url = https://github.com/codegangsta/inject.git
+[submodule "vendor/src/github.com/codegangsta/martini"]
+	path = vendor/src/github.com/codegangsta/martini
+	url = https://github.com/codegangsta/martini.git
