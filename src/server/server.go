@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"math"
 	"net/http"
 	"os"
@@ -146,6 +147,5 @@ func main() {
 	m.Get("/tables/facts", handleFactTableRoute)
 	m.Get("/tables/dimensions", handleDimensionsTableRoute)
 	m.Post("/tables/facts/query", handleQueryRoute)
-	// TODO(philc): Complain if we can't bind to this port
-	http.ListenAndServe(":9000", m)
+	log.Fatal(http.ListenAndServe(":9000", m))
 }
