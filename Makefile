@@ -21,3 +21,6 @@ benchmark: build
 # Runs all benhcmarks appearing in any *_test.go files.
 run-benchmark: benchmark
 	bin/benchmark -minimal-set=true
+
+fmt:
+	gofmt -s -l -w src
