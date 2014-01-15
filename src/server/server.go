@@ -27,7 +27,11 @@ const saveDurationInSecs = 10
 var table *gumshoe.FactTable
 
 func writeJsonResponse(responseWriter http.ResponseWriter, objectToSerialize interface{}) {
-	jsonResult, _ := json.Marshal(objectToSerialize)
+	if jsonResult, err := json.Marshal(objectToSerialize); err != nil {
+		log.Print(err)
+		http.Error(responseWriter, err.Error(), 500)
+		return
+	}
 	responseWriter.Header().Set("Content-Type", "application/json")
 	responseWriter.Write(jsonResult)
 }

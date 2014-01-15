@@ -50,7 +50,9 @@ func LoadFactTableFromDisk(tableFilePath string) *FactTable {
 	if err != nil {
 		panic(err)
 	}
-	json.Unmarshal(file, &table)
+	if err := json.Unmarshal(file, &table); err != nil {
+		panic(err)
+	}
 
 	if err != nil {
 		panic(err)
@@ -99,5 +101,6 @@ func (table *FactTable) SaveToDisk() {
 
 	file.Write(bytesBuffer)
 	file.Close()
+	// TODO(caleb): Handle a flush error
 	table.memoryMap.Flush() // Sync the memory map to disk synchronously.
 }
