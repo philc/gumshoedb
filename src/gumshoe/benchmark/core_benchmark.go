@@ -1,4 +1,5 @@
-// Benchmarks which use the gumshoe core in a representative way.
+// Benchmarks which use the gumshoe core code paths in a representative way. These numbers should be compared
+// to the ideal, simplified synthetic benchmarks to find areas for improvement.
 package main
 
 import "fmt"
@@ -14,7 +15,6 @@ func setupFactTable() *core.FactTable {
 	return core.NewFactTable("./benchmark", columnNames)
 }
 
-// Populates a table with representative test data. The columns are named "column1", "column2".
 func populateTableWithTestingData(table *core.FactTable) {
 	rows := make([]map[string]core.Untyped, 0, BENCHMARK_ROWS)
 
@@ -32,7 +32,7 @@ func populateTableWithTestingData(table *core.FactTable) {
 	}
 }
 
-// Creates a QueryAggregate structure which will define the sums of the given columns.
+// Creates a QueryAggregate structure which represents the sums of the given columns.
 func createQueryAggregates(columns []string) []core.QueryAggregate {
 	queryAggregates := make([]core.QueryAggregate, 0, len(columns))
 	for _, column := range columns {
@@ -55,7 +55,7 @@ func runAggregateQuery(table *core.FactTable) {
 	core.InvokeQuery(table, query)
 }
 
-// A query which filters rows by a single simple filter function.
+// A query which filters rows by a single, simple filter function.
 func runFilterQuery(table *core.FactTable) {
 	query := &core.Query{
 		"tableName",
@@ -69,7 +69,8 @@ func runFilterQuery(table *core.FactTable) {
 	core.InvokeQuery(table, query)
 }
 
-// A query which groups by a column. Each column has 10 possible values.
+// A query which groups by a column. Each column has 10 possible values, so the result set will contain 10 row
+// aggregates.
 func runGroupByQuery(table *core.FactTable) {
 	query := &core.Query{
 		"tableName",
@@ -97,7 +98,7 @@ func runGroupByWithTimeTransformQuery(table *core.FactTable) {
 	core.InvokeQuery(table, query)
 }
 
-// These exercise the main core query pipeline in a representative way.
+// Run benchmarks which exercise the core query pipeline in a representative way.
 func runCoreBenchmarks(flags BenchmarkFlags) {
 	table := setupFactTable()
 	populateTableWithTestingData(table)

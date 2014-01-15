@@ -1,12 +1,15 @@
-// "Synthetic" benchmarks which test narrow, isolated conditions. These represent the ideal performance for
-// a given technique. These benchmarks are helpful in providing a simplified view on what affects performance,
-// and for sanity checking the performance of the main query pipeline.
+// Synthetic benchmarks which test narrow, isolated conditions. These represent the ideal performance for a
+// given technique. These benchmarks are helpful in providing an upper-bound for table scan speed, a
+// simplified view on what affects performance, and for sanity checking the performance of the main query
+// pipeline.
 package main
 
 import "unsafe"
 
 const ROWS = 100000
 const COLS = 50
+// The "Cell" type and COL_SIZE are compile time constants, but they can be changed by hand to observe the
+// the effect column size and thus row size has on scan speed.
 var COL_SIZE int = typeSizes["float32"]
 var ROW_SIZE int = COL_SIZE * COLS
 type Cell float32
@@ -22,6 +25,7 @@ var typeSizes map[string]int = map[string]int {
 	"float64": asInt(unsafe.Sizeof(*new(float64))),
 }
 
+// Sum columns over a native array.
 func SumArrayMatrix(matrix *[ROWS][COLS]Cell) int {
 	length := len(matrix)
 	var sum SumType = 0.0
@@ -31,6 +35,7 @@ func SumArrayMatrix(matrix *[ROWS][COLS]Cell) int {
   return int(sum)
 }
 
+// Sum columns over a slice of arrays.
 func SumOneRolledLoop(matrix []*[COLS]Cell) int {
 	var sum SumType = 0.0
 	length := len(matrix)
@@ -40,27 +45,7 @@ func SumOneRolledLoop(matrix []*[COLS]Cell) int {
 	return int(sum)
 }
 
-func SumSliceOfSliceMatrix(matrix [][]Cell) int {
-	var sum SumType = 0.0
-	length := len(matrix)
-	for i := 0; i < length; i++ {
-		sum += SumType(matrix[i][0])
-	}
-	return int(sum)
-}
-
-func SumByteMatrix(matrix uintptr) int {
-	// NOTE(philc): this doesn't currently produce the correct results. It's off by a few thousand
-	var sum SumType = 0
-	length := ROWS
-	for i := 0; i < length; i++ {
-		a := *(*Cell)(unsafe.Pointer(matrix))
-		sum += SumType(a)
-		matrix += uintptr(ROW_SIZE)
-	}
-	return int(sum)
-}
-
+// Sum columns over a slice of arrays.
 func SumOneUnrolledLoop(matrix []*[COLS]Cell) int {
 	var sum SumType = 0
 	length := len(matrix)
@@ -74,6 +59,30 @@ func SumOneUnrolledLoop(matrix []*[COLS]Cell) int {
 	return int(sum)
 }
 
+// Sum columns over a slice of slices.
+func SumSliceOfSliceMatrix(matrix [][]Cell) int {
+	var sum SumType = 0.0
+	length := len(matrix)
+	for i := 0; i < length; i++ {
+		sum += SumType(matrix[i][0])
+	}
+	return int(sum)
+}
+
+// Sum columns over a byte matrix.
+func SumByteMatrix(matrix uintptr) int {
+	// NOTE(philc): this doesn't currently produce the correct results. It's off by a few thousand
+	var sum SumType = 0
+	length := ROWS
+	for i := 0; i < length; i++ {
+		a := *(*Cell)(unsafe.Pointer(matrix))
+		sum += SumType(a)
+		matrix += uintptr(ROW_SIZE)
+	}
+	return int(sum)
+}
+
+// Filter rows by invoking a function.
 func SumUsingFilterFn(matrix []*[COLS]Cell, filter func(*[COLS]Cell) bool) int {
 	var sum SumType = 0
 	length := len(matrix)
@@ -86,6 +95,7 @@ func SumUsingFilterFn(matrix []*[COLS]Cell, filter func(*[COLS]Cell) bool) int {
 	return int(sum)
 }
 
+// Filter rows by evaluating an inlined filter function.
 func SumUsingInlineFilterFn(matrix []*[COLS]Cell) int {
 	var sum SumType = 0
 	length := len(matrix)

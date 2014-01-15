@@ -1,3 +1,4 @@
+// A CLI interface for running gumshoedb benchmarks.
 package main
 
 import (
