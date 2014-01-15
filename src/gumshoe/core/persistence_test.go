@@ -16,11 +16,11 @@ func TestPersistenceEndToEnd(t *testing.T) {
 	table := NewFactTable(tableFilePath , []string{"col1", "col2"})
 	table.SaveToDisk()
 	rowMap := map[string]Untyped{"col1": 12, "col2": 34}
-	InsertRowMaps(table, []map[string]Untyped{rowMap})
+	table.InsertRowMaps([]map[string]Untyped{rowMap})
 
 	table = LoadFactTableFromDisk(tableFilePath)
 	Assert(t, table.FilePath, Equals, tableFilePath)
-	denormalizedRow := DenormalizeRow(table, &table.Rows()[0])
+	denormalizedRow := table.DenormalizeRow(&table.Rows()[0])
 
 	Assert(t, int(denormalizedRow["col1"].(Cell)), Equals, int(rowMap["col1"].(int)))
 }

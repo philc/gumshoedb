@@ -11,7 +11,7 @@ func tableFixture() *FactTable {
 }
 
 func insertRow(table *FactTable, column1Value Untyped, column2Value Untyped) {
-	InsertRowMaps(table, []map[string]Untyped{{"col1": column1Value, "col2": column2Value}})
+	table.InsertRowMaps([]map[string]Untyped{{"col1": column1Value, "col2": column2Value}})
 }
 
 func createQuery() Query {
@@ -37,7 +37,7 @@ func HasEqualJson(args... interface{}) (ok bool, message string) {
 }
 
 func TestConvertRowMapToRowArrayThrowsErrorForUnrecognizedColumn(t *testing.T) {
-	_, error := convertRowMapToRowArray(tableFixture(), map[string]Untyped{"col1": 5, "unknownColumn": 10})
+	_, error := tableFixture().convertRowMapToRowArray(map[string]Untyped{"col1": 5, "unknownColumn": 10})
 	Assert(t, error, NotNil)
 }
 
@@ -51,13 +51,13 @@ func createTableFixtureForFilterTests() *FactTable {
 func runWithFilter(table *FactTable, filter QueryFilter) []map[string]Untyped {
 	query := createQuery()
 	query.Filters = []QueryFilter{filter}
-	return InvokeQuery(table, &query)["results"].([]map[string]Untyped)
+	return table.InvokeQuery(&query)["results"].([]map[string]Untyped)
 }
 
 func runWithGroupBy(table *FactTable, filter QueryGrouping) []map[string]Untyped {
 	query := createQuery()
 	query.Groupings = []QueryGrouping{filter}
-	return InvokeQuery(table, &query)["results"].([]map[string]Untyped)
+	return table.InvokeQuery(&query)["results"].([]map[string]Untyped)
 }
 
 func TestInvokeQueryFiltersRowsUsingEqualsFilter(t *testing.T) {

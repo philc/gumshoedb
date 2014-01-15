@@ -90,7 +90,7 @@ func NewFactTable(filePath string, columnNames []string) *FactTable {
 
 // Given a cell from a row vector, returns either the cell if this column isn't already normalized,
 // or the denormalized value. E.g. denormalizeColumnValue(213, 1) => "Japan"
-func denormalizeColumnValue(table *FactTable, columnValue Cell, columnIndex int) Untyped {
+func (table *FactTable) denormalizeColumnValue(columnValue Cell, columnIndex int) Untyped {
 	// TODO(philc): I'm using the implicit condition that if a dimension table is empty, this column isn't a
 	// normalized dimension. This should be represented explicitly by a user-defined schema.
 	dimensionTable := table.DimensionTables[columnIndex]
@@ -104,10 +104,10 @@ func denormalizeColumnValue(table *FactTable, columnValue Cell, columnIndex int)
 // Takes a normalized FactRow vector and returns a map consistent of column names and values pulled from
 // the dimension tables.
 // e.g. [0, 1, 17] => {"country": "Japan", "browser": "Chrome", "age": 17}
-func DenormalizeRow(table *FactTable, row *FactRow) map[string]Untyped {
+func (table *FactTable) DenormalizeRow(row *FactRow) map[string]Untyped {
 	result := make(map[string]Untyped)
 	for i := 0; i < table.ColumnCount; i++ {
-		result[table.ColumnIndexToName[i]] = denormalizeColumnValue(table, row[i], i)
+		result[table.ColumnIndexToName[i]] = table.denormalizeColumnValue(row[i], i)
 	}
 	return result
 }
@@ -116,7 +116,7 @@ func DenormalizeRow(table *FactTable, row *FactRow) map[string]Untyped {
 // position according to the table's schema, e.g.:
 // e.g. {"country": "Japan", "browser": "Chrome", "age": 17} => ["Chrome", 17, "Japan"]
 // Returns an error if there are unrecognized columns, or if a column is missing.
-func convertRowMapToRowArray(table *FactTable, rowMap map[string]Untyped) ([]Untyped, error) {
+func (table *FactTable) convertRowMapToRowArray(rowMap map[string]Untyped) ([]Untyped, error) {
 	result := make([]Untyped, COLS)
 	for columnName, value := range rowMap {
 		columnIndex, found := table.ColumnNameToIndex[columnName]
@@ -132,8 +132,8 @@ func convertRowMapToRowArray(table *FactTable, rowMap map[string]Untyped) ([]Unt
 // every string column, replaces its value with the matching ID from the dimension table, inserting a row into
 // the dimension table if one doesn't already exist.
 // e.g. {"country": "Japan", "browser": "Chrome", "age": 17} => [0, 1, 17]
-func normalizeRow(table *FactTable, rowMap map[string]Untyped) (*FactRow, error) {
-	rowAsArray, error := convertRowMapToRowArray(table, rowMap)
+func (table *FactTable) normalizeRow(rowMap map[string]Untyped) (*FactRow, error) {
+	rowAsArray, error := table.convertRowMapToRowArray(rowMap)
 	if error != nil {
 		return nil, error
 	}
@@ -145,7 +145,7 @@ func normalizeRow(table *FactTable, rowMap map[string]Untyped) (*FactRow, error)
 			dimensionTable := table.DimensionTables[columnIndex]
 			dimensionRowId, ok := dimensionTable.ValueToId[stringValue]
 			if !ok {
-				dimensionRowId = addRowToDimensionTable(dimensionTable, stringValue)
+				dimensionRowId = dimensionTable.addRow(stringValue)
 			}
 			row[columnIndex] = Cell(dimensionRowId)
 		} else {
@@ -155,7 +155,7 @@ func normalizeRow(table *FactTable, rowMap map[string]Untyped) (*FactRow, error)
 	return &row, nil
 }
 
-func insertNormalizedRow(table *FactTable, row *FactRow) {
+func (table *FactTable) insertNormalizedRow(row *FactRow) {
 	table.rows[table.NextInsertPosition] = *row
 	table.NextInsertPosition = (table.NextInsertPosition + 1) % table.Capacity
 	if table.Count < table.Capacity {
@@ -164,28 +164,28 @@ func insertNormalizedRow(table *FactTable, row *FactRow) {
 }
 
 // Inserts the given rows into the table. Returns an error if one of the rows contains an unrecognized column.
-func InsertRowMaps(table *FactTable, rows []map[string]Untyped) error {
+func (table *FactTable) InsertRowMaps(rows []map[string]Untyped) error {
 	for _, rowMap := range rows {
-		normalizedRow, error := normalizeRow(table, rowMap)
+		normalizedRow, error := table.normalizeRow(rowMap)
 		if error != nil {
 			return error
 		}
-		insertNormalizedRow(table, normalizedRow)
+		table.insertNormalizedRow(normalizedRow)
 	}
 	return nil
 }
 
-func addRowToDimensionTable(dimensionTable *DimensionTable, rowValue string) int32 {
-	nextId := int32(len(dimensionTable.Rows))
-	dimensionTable.Rows = append(dimensionTable.Rows, rowValue)
-	dimensionTable.ValueToId[rowValue] = nextId
+func (table *DimensionTable) addRow(rowValue string) int32 {
+	nextId := int32(len(table.Rows))
+	table.Rows = append(table.Rows, rowValue)
+	table.ValueToId[rowValue] = nextId
 	return nextId
 }
 
 // Scans all rows in the table, aggregating columns, filtering and grouping rows.
 // This logic is performance critical.
 // TODO(philc): make the groupByColumnName parameter be an integer, for consistency
-func scanTable(table *FactTable, filters []FactTableFilterFunc, columnIndices []int,
+func (table *FactTable) scanTable(filters []FactTableFilterFunc, columnIndices []int,
 	groupByColumnName string, groupByColumnTransformFn func(Cell) Cell) []RowAggregate {
 	columnIndexToGroupBy, useGrouping := table.ColumnNameToIndex[groupByColumnName]
 	// This maps the values of the group-by column => RowAggregate.
@@ -240,7 +240,7 @@ outerLoop:
 }
 
 // TODO(philc): This function probably be inlined.
-func getColumnIndiciesFromQuery(query *Query, table *FactTable) []int {
+func (table *FactTable) getColumnIndiciesFromQuery(query *Query) []int {
 	columnIndicies := make([]int, 0)
 	for _, queryAggregate := range query.Aggregates {
 		columnIndicies = append(columnIndicies, table.ColumnNameToIndex[queryAggregate.Column])
@@ -248,7 +248,7 @@ func getColumnIndiciesFromQuery(query *Query, table *FactTable) []int {
 	return columnIndicies
 }
 
-func mapRowAggregatesToJsonResultsFormat(query *Query, table *FactTable,
+func (table *FactTable) mapRowAggregatesToJsonResultsFormat(query *Query,
 	rowAggregates []RowAggregate) [](map[string]Untyped) {
 	jsonRows := make([](map[string]Untyped), 0)
 	for _, rowAggregate := range rowAggregates {
@@ -266,7 +266,7 @@ func mapRowAggregatesToJsonResultsFormat(query *Query, table *FactTable,
 		// TODO(philc): This code does not handle multi-level groupings.
 		for _, grouping := range query.Groupings {
 			columnIndex := table.ColumnNameToIndex[grouping.Column]
-			jsonRow[grouping.Name] = denormalizeColumnValue(table, rowAggregate.GroupByValue, columnIndex)
+			jsonRow[grouping.Name] = table.denormalizeColumnValue(rowAggregate.GroupByValue, columnIndex)
 		}
 		jsonRow["rowCount"] = rowAggregate.Count
 		jsonRows = append(jsonRows, jsonRow)
@@ -276,10 +276,10 @@ func mapRowAggregatesToJsonResultsFormat(query *Query, table *FactTable,
 
 // Given a list of values, looks up the corresponding row IDs for those values. If those values don't
 // exist in the dimension table, they're omitted.
-func getDimensionRowIdsForValues(dimensionTable *DimensionTable, values []string) []Cell {
+func (table *DimensionTable) getDimensionRowIdsForValues(values []string) []Cell {
 	rowIds := make([]Cell, 0)
 	for _, value := range values {
-		if id, ok := dimensionTable.ValueToId[value]; ok {
+		if id, ok := table.ValueToId[value]; ok {
 			rowIds = append(rowIds, Cell(id))
 		}
 	}
@@ -309,7 +309,7 @@ func convertQueryFilterToFilterFunc(queryFilter QueryFilter, table *FactTable) F
 				queryValuesAstrings = append(queryValuesAstrings, value.(string))
 			}
 			dimensionTable := table.DimensionTables[columnIndex]
-			valueAsCells = getDimensionRowIdsForValues(dimensionTable, queryValuesAstrings)
+			valueAsCells = dimensionTable.getDimensionRowIdsForValues(queryValuesAstrings)
 		} else {
 			valueAsCells = make([]Cell, 0, len(untypedQueryValues))
 			for _, value := range untypedQueryValues {
@@ -319,7 +319,7 @@ func convertQueryFilterToFilterFunc(queryFilter QueryFilter, table *FactTable) F
 	} else {
 		if isString(queryFilter.Value) {
 			dimensionTable := table.DimensionTables[columnIndex]
-			matchingRowIds := getDimensionRowIdsForValues(dimensionTable, []string{queryFilter.Value.(string)})
+			matchingRowIds := dimensionTable.getDimensionRowIdsForValues([]string{queryFilter.Value.(string)})
 			if len(matchingRowIds) == 0 {
 				return func(row *FactRow) bool { return false }
 			} else {
@@ -387,8 +387,8 @@ func convertTimeTransformToFunc(transformFunctionName string) func(Cell) Cell {
 	}
 }
 
-func InvokeQuery(table *FactTable, query *Query) map[string]Untyped {
-	columnIndicies := getColumnIndiciesFromQuery(query, table)
+func (table *FactTable) InvokeQuery(query *Query) map[string]Untyped {
+	columnIndicies := table.getColumnIndiciesFromQuery(query)
 	var groupByColumn string
 	var groupByTransformFunc func(Cell) Cell
 	// NOTE(philc): For now, only support one level of grouping. We intend to support multiple levels.
@@ -405,8 +405,8 @@ func InvokeQuery(table *FactTable, query *Query) map[string]Untyped {
 		filterFuncs = append(filterFuncs, convertQueryFilterToFilterFunc(queryFilter, table))
 	}
 
-	results := scanTable(table, filterFuncs, columnIndicies, groupByColumn, groupByTransformFunc)
-	jsonResultRows := mapRowAggregatesToJsonResultsFormat(query, table, results)
+	results := table.scanTable(filterFuncs, columnIndicies, groupByColumn, groupByTransformFunc)
+	jsonResultRows := table.mapRowAggregatesToJsonResultsFormat(query, results)
 	return map[string]Untyped{
 		"results": jsonResultRows,
 	}

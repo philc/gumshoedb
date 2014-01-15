@@ -46,7 +46,7 @@ func handleInsertRoute(responseWriter http.ResponseWriter, request *http.Request
 	}
 	fmt.Printf("Inserting %d rows\n", len(jsonBody))
 
-	error = core.InsertRowMaps(table, jsonBody)
+	error = table.InsertRowMaps(jsonBody)
 	if error != nil {
 		fmt.Println(error)
 		http.Error(responseWriter, error.Error(), 500)
@@ -69,7 +69,7 @@ func handleFactTableRoute(responseWriter http.ResponseWriter, request *http.Requ
 	rows := table.Rows()
 	for i := 0; i < rowCount; i++ {
 		row := rows[i]
-		results = append(results, core.DenormalizeRow(table, &row))
+		results = append(results, table.DenormalizeRow(&row))
 	}
 	writeJsonResponse(responseWriter, &results)
 }
@@ -105,7 +105,7 @@ func handleQueryRoute(responseWriter http.ResponseWriter, request *http.Request)
 		http.Error(responseWriter, error.Error(), 500)
 		return
 	}
-	results := core.InvokeQuery(table, query)
+	results := table.InvokeQuery(query)
 	results["duration"] = (time.Since(start)).Nanoseconds() / (1000.0 * 1000.0)
 	writeJsonResponse(responseWriter, results)
 }
@@ -143,5 +143,6 @@ func main() {
 	m.Get("/tables/facts", handleFactTableRoute)
 	m.Get("/tables/dimensions", handleDimensionsTableRoute)
 	m.Post("/tables/facts/query", handleQueryRoute)
+	// TODO(philc): Complain if we can't bind to this port
 	http.ListenAndServe(":9000", m)
 }
