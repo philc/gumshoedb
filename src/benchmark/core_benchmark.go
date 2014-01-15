@@ -30,7 +30,7 @@ func populateTableWithTestingData(table *gumshoe.FactTable) {
 	}
 
 	if err := table.InsertRowMaps(rows); err != nil {
-		panic(error)
+		panic(err)
 	}
 }
 
