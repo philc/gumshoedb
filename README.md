@@ -7,6 +7,7 @@ choices are coming soon.
 
 To run:
 
+    make deps
     make run-web
 
 This starts a GumshoeDB daemon at [localhost:9000](http://localhost:9000).

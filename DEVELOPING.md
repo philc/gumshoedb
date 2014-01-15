@@ -1,3 +1,14 @@
+Getting started
+---------------
+
+Run the tests:
+
+    make run-tests
+
+Run the benchmarks:
+
+    make run-benchmarks
+
 Major todos
 -----------
 * All columns are currently assumed to be float32. Use byte arrays rather than typed arrays, so we mix types
@@ -21,8 +32,8 @@ To run:
 
     make run-benchmarks
 
-The synthetic suite tests small, narrow techniques and represents the upper-bound of performance. It provides
-a clean, isolated view on how fast a technique is.
+The synthetic suite benchmarks small, narrow techniques and represents the upper-bound of performance. It
+provides a clean, isolated view on how fast a technique is.
 
 The core benchmarks test the core GumshoeDB code paths. The core code paths should be comparable in speed to
 the ideal benchmarks -- ideally within 20%.
