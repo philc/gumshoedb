@@ -1,3 +1,4 @@
+// The core table creation and query execution functions.
 package core
 
 import (
@@ -6,24 +7,26 @@ import (
 )
 
 // The size of the fact table is currently a compile time constant, so we can use native arrays instead of
-// ranges.
+// ranges. In the future we'll use byte arrays so we that rows can be composites of many column types.
 const ROWS = 10000000
 const COLS = 42
 
 type Cell float32
 type FactRow [COLS]Cell
 
+// A fixed sized table of rows.
+// When we insert more rows than the table's capacity, we wrap around and begin inserting rows at index 0.
 type FactTable struct {
-	// We serialize this struct usin gobs. The unexported fields are fields we don't want to serialize.
-	rows               *[ROWS]FactRow
-	FilePath string        // Path to this db on disk, where we should periodically snapshot it to.
-	// The memory map bookkeeping object which contains the file descriptor we are mapping the table rows into.
-	memoryMap *gommap.MMap
+	// We serialize this struct using JSON. The unexported fields are fields we don't want to serialize.
+	rows     *[ROWS]FactRow
+	FilePath string // Path to this table on disk, where we will periodically snapshot it to.
+	// The mmap bookkeeping object which contains the file descriptor we are mapping the table rows to.
+	memoryMap          *gommap.MMap
 	NextInsertPosition int
-	Count              int // The number of used rows currently in the table. This is <= ROWS.
-	ColumnCount        int // The number of columns in use in the table. This is <= COLS.
-	Capacity           int
-	DimensionTables    [COLS]*DimensionTable // Column index => column's dimension table.
+	Count              int                   // The number of used rows currently in the table. This is <= ROWS.
+	ColumnCount        int                   // The number of columns in use in the table. This is <= COLS.
+	Capacity           int                   // For now, this is an alias for the ROWS constant.
+	DimensionTables    [COLS]*DimensionTable // A mapping from column index => column's DimensionTable.
 	ColumnNameToIndex  map[string]int
 	ColumnIndexToName  []string
 }
@@ -32,6 +35,8 @@ func (table *FactTable) Rows() *[ROWS]FactRow {
 	return table.rows
 }
 
+// A DimensionTable is a mapping of string column values to int IDs, so that the FactTable can store rows of
+// integer IDs rather than string values.
 type DimensionTable struct {
 	Name      string
 	Rows      []string
@@ -45,7 +50,6 @@ func NewDimensionTable(name string) *DimensionTable {
 	return table
 }
 
-// TODO(philc): Capitalize these field names.
 type RowAggregate struct {
 	GroupByValue Cell
 	Sums         [COLS]float64
@@ -54,8 +58,8 @@ type RowAggregate struct {
 
 type FactTableFilterFunc func(*FactRow) bool
 
-// Allocates a new fact table. The table is immediately provisioned to disk. An empty filePath causes the
-// table to exist only in memory.
+// Allocates a new FactTable. If a non-empty filePath is specified, this table's rows are immediately
+// persisted to disk in the form of a memory-mapped file.
 func NewFactTable(filePath string, columnNames []string) *FactTable {
 	if len(columnNames) > COLS {
 		panic(fmt.Sprintf("You provided %d columns, but this table is configured to have only %d columns.",
@@ -70,7 +74,7 @@ func NewFactTable(filePath string, columnNames []string) *FactTable {
 	if filePath == "" {
 		// Create an in-memory database only, without a file backing.
 		table.rows = new([ROWS]FactRow)
-	}	else {
+	} else {
 		table.memoryMap, table.rows = CreateMemoryMappedFactTableStorage(table.FilePath, ROWS)
 	}
 	table.Capacity = len(table.rows)
@@ -99,6 +103,7 @@ func denormalizeColumnValue(table *FactTable, columnValue Cell, columnIndex int)
 
 // Takes a normalized FactRow vector and returns a map consistent of column names and values pulled from
 // the dimension tables.
+// e.g. [0, 1, 17] => {"country": "Japan", "browser": "Chrome", "age": 17}
 func DenormalizeRow(table *FactTable, row *FactRow) map[string]Untyped {
 	result := make(map[string]Untyped)
 	for i := 0; i < table.ColumnCount; i++ {
@@ -108,7 +113,8 @@ func DenormalizeRow(table *FactTable, row *FactRow) map[string]Untyped {
 }
 
 // Takes a map of column names => values, and returns a vector with the map's values in the correct column
-// position according to the table's schema.
+// position according to the table's schema, e.g.:
+// e.g. {"country": "Japan", "browser": "Chrome", "age": 17} => ["Chrome", 17, "Japan"]
 // Returns an error if there are unrecognized columns, or if a column is missing.
 func convertRowMapToRowArray(table *FactTable, rowMap map[string]Untyped) ([]Untyped, error) {
 	result := make([]Untyped, COLS)
@@ -125,6 +131,7 @@ func convertRowMapToRowArray(table *FactTable, rowMap map[string]Untyped) ([]Unt
 // Takes a row of mixed types, like strings and ints, and converts it to a FactRow (a vector of ints). For
 // every string column, replaces its value with the matching ID from the dimension table, inserting a row into
 // the dimension table if one doesn't already exist.
+// e.g. {"country": "Japan", "browser": "Chrome", "age": 17} => [0, 1, 17]
 func normalizeRow(table *FactTable, rowMap map[string]Untyped) (*FactRow, error) {
 	rowAsArray, error := convertRowMapToRowArray(table, rowMap)
 	if error != nil {
@@ -156,7 +163,7 @@ func insertNormalizedRow(table *FactTable, row *FactRow) {
 	}
 }
 
-// Inserts the given rows into the table.
+// Inserts the given rows into the table. Returns an error if one of the rows contains an unrecognized column.
 func InsertRowMaps(table *FactTable, rows []map[string]Untyped) error {
 	for _, rowMap := range rows {
 		normalizedRow, error := normalizeRow(table, rowMap)
@@ -175,42 +182,17 @@ func addRowToDimensionTable(dimensionTable *DimensionTable, rowValue string) int
 	return nextId
 }
 
-func isString(value interface{}) bool {
-	// TODO(philc): There must be a built-in for this.
-	result := false
-	switch value.(type) {
-	case string:
-		result = true
-	}
-	return result
-}
-
-func convertUntypedToFloat64(v Untyped) float64 {
-	var result float64
-	switch v.(type) {
-	case float32:
-		result = float64(v.(float32))
-	case float64:
-		result = v.(float64)
-	case int:
-		result = float64(v.(int))
-	case int8:
-		result = float64(v.(int8))
-	case int32:
-		result = float64(v.(int32))
-	case int64:
-		result = float64(v.(int64))
-	}
-	return result
-}
-
+// Scans all rows in the table, aggregating columns, filtering and grouping rows.
+// This logic is performance critical.
+// TODO(philc): make the groupByColumnName parameter be an integer, for consistency
 func scanTable(table *FactTable, filters []FactTableFilterFunc, columnIndices []int,
 	groupByColumnName string, groupByColumnTransformFn func(Cell) Cell) []RowAggregate {
 	columnIndexToGroupBy, useGrouping := table.ColumnNameToIndex[groupByColumnName]
 	// This maps the values of the group-by column => RowAggregate.
-	// For now, we support only one level of grouping.
+	// Due to laziness, only one level of grouping is supported. TODO(philc): Support multiple levels of
+	// grouping.
 	rowAggregatesMap := make(map[Cell]*RowAggregate)
-	// When the query has no group-by, we tally results into a single RowAggregate.
+	// When the query has no group-by clause, we accumulate results into a single RowAggregate.
 	rowAggregate := new(RowAggregate)
 	rows := table.rows
 	rowCount := table.Count
@@ -230,9 +212,9 @@ outerLoop:
 			if groupByColumnTransformFn != nil {
 				groupByValue = groupByColumnTransformFn(groupByValue)
 			}
-			var ok bool
-			rowAggregate, ok = rowAggregatesMap[groupByValue]
-			if !ok {
+			var found bool
+			rowAggregate, found = rowAggregatesMap[groupByValue]
+			if !found {
 				rowAggregate = new(RowAggregate)
 				(*rowAggregate).GroupByValue = groupByValue
 				rowAggregatesMap[groupByValue] = rowAggregate
@@ -281,7 +263,7 @@ func mapRowAggregatesToJsonResultsFormat(query *Query, table *FactTable,
 				jsonRow[queryAggregate.Name] = sums / float64(rowAggregate.Count)
 			}
 		}
-		// TODO(philc): This code does not handle multiple groupings.
+		// TODO(philc): This code does not handle multi-level groupings.
 		for _, grouping := range query.Groupings {
 			columnIndex := table.ColumnNameToIndex[grouping.Column]
 			jsonRow[grouping.Name] = denormalizeColumnValue(table, rowAggregate.GroupByValue, columnIndex)
@@ -304,6 +286,7 @@ func getDimensionRowIdsForValues(dimensionTable *DimensionTable, values []string
 	return rowIds
 }
 
+// Given a QueryFilter, return a filter function that can be tested against a FactRow.
 func convertQueryFilterToFilterFunc(queryFilter QueryFilter, table *FactTable) FactTableFilterFunc {
 	columnIndex := table.ColumnNameToIndex[queryFilter.Column]
 	var f FactTableFilterFunc
@@ -335,14 +318,14 @@ func convertQueryFilterToFilterFunc(queryFilter QueryFilter, table *FactTable) F
 		}
 	} else {
 		if isString(queryFilter.Value) {
-     	dimensionTable := table.DimensionTables[columnIndex]
+			dimensionTable := table.DimensionTables[columnIndex]
 			matchingRowIds := getDimensionRowIdsForValues(dimensionTable, []string{queryFilter.Value.(string)})
 			if len(matchingRowIds) == 0 {
-				return func(row *FactRow) bool { return false; }
+				return func(row *FactRow) bool { return false }
 			} else {
 				valueAsCell = matchingRowIds[0]
 			}
-	  } else {
+		} else {
 			valueAsCell = Cell(convertUntypedToFloat64(queryFilter.Value))
 		}
 	}
@@ -370,8 +353,8 @@ func convertQueryFilterToFilterFunc(queryFilter QueryFilter, table *FactTable) F
 		}
 	case "in":
 		count := len(valueAsCells)
-		// TODO(philc): At some threshold, indexing into a query set of a given size will be more efficiently done
-		// as a hash table lookup. We should figure out what that threshold is and use a hash table in that case.
+		// TODO(philc): A hash table may be more efficient for longer lists. We should determine what that list
+		// size is and use a hash table in that case.
 		f = func(row *FactRow) bool {
 			columnValue := row[columnIndex]
 			for i := 0; i < count; i++ {
@@ -392,9 +375,9 @@ func convertTimeTransformToFunc(transformFunctionName string) func(Cell) Cell {
 	switch transformFunctionName {
 	case "minute":
 		divisor = 60
-  case "hour":
+	case "hour":
 		divisor = 60 * 60
-  case "day":
+	case "day":
 		divisor = 60 * 60 * 24
 	}
 	return func(cell Cell) Cell {
@@ -427,4 +410,33 @@ func InvokeQuery(table *FactTable, query *Query) map[string]Untyped {
 	return map[string]Untyped{
 		"results": jsonResultRows,
 	}
+}
+
+func isString(value interface{}) bool {
+	// TODO(philc): There must be a built-in for this.
+	result := false
+	switch value.(type) {
+	case string:
+		result = true
+	}
+	return result
+}
+
+func convertUntypedToFloat64(v Untyped) float64 {
+	var result float64
+	switch v.(type) {
+	case float32:
+		result = float64(v.(float32))
+	case float64:
+		result = v.(float64)
+	case int:
+		result = float64(v.(int))
+	case int8:
+		result = float64(v.(int8))
+	case int32:
+		result = float64(v.(int32))
+	case int64:
+		result = float64(v.(int64))
+	}
+	return result
 }
