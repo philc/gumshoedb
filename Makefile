@@ -1,21 +1,20 @@
-
-GOPATH := $$PWD
+export GOPATH=$(PWD)
 
 build:
-	GOPATH=$(GOPATH) go install gumshoe/core
+	go install gumshoe/core
 
-test: build
-	GOPATH=$(GOPATH) go test ...gumshoe/core
+run-test: build
+	go test ...gumshoe/core
 
-build_web: build
-	GOPATH=$(GOPATH) go install ...gumshoe/gumshoe_server
+web: build
+	go install ...gumshoe/gumshoe_server
 
-run_web: build_web
+run-web: web
 	bin/gumshoe_server
 
-# Runs all benhcmarks appearing in any *_test.go files.
-benchmark: build_benchmark
-	bin/benchmark -minimal-set=true
+benchmark: build
+	go install ...gumshoe/benchmark
 
-build_benchmark: build
-	GOPATH=$(GOPATH) go install ...gumshoe/benchmark
+# Runs all benhcmarks appearing in any *_test.go files.
+run-benchmark: build_benchmark
+	bin/benchmark -minimal-set=true
