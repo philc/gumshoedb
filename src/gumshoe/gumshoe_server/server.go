@@ -15,7 +15,7 @@ import (
 )
 
 // TODO(philc): Add the ability to specify schema and persistence settings via a config file.
-const tableFilePath = "data/table"
+const tableFilePath = "db/table"
 
 // How often to persist tables to disk.
 const saveDurationInSecs = 10
