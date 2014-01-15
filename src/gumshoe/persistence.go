@@ -9,11 +9,12 @@ package gumshoe
 
 import (
 	"encoding/json"
-	mmap "github.com/edsrzf/mmap-go"
 	"io/ioutil"
 	"os"
 	"reflect"
 	"unsafe"
+
+	mmap "github.com/edsrzf/mmap-go"
 )
 
 func factsDataFilePath(tableFilePath string) string {

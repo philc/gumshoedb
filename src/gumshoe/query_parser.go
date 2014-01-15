@@ -2,7 +2,7 @@
 package gumshoe
 
 import (
-	json "encoding/json"
+	"encoding/json"
 	"fmt"
 )
 

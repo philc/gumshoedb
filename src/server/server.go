@@ -5,7 +5,6 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	martini "github.com/codegangsta/martini"
 	"io/ioutil"
 	"math"
 	"net/http"
@@ -14,6 +13,8 @@ import (
 	"time"
 
 	"gumshoe"
+
+	"github.com/codegangsta/martini"
 )
 
 // TODO(philc): Add the ability to specify schema and persistence settings via a config file.

@@ -1,9 +1,10 @@
 package gumshoe
 
 import (
-	json "encoding/json"
-	. "github.com/cespare/a"
+	"encoding/json"
 	"testing"
+
+	. "github.com/cespare/a"
 )
 
 func tableFixture() *FactTable {

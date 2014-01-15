@@ -3,6 +3,7 @@ package gumshoe
 
 import (
 	"fmt"
+
 	mmap "github.com/edsrzf/mmap-go"
 )
 

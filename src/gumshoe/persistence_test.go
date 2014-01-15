@@ -1,9 +1,10 @@
 package gumshoe
 
 import (
-	. "github.com/cespare/a"
 	"os"
 	"testing"
+
+	. "github.com/cespare/a"
 )
 
 const testingFolder = "/tmp/gumshoedb_tests"
