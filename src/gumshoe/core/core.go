@@ -3,7 +3,7 @@ package core
 
 import (
 	"fmt"
-	"gommap"
+	mmap "github.com/edsrzf/mmap-go"
 )
 
 // The size of the fact table is currently a compile time constant, so we can use native arrays instead of
@@ -21,7 +21,7 @@ type FactTable struct {
 	rows     *[ROWS]FactRow
 	FilePath string // Path to this table on disk, where we will periodically snapshot it to.
 	// The mmap bookkeeping object which contains the file descriptor we are mapping the table rows to.
-	memoryMap          *gommap.MMap
+	memoryMap          *mmap.MMap
 	NextInsertPosition int
 	Count              int                   // The number of used rows currently in the table. This is <= ROWS.
 	ColumnCount        int                   // The number of columns in use in the table. This is <= COLS.

@@ -9,7 +9,7 @@ package core
 
 import (
 	"encoding/json"
-	"gommap"
+	mmap "github.com/edsrzf/mmap-go"
 	"io/ioutil"
 	"os"
 	"reflect"
@@ -26,7 +26,7 @@ func tableMetadataFilePath(tableFilePath string) string {
 
 // Creates a new file on disk which is large enough to hold the entire facts table, and maps that file
 // into memory to be accessed and modified.
-func CreateMemoryMappedFactTableStorage(tableFilePath string, rows int) (*gommap.MMap, *[ROWS]FactRow) {
+func CreateMemoryMappedFactTableStorage(tableFilePath string, rows int) (*mmap.MMap, *[ROWS]FactRow) {
 	file, err := os.Create(factsDataFilePath(tableFilePath))
 	if err != nil {
 		panic(err)
@@ -58,12 +58,12 @@ func LoadFactTableFromDisk(tableFilePath string) *FactTable {
 	return &table
 }
 
-func memoryMapFactRows(filename string) (*gommap.MMap, *[ROWS]FactRow) {
+func memoryMapFactRows(filename string) (*mmap.MMap, *[ROWS]FactRow) {
 	file, err := os.OpenFile(filename, os.O_RDWR, 0600)
 	if err != nil {
 		panic(err)
 	}
-	mmap, err := gommap.Map(file.Fd(), gommap.PROT_WRITE, gommap.MAP_SHARED)
+	mmap, err := mmap.Map(file, mmap.RDWR, 0)
 	if err != nil {
 		panic(err)
 	}
@@ -73,7 +73,7 @@ func memoryMapFactRows(filename string) (*gommap.MMap, *[ROWS]FactRow) {
 	}
 	sliceHeader := *(*reflect.SliceHeader)(unsafe.Pointer(&mmap))
 	table := (*[ROWS]FactRow)(unsafe.Pointer(sliceHeader.Data))
-	err = mmap.Sync(gommap.MS_SYNC)
+	err = mmap.Flush()
 	if err != nil {
 		panic(err)
 	}
@@ -98,5 +98,5 @@ func (table *FactTable) SaveToDisk() {
 
 	file.Write(bytesBuffer)
 	file.Close()
-	table.memoryMap.Sync(gommap.MS_SYNC) // Sync the memory map to disk synchronously.
+	table.memoryMap.Flush() // Sync the memory map to disk synchronously.
 }
