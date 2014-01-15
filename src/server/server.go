@@ -4,7 +4,6 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"log"
 	"math"
@@ -30,7 +29,7 @@ var table *gumshoe.FactTable
 func writeJsonResponse(responseWriter http.ResponseWriter, objectToSerialize interface{}) {
 	jsonResult, _ := json.Marshal(objectToSerialize)
 	responseWriter.Header().Set("Content-Type", "application/json")
-	fmt.Fprint(responseWriter, string(jsonResult))
+	responseWriter.Write(jsonResult)
 }
 
 // Given an array of JSON rows, insert them.
