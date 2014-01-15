@@ -1,4 +1,4 @@
-export GOPATH=$(PWD)
+export GOPATH=$(PWD):$(PWD)/vendor
 
 build:
 	go install gumshoe/core
