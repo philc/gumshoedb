@@ -29,9 +29,8 @@ var typeSizes map[string]int = map[string]int{
 
 // Sum columns over a native array.
 func SumArrayMatrix(matrix *[ROWS][COLS]Cell) int {
-	length := len(matrix)
-	var sum SumType = 0.0
-	for i := 0; i < length; i++ {
+	var sum SumType
+	for i := range matrix {
 		sum += SumType(matrix[i][0])
 	}
 	return int(sum)
@@ -39,9 +38,8 @@ func SumArrayMatrix(matrix *[ROWS][COLS]Cell) int {
 
 // Sum columns over a slice of arrays.
 func SumOneRolledLoop(matrix []*[COLS]Cell) int {
-	var sum SumType = 0.0
-	length := len(matrix)
-	for i := 0; i < length; i += 1 {
+	var sum SumType
+	for i := range matrix {
 		sum += SumType(matrix[i][0])
 	}
 	return int(sum)
@@ -49,9 +47,8 @@ func SumOneRolledLoop(matrix []*[COLS]Cell) int {
 
 // Sum columns over a slice of arrays.
 func SumOneUnrolledLoop(matrix []*[COLS]Cell) int {
-	var sum SumType = 0
-	length := len(matrix)
-	for i := 0; i < length; i += 5 {
+	var sum SumType
+	for i := 0; i < len(matrix); i += 5 {
 		sum += SumType(matrix[i][0])
 		sum += SumType(matrix[i+1][0])
 		sum += SumType(matrix[i+2][0])
@@ -63,9 +60,8 @@ func SumOneUnrolledLoop(matrix []*[COLS]Cell) int {
 
 // Sum columns over a slice of slices.
 func SumSliceOfSliceMatrix(matrix [][]Cell) int {
-	var sum SumType = 0.0
-	length := len(matrix)
-	for i := 0; i < length; i++ {
+	var sum SumType
+	for i := range matrix {
 		sum += SumType(matrix[i][0])
 	}
 	return int(sum)
@@ -74,9 +70,8 @@ func SumSliceOfSliceMatrix(matrix [][]Cell) int {
 // Sum columns over a byte matrix.
 func SumByteMatrix(matrix uintptr) int {
 	// NOTE(philc): this doesn't currently produce the correct results. It's off by a few thousand
-	var sum SumType = 0
-	length := ROWS
-	for i := 0; i < length; i++ {
+	var sum SumType
+	for i := 0; i < ROWS; i++ {
 		a := *(*Cell)(unsafe.Pointer(matrix))
 		sum += SumType(a)
 		matrix += uintptr(ROW_SIZE)
@@ -86,10 +81,8 @@ func SumByteMatrix(matrix uintptr) int {
 
 // Filter rows by invoking a function.
 func SumUsingFilterFn(matrix []*[COLS]Cell, filter func(*[COLS]Cell) bool) int {
-	var sum SumType = 0
-	length := len(matrix)
-	for i := 0; i < length; i++ {
-		row := matrix[i]
+	var sum SumType
+	for _, row := range matrix {
 		if filter(row) && filter(row) {
 			sum += SumType(row[0])
 		}
@@ -99,10 +92,8 @@ func SumUsingFilterFn(matrix []*[COLS]Cell, filter func(*[COLS]Cell) bool) int {
 
 // Filter rows by evaluating an inlined filter function.
 func SumUsingInlineFilterFn(matrix []*[COLS]Cell) int {
-	var sum SumType = 0
-	length := len(matrix)
-	for i := 0; i < length; i++ {
-		row := matrix[i]
+	var sum SumType
+	for _, row := range matrix {
 		if row[0] >= 0 {
 			sum += SumType(row[0])
 		}
@@ -142,9 +133,9 @@ func setValue(matrix uintptr, row int, col int, value Cell) {
 
 func initByteMatrix() uintptr {
 	// I don't need to allocate a slice here. I can just allocate an array.
-	matrix := *new([ROWS][COLS]Cell)
-	for i := 0; i < len(matrix); i++ {
-		for j := 0; j < len(matrix[i]); j++ {
+	var matrix [ROWS][COLS]Cell
+	for i, row := range matrix {
+		for j := range row {
 			matrix[i][j] = Cell(i)
 		}
 	}
@@ -152,8 +143,8 @@ func initByteMatrix() uintptr {
 }
 
 func createArrayMatrix() *[ROWS][COLS]Cell {
-	matrix := *(new([ROWS][COLS]Cell))
-	for i := 0; i < len(matrix); i++ {
+	var matrix [ROWS][COLS]Cell
+	for i := range matrix {
 		matrix[i][0] = Cell(i)
 	}
 	return &matrix
@@ -161,9 +152,9 @@ func createArrayMatrix() *[ROWS][COLS]Cell {
 
 func initSliceMatrix() []*[COLS]Cell {
 	matrix := make([]*[COLS]Cell, ROWS)
-	for i := 0; i < len(matrix); i++ {
+	for i := range matrix {
 		matrix[i] = new([COLS]Cell)
-		for j := 0; j < len(matrix[i]); j++ {
+		for j := range matrix[i] {
 			matrix[i][j] = Cell(i)
 		}
 	}
@@ -172,9 +163,9 @@ func initSliceMatrix() []*[COLS]Cell {
 
 func initSliceOfSliceMatrix() [][]Cell {
 	matrix := make([][]Cell, ROWS)
-	for i := 0; i < len(matrix); i++ {
+	for i := range matrix {
 		matrix[i] = make([]Cell, COLS)
-		for j := 0; j < len(matrix[i]); j++ {
+		for j := range matrix[i] {
 			matrix[i][j] = Cell(i)
 		}
 	}

@@ -11,22 +11,22 @@ import (
 )
 
 func setupFactTable() *gumshoe.FactTable {
-	columnNames := make([]string, 0, gumshoe.COLS)
-	for i := 0; i < gumshoe.COLS; i++ {
-		columnNames = append(columnNames, fmt.Sprintf("column%d", i))
+	columnNames := make([]string, gumshoe.COLS)
+	for i := range columnNames {
+		columnNames[i] = fmt.Sprintf("column%d", i)
 	}
 	return gumshoe.NewFactTable("./db/benchmark", columnNames)
 }
 
 func populateTableWithTestingData(table *gumshoe.FactTable) {
-	rows := make([]map[string]gumshoe.Untyped, 0, BENCHMARK_ROWS)
+	rows := make([]map[string]gumshoe.Untyped, BENCHMARK_ROWS)
 
-	for i := 0; i < BENCHMARK_ROWS; i++ {
+	for i := range rows {
 		row := make(map[string]gumshoe.Untyped, table.ColumnCount)
 		for j := 0; j < table.ColumnCount; j++ {
 			row[table.ColumnIndexToName[j]] = i % 10
 		}
-		rows = append(rows, row)
+		rows[i] = row
 	}
 
 	if err := table.InsertRowMaps(rows); err != nil {
@@ -36,9 +36,9 @@ func populateTableWithTestingData(table *gumshoe.FactTable) {
 
 // Creates a QueryAggregate structure which represents the sums of the given columns.
 func createQueryAggregates(columns []string) []gumshoe.QueryAggregate {
-	queryAggregates := make([]gumshoe.QueryAggregate, 0, len(columns))
-	for _, column := range columns {
-		queryAggregates = append(queryAggregates, gumshoe.QueryAggregate{"sum", column, column})
+	queryAggregates := make([]gumshoe.QueryAggregate, len(columns))
+	for i, column := range columns {
+		queryAggregates[i] = gumshoe.QueryAggregate{"sum", column, column}
 	}
 	return queryAggregates
 }

@@ -51,7 +51,7 @@ func parseCliFlags() BenchmarkFlags {
 func main() {
 	flags := parseCliFlags()
 	if BENCHMARK_ROWS > gumshoe.ROWS {
-		panic("Benchmark.ROWS is larger than core.ROWS.")
+		panic("Benchmark.ROWS is larger than gumshoe.ROWS.")
 	}
 	runCoreBenchmarks(flags)
 	runSyntheticBenchmarks(flags)
