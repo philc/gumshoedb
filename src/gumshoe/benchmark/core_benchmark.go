@@ -12,7 +12,7 @@ func setupFactTable() *core.FactTable {
 	for i := 0; i < core.COLS; i++ {
 		columnNames = append(columnNames, fmt.Sprintf("column%d", i))
 	}
-	return core.NewFactTable("./benchmark", columnNames)
+	return core.NewFactTable("./db/benchmark", columnNames)
 }
 
 func populateTableWithTestingData(table *core.FactTable) {
