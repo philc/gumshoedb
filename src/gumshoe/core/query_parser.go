@@ -1,3 +1,4 @@
+// Functions and data types for parsing JSON queries into typed structs.
 package core
 
 import (

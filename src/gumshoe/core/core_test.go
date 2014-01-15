@@ -29,7 +29,7 @@ func convertToJsonAndBack(o interface{}) interface{} {
 	return *result
 }
 
-// A variant on DeepEqual/ShouldResemble which is less finicky about which numeric type you're using in maps.
+// A variant of DeepEqual/ShouldResemble which is less finicky about which numeric type you're using in maps.
 func ShouldHaveEqualJson(actual interface{}, expected ...interface{}) string {
 	o1 := convertToJsonAndBack(actual)
 	o2 := convertToJsonAndBack(expected[0])

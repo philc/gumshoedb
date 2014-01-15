@@ -1,10 +1,10 @@
 // Functions for loading and saving tables to disk.
-// A table consists of two files:
+// A fact table consists of two files:
 // 1. tableName.json: The json-encoded table metadata and dimension tables.
-// 2. tableName.facts.dat: The facts matrix, encoded as raw bytes, and which are mapped into memory.
+// 2. tableName.facts.dat: The facts matrix, encoded as raw bytes, which are memorye-mapped at runtime.
 //
-// NOTE(philc): I would use gobs for serializing the table name, but I had trouble getting gobs to serialized
-// maps as fields on a struct when serializing the top-level FactTable struct.
+// NOTE(philc): I would use gobs for serializing the table metadata and dimension tables, but I had trouble
+// getting gobs to fleds on a struct which are maps when serializing the top-level FactTable struct.
 package core
 
 import (
@@ -25,7 +25,7 @@ func tableMetadataFilePath(tableFilePath string) string {
 }
 
 // Creates a new file on disk which is large enough to hold the entire facts table, and maps that file
-// into memory to be written and accessed by a FactTable.
+// into memory to be accessed and modified.
 func CreateMemoryMappedFactTableStorage(tableFilePath string, rows int) (*gommap.MMap, *[ROWS]FactRow) {
 	file, err := os.Create(factsDataFilePath(tableFilePath))
 	if err != nil {
@@ -41,7 +41,7 @@ func CreateMemoryMappedFactTableStorage(tableFilePath string, rows int) (*gommap
 	return memoryMapFactRows(factsDataFilePath(tableFilePath))
 }
 
-// Load a FactTable from disk. The returned FactTable has its storage memory mapped to the corresponding
+// Load a FactTable from disk. The returned FactTable has its storage memory-mapped to the corresponding
 // file on disk.
 func LoadFactTableFromDisk(tableFilePath string) *FactTable {
 	var table FactTable
@@ -80,10 +80,12 @@ func memoryMapFactRows(filename string) (*gommap.MMap, *[ROWS]FactRow) {
 	return &mmap, table
 }
 
-// Persist this database to disk.
+// Persist this database to disk. This blocks until all table metadata has been written, and until the memory
+// map has finished being synced.
 func (table *FactTable) SaveToDisk() {
-	// TODO(philc): Make this writing method safer. If this writing process is interrupted, we lose the entire
-	// table.
+	// TODO(philc): Make this writing method safer. If this writing process is interrupted, we lose/corrupt the
+	// entire table. Instead, we should serialize the fact table's metadata and dimension tables to a temporary
+	// file and then atomically rename it to the destination file.
 	file, err := os.Create(tableMetadataFilePath(table.FilePath))
 	if err != nil {
 		panic(err)
