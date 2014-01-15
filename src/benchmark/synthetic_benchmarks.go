@@ -11,20 +11,20 @@ const COLS = 50
 
 // The "Cell" type and COL_SIZE are compile time constants, but they can be changed by hand to observe the
 // the effect column size and thus row size has on scan speed.
-var COL_SIZE int = typeSizes["float32"]
-var ROW_SIZE int = COL_SIZE * COLS
+var COL_SIZE = typeSizes["float32"]
+var ROW_SIZE = COL_SIZE * COLS
 
 type Cell float32
 type SumType float32
 
-var typeSizes map[string]int = map[string]int{
-	"int":     asInt(unsafe.Sizeof(*new(int))),
-	"int8":    asInt(unsafe.Sizeof(*new(int8))),
-	"int16":   asInt(unsafe.Sizeof(*new(int16))),
-	"int32":   asInt(unsafe.Sizeof(*new(int32))),
-	"uint32":  asInt(unsafe.Sizeof(*new(uint32))),
-	"float32": asInt(unsafe.Sizeof(*new(float32))),
-	"float64": asInt(unsafe.Sizeof(*new(float64))),
+var typeSizes = map[string]uintptr{
+	"int":     unsafe.Sizeof(*new(int)),
+	"int8":    unsafe.Sizeof(*new(int8)),
+	"int16":   unsafe.Sizeof(*new(int16)),
+	"int32":   unsafe.Sizeof(*new(int32)),
+	"uint32":  unsafe.Sizeof(*new(uint32)),
+	"float32": unsafe.Sizeof(*new(float32)),
+	"float64": unsafe.Sizeof(*new(float64)),
 }
 
 // Sum columns over a native array.
@@ -68,13 +68,13 @@ func SumSliceOfSliceMatrix(matrix [][]Cell) int {
 }
 
 // Sum columns over a byte matrix.
-func SumByteMatrix(matrix uintptr) int {
-	// NOTE(philc): this doesn't currently produce the correct results. It's off by a few thousand
+func SumByteMatrix(matrix unsafe.Pointer) int {
 	var sum SumType
+	p := uintptr(matrix)
 	for i := 0; i < ROWS; i++ {
-		a := *(*Cell)(unsafe.Pointer(matrix))
+		a := *(*Cell)(unsafe.Pointer(p))
 		sum += SumType(a)
-		matrix += uintptr(ROW_SIZE)
+		p += ROW_SIZE
 	}
 	return int(sum)
 }
@@ -117,23 +117,9 @@ func SumUsingInlineFilterFn(matrix []*[COLS]Cell) int {
 // 	return sum
 // }
 
-func asUint(p uintptr) uint {
-	return *(*uint)(unsafe.Pointer(&p))
-}
-
-func asInt(p uintptr) int {
-	return *(*int)(unsafe.Pointer(&p))
-}
-
-func setValue(matrix uintptr, row int, col int, value Cell) {
-	matrix += uintptr((ROW_SIZE * row) + (COL_SIZE * col))
-	a := (*Cell)(unsafe.Pointer(matrix))
-	*a = value
-}
-
-func initByteMatrix() uintptr {
+func initByteMatrix() unsafe.Pointer {
 	matrix := createArrayMatrix()
-	return uintptr(unsafe.Pointer(&matrix))
+	return unsafe.Pointer(matrix)
 }
 
 func createArrayMatrix() *[ROWS][COLS]Cell {
