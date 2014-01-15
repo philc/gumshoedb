@@ -2,24 +2,27 @@
 // to the ideal, simplified synthetic benchmarks to find areas for improvement.
 package main
 
-import "fmt"
-import core "gumshoe/core"
-import "runtime/pprof"
-import "os"
+import (
+	"fmt"
+	"os"
+	"runtime/pprof"
 
-func setupFactTable() *core.FactTable {
-	columnNames := make([]string, 0, core.COLS)
-	for i := 0; i < core.COLS; i++ {
+	"gumshoe"
+)
+
+func setupFactTable() *gumshoe.FactTable {
+	columnNames := make([]string, 0, gumshoe.COLS)
+	for i := 0; i < gumshoe.COLS; i++ {
 		columnNames = append(columnNames, fmt.Sprintf("column%d", i))
 	}
-	return core.NewFactTable("./db/benchmark", columnNames)
+	return gumshoe.NewFactTable("./db/benchmark", columnNames)
 }
 
-func populateTableWithTestingData(table *core.FactTable) {
-	rows := make([]map[string]core.Untyped, 0, BENCHMARK_ROWS)
+func populateTableWithTestingData(table *gumshoe.FactTable) {
+	rows := make([]map[string]gumshoe.Untyped, 0, BENCHMARK_ROWS)
 
 	for i := 0; i < BENCHMARK_ROWS; i++ {
-		row := make(map[string]core.Untyped, table.ColumnCount)
+		row := make(map[string]gumshoe.Untyped, table.ColumnCount)
 		for j := 0; j < table.ColumnCount; j++ {
 			row[table.ColumnIndexToName[j]] = i % 10
 		}
@@ -33,22 +36,22 @@ func populateTableWithTestingData(table *core.FactTable) {
 }
 
 // Creates a QueryAggregate structure which represents the sums of the given columns.
-func createQueryAggregates(columns []string) []core.QueryAggregate {
-	queryAggregates := make([]core.QueryAggregate, 0, len(columns))
+func createQueryAggregates(columns []string) []gumshoe.QueryAggregate {
+	queryAggregates := make([]gumshoe.QueryAggregate, 0, len(columns))
 	for _, column := range columns {
-		queryAggregates = append(queryAggregates, core.QueryAggregate{"sum", column, column})
+		queryAggregates = append(queryAggregates, gumshoe.QueryAggregate{"sum", column, column})
 	}
 	return queryAggregates
 }
 
 // A query which only sums aggregates.
-func runAggregateQuery(table *core.FactTable) {
-	query := &core.Query{
+func runAggregateQuery(table *gumshoe.FactTable) {
+	query := &gumshoe.Query{
 		"tableName",
 		createQueryAggregates([]string{"column1"}),
 		nil,
 		nil}
-	error := core.ValidateQuery(table, query)
+	error := gumshoe.ValidateQuery(table, query)
 	if error != nil {
 		panic(error)
 	}
@@ -56,13 +59,13 @@ func runAggregateQuery(table *core.FactTable) {
 }
 
 // A query which filters rows by a single, simple filter function.
-func runFilterQuery(table *core.FactTable) {
-	query := &core.Query{
+func runFilterQuery(table *gumshoe.FactTable) {
+	query := &gumshoe.Query{
 		"tableName",
 		createQueryAggregates([]string{"column1"}),
 		nil,
-		[]core.QueryFilter{{">", "column2", 5}}}
-	error := core.ValidateQuery(table, query)
+		[]gumshoe.QueryFilter{{">", "column2", 5}}}
+	error := gumshoe.ValidateQuery(table, query)
 	if error != nil {
 		panic(error)
 	}
@@ -71,13 +74,13 @@ func runFilterQuery(table *core.FactTable) {
 
 // A query which groups by a column. Each column has 10 possible values, so the result set will contain 10 row
 // aggregates.
-func runGroupByQuery(table *core.FactTable) {
-	query := &core.Query{
+func runGroupByQuery(table *gumshoe.FactTable) {
+	query := &gumshoe.Query{
 		"tableName",
 		createQueryAggregates([]string{"column1"}),
-		[]core.QueryGrouping{{"", "column2", "column2"}},
+		[]gumshoe.QueryGrouping{{"", "column2", "column2"}},
 		nil}
-	error := core.ValidateQuery(table, query)
+	error := gumshoe.ValidateQuery(table, query)
 	if error != nil {
 		panic(error)
 	}
@@ -85,13 +88,13 @@ func runGroupByQuery(table *core.FactTable) {
 }
 
 // A query which groups by a column that is transformed using a time transform function.
-func runGroupByWithTimeTransformQuery(table *core.FactTable) {
-	query := &core.Query{
+func runGroupByWithTimeTransformQuery(table *gumshoe.FactTable) {
+	query := &gumshoe.Query{
 		"tableName",
 		createQueryAggregates([]string{"column1"}),
-		[]core.QueryGrouping{{"hour", "column2", "column2"}},
+		[]gumshoe.QueryGrouping{{"hour", "column2", "column2"}},
 		nil}
-	error := core.ValidateQuery(table, query)
+	error := gumshoe.ValidateQuery(table, query)
 	if error != nil {
 		panic(error)
 	}

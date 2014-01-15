@@ -6,13 +6,14 @@ import (
 	"encoding/json"
 	"fmt"
 	martini "github.com/codegangsta/martini"
-	"gumshoe/core"
 	"io/ioutil"
 	"math"
 	"net/http"
 	"os"
 	"runtime"
 	"time"
+
+	"gumshoe"
 )
 
 // TODO(philc): Add the ability to specify schema and persistence settings via a config file.
@@ -22,7 +23,7 @@ const tableFilePath = "db/table"
 const saveDurationInSecs = 10
 
 // This table is referenced by all of the routes.
-var table *core.FactTable
+var table *gumshoe.FactTable
 
 func writeJsonResponse(responseWriter http.ResponseWriter, objectToSerialize interface{}) {
 	jsonResult, _ := json.Marshal(objectToSerialize)
@@ -38,7 +39,7 @@ func handleInsertRoute(responseWriter http.ResponseWriter, request *http.Request
 	}
 
 	requestBody, _ := ioutil.ReadAll(request.Body)
-	jsonBody := make([](map[string]core.Untyped), 0)
+	jsonBody := make([](map[string]gumshoe.Untyped), 0)
 	error := json.Unmarshal([]byte(requestBody), &jsonBody)
 	if error != nil {
 		fmt.Println(error)
@@ -66,7 +67,7 @@ func handleFactTableRoute(responseWriter http.ResponseWriter, request *http.Requ
 	// and for debugging, we only need a few rows to inspect that importing is working correctly.
 	maxRowsToReturn := 1000
 	rowCount := int(math.Min(float64(table.Count), float64(maxRowsToReturn)))
-	results := make([]map[string]core.Untyped, 0, rowCount)
+	results := make([]map[string]gumshoe.Untyped, 0, rowCount)
 	rows := table.Rows()
 	for i := 0; i < rowCount; i++ {
 		row := rows[i]
@@ -78,11 +79,11 @@ func handleFactTableRoute(responseWriter http.ResponseWriter, request *http.Requ
 // Returns the contents of the all of the dimensions tables, for use when debugging.
 func handleDimensionsTableRoute(responseWriter http.ResponseWriter, request *http.Request) {
 	// Assembles the map: {dimensionTableName => [ [0 value0] [1 value1] ... ]}
-	results := make(map[string][][2]core.Untyped)
+	results := make(map[string][][2]gumshoe.Untyped)
 	for _, dimensionTable := range table.DimensionTables[:table.ColumnCount] {
-		rows := make([][2]core.Untyped, 0, table.ColumnCount)
+		rows := make([][2]gumshoe.Untyped, 0, table.ColumnCount)
 		for i, value := range dimensionTable.Rows {
-			row := [2]core.Untyped{i, value}
+			row := [2]gumshoe.Untyped{i, value}
 			rows = append(rows, row)
 		}
 		results[dimensionTable.Name] = rows
@@ -95,13 +96,13 @@ func handleDimensionsTableRoute(responseWriter http.ResponseWriter, request *htt
 func handleQueryRoute(responseWriter http.ResponseWriter, request *http.Request) {
 	start := time.Now()
 	requestBody, _ := ioutil.ReadAll(request.Body)
-	query, error := core.ParseJsonQuery(string(requestBody))
+	query, error := gumshoe.ParseJsonQuery(string(requestBody))
 	if error != nil {
 		fmt.Println(error)
 		http.Error(responseWriter, error.Error(), 500)
 		return
 	}
-	if error = core.ValidateQuery(table, query); error != nil {
+	if error = gumshoe.ValidateQuery(table, query); error != nil {
 		fmt.Println(error)
 		http.Error(responseWriter, error.Error(), 500)
 		return
@@ -112,16 +113,16 @@ func handleQueryRoute(responseWriter http.ResponseWriter, request *http.Request)
 }
 
 // Loads the fact table from disk if it exists, or creates a new one.
-func loadFactTable() *core.FactTable {
-	var table *core.FactTable
+func loadFactTable() *gumshoe.FactTable {
+	var table *gumshoe.FactTable
 	if _, err := os.Stat(tableFilePath + ".json"); os.IsNotExist(err) {
 		fmt.Printf("Table \"%s\" does not exist, creating... ", tableFilePath)
-		table = core.NewFactTable(tableFilePath, columnNames)
+		table = gumshoe.NewFactTable(tableFilePath, columnNames)
 		table.SaveToDisk()
 		fmt.Println("done.")
 	} else {
 		fmt.Printf("Loading \"%s\"... ", tableFilePath)
-		table = core.LoadFactTableFromDisk(tableFilePath)
+		table = gumshoe.LoadFactTableFromDisk(tableFilePath)
 		fmt.Printf("loaded %d rows.\n", table.Count)
 	}
 	return table

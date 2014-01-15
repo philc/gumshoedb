@@ -1,5 +1,5 @@
 // The core table creation and query execution functions.
-package core
+package gumshoe
 
 import (
 	"fmt"
