@@ -134,9 +134,9 @@ func (table *FactTable) convertRowMapToRowArray(rowMap map[string]Untyped) ([]Un
 // the dimension table if one doesn't already exist.
 // e.g. {"country": "Japan", "browser": "Chrome", "age": 17} => [0, 1, 17]
 func (table *FactTable) normalizeRow(rowMap map[string]Untyped) (*FactRow, error) {
-	rowAsArray, error := table.convertRowMapToRowArray(rowMap)
-	if error != nil {
-		return nil, error
+	rowAsArray, err := table.convertRowMapToRowArray(rowMap)
+	if err != nil {
+		return nil, err
 	}
 	var row FactRow
 	for columnIndex, value := range rowAsArray {
@@ -167,9 +167,9 @@ func (table *FactTable) insertNormalizedRow(row *FactRow) {
 // Inserts the given rows into the table. Returns an error if one of the rows contains an unrecognized column.
 func (table *FactTable) InsertRowMaps(rows []map[string]Untyped) error {
 	for _, rowMap := range rows {
-		normalizedRow, error := table.normalizeRow(rowMap)
-		if error != nil {
-			return error
+		normalizedRow, err := table.normalizeRow(rowMap)
+		if err != nil {
+			return err
 		}
 		table.insertNormalizedRow(normalizedRow)
 	}

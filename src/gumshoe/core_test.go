@@ -23,7 +23,7 @@ func createQuery() Query {
 func convertToJsonAndBack(o interface{}) interface{} {
 	b, err := json.Marshal(o)
 	if err != nil {
-		panic(err.Error)
+		panic(err)
 	}
 	result := new(interface{})
 	json.Unmarshal(b, result)
@@ -38,8 +38,8 @@ func HasEqualJson(args ...interface{}) (ok bool, message string) {
 }
 
 func TestConvertRowMapToRowArrayThrowsErrorForUnrecognizedColumn(t *testing.T) {
-	_, error := tableFixture().convertRowMapToRowArray(map[string]Untyped{"col1": 5, "unknownColumn": 10})
-	Assert(t, error, NotNil)
+	_, err := tableFixture().convertRowMapToRowArray(map[string]Untyped{"col1": 5, "unknownColumn": 10})
+	Assert(t, err, NotNil)
 }
 
 func createTableFixtureForFilterTests() *FactTable {

@@ -29,8 +29,7 @@ func populateTableWithTestingData(table *gumshoe.FactTable) {
 		rows = append(rows, row)
 	}
 
-	error := table.InsertRowMaps(rows)
-	if error != nil {
+	if err := table.InsertRowMaps(rows); err != nil {
 		panic(error)
 	}
 }
@@ -51,9 +50,8 @@ func runAggregateQuery(table *gumshoe.FactTable) {
 		createQueryAggregates([]string{"column1"}),
 		nil,
 		nil}
-	error := gumshoe.ValidateQuery(table, query)
-	if error != nil {
-		panic(error)
+	if err := gumshoe.ValidateQuery(table, query); err != nil {
+		panic(err)
 	}
 	table.InvokeQuery(query)
 }
@@ -65,9 +63,8 @@ func runFilterQuery(table *gumshoe.FactTable) {
 		createQueryAggregates([]string{"column1"}),
 		nil,
 		[]gumshoe.QueryFilter{{">", "column2", 5}}}
-	error := gumshoe.ValidateQuery(table, query)
-	if error != nil {
-		panic(error)
+	if err := gumshoe.ValidateQuery(table, query); err != nil {
+		panic(err)
 	}
 	table.InvokeQuery(query)
 }
@@ -80,9 +77,8 @@ func runGroupByQuery(table *gumshoe.FactTable) {
 		createQueryAggregates([]string{"column1"}),
 		[]gumshoe.QueryGrouping{{"", "column2", "column2"}},
 		nil}
-	error := gumshoe.ValidateQuery(table, query)
-	if error != nil {
-		panic(error)
+	if err := gumshoe.ValidateQuery(table, query); err != nil {
+		panic(err)
 	}
 	table.InvokeQuery(query)
 }
@@ -94,9 +90,8 @@ func runGroupByWithTimeTransformQuery(table *gumshoe.FactTable) {
 		createQueryAggregates([]string{"column1"}),
 		[]gumshoe.QueryGrouping{{"hour", "column2", "column2"}},
 		nil}
-	error := gumshoe.ValidateQuery(table, query)
-	if error != nil {
-		panic(error)
+	if err := gumshoe.ValidateQuery(table, query); err != nil {
+		panic(err)
 	}
 	table.InvokeQuery(query)
 }
