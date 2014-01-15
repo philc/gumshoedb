@@ -132,13 +132,7 @@ func setValue(matrix uintptr, row int, col int, value Cell) {
 }
 
 func initByteMatrix() uintptr {
-	// I don't need to allocate a slice here. I can just allocate an array.
-	var matrix [ROWS][COLS]Cell
-	for i, row := range matrix {
-		for j := range row {
-			matrix[i][j] = Cell(i)
-		}
-	}
+	matrix := createArrayMatrix()
 	return uintptr(unsafe.Pointer(&matrix))
 }
 
