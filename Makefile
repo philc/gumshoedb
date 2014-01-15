@@ -17,12 +17,8 @@ web: build
 run-web: web
 	bin/gumshoe_server
 
-benchmark: build
-	go install benchmark
-
-# Runs all benhcmarks appearing in any *_test.go files.
-run-benchmark: benchmark
-	bin/benchmark -minimal-set=true
+benchmark:
+	go test -run=NONE -bench=. $(SUBPACKAGES)
 
 fmt:
 	gofmt -s -l -w src
