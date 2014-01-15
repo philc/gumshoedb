@@ -1,53 +1,39 @@
+GumshoeDB
+=========
 
-Implementation plan
+GumshoeDB is a database for quickly scouring hundreds of millions of analytics events and finding
+answers. It's a work-in-progress and not ready for consumption. Details about typical use cases and key design
+choices are coming soon.
 
-* How can I cast a byte buffer into a struct?
-* If I have a pointer to a value and know its type, how can I pick the right operator to use with it?
+To run:
 
-Performance ideas
------------------
-* Use pointer arithmetic to iterate through rows of variable width
-* Use vectors instead of hashmaps for low-cardinality group-bys
+    make run-web
 
-High-level performance observations
------------------------------------
-* Assigning to hashes (for grouping) is much slower than grouping by array.
-* Iterating over two-dimensional slices is twice as slow as simple arrays.
+This starts a GumshoeDB daemon at [localhost:9000](http://localhost:9000).
 
+You can interact with GumshoeDB over HTTP. Here's a representative query, assuming the columns "country",
+"age", and "clicks".
 
-Query API design
-================
-* Table
-* List of filters
-* List of GroupBy columns
-* Selected aggregates, and their names
+    curl -XPOST localhost:9000/tables/facts
 
-Inspiration:
-https://github.com/metamx/druid/wiki/Querying
-https://github.com/metamx/druid/wiki/GroupByQuery
+    {
+      table: "events",
+      "aggregates":[
+          {"type": "sum", "name": "clicks", "column": "clicks"},
+          {"type": "avg", "name": "avgAge, "column": "age"}],
+      "filters": [{"type": "greaterThan", "column": "age", "value": 21},
+                  {"type": "in", "column": "country", "value": ["USA", "Japan"]}],
+      "groupings": [{"column": "at", "name":"date", "timeTransform": "day"}]
+    }
 
-Representative query:
+    Results:
+    {
+      results:
+        [{date: "2013-12-01", country: "Japan", clicks: 123, rowCount: 145},
+         {date: "2013-12-01", country: "USA", clicks: 123, rowCount: 145}]
+    }
 
-{
-  table: "events",
-  "aggregates":[
-      {"type": "sum", "name": "countrySum", "column": "country"},
-      {"type": "sum", "name": "atSum", "column": "at"}],
-  "filters": [{"type": "greaterThan", "column": "at", "value": 2}],
-  "groupings": [{"column": "country", "name":"country"}]
-}
+See [DEVELOPING.md](https://github.com/philc/gumshoedb/blob/master/DEVELOPING.md) for how to navigate the code
+and make changes.
 
-
-Result:
-
-{
-  results:
-    [{date: "2013-12-01", country: "Japan", clicks: 123, rowCount: 145},
-     {date: "2013-12-01", country: "USA", clicks: 123, rowCount: 145},
-     {date: "2013-12-02", country: "Japan", clicks: 123, rowCount: 145},
-     {date: "2013-12-02", country: "USA", clicks: 123, rowCount: 145}]
-}
-
-Resources
-
-[Memory mapped files API]([http://www.gnu.org/software/libc/manual/html_node/Memory_002dmapped-I_002fO.html)
+Gumshoedb is licensed under [the MIT license](http://www.opensource.org/licenses/mit-license.php).
