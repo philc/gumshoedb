@@ -1,4 +1,5 @@
-// A web server which exposes routes for ingesting rows and executing queries.
+// A web server which runs the database as a daemon, and exposes routes for ingesting rows and executing
+// queries.
 package main
 
 import (

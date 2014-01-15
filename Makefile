@@ -10,7 +10,7 @@ run-test: build
 	go test ...gumshoe/core
 
 web: build
-	go install ...gumshoe/gumshoe_server
+	go build -o bin/gumshoe_server gumshoe/server
 
 run-web: web
 	bin/gumshoe_server
