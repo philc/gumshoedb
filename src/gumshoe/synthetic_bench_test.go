@@ -98,6 +98,37 @@ func BenchmarkSumOneUnrolledLoop(b *testing.B) {
 	checkExpectedSum(b, sum)
 }
 
+// Sums columns over a virtual matrix stored in a contiguous slice.
+func BenchmarkContiguousSliceMatrix(b *testing.B) {
+	matrix := createContiguousSliceMatrix()
+	var sum SumType
+	b.ResetTimer()
+	for n := 0; n < b.N; n++ {
+		sum = 0
+		for i := 0; i < Rows; i++ {
+			sum += SumType(matrix[i*Cols+0])
+		}
+	}
+	b.StopTimer()
+	checkExpectedSum(b, sum)
+}
+
+// Sums columns over a virtual byte matrix stored in a contiguous slice.
+func BenchmarkContiguousSliceByteMatrix(b *testing.B) {
+	matrix := createContiguousSliceByteMatrix(Cols)
+	var sum SumType
+	b.ResetTimer()
+	for n := 0; n < b.N; n++ {
+		sum = 0
+		for i := 0; i < Rows; i++ {
+			v := &matrix[i*int(RowSize)+0]
+			sum += *(*SumType)(unsafe.Pointer(v))
+		}
+	}
+	b.StopTimer()
+	checkExpectedSum(b, sum)
+}
+
 // Sum columns over a slice of slices.
 func BenchmarkSumSliceOfSliceMatrix(b *testing.B) {
 	matrix := createSliceOfSliceMatrix()
@@ -193,6 +224,28 @@ func createArrayMatrix() *[Rows][Cols]Cell {
 		matrix[i][0] = Cell(i)
 	}
 	return &matrix
+}
+
+func createContiguousSliceMatrix() []Cell {
+	matrix := make([]Cell, Rows*Cols)
+	for i := 0; i < Rows; i++ {
+		for j := 0; j < Cols; j++ {
+			matrix[i*Cols+j] = Cell(i)
+		}
+	}
+	return matrix
+}
+
+func createContiguousSliceByteMatrix(cols int) []byte {
+	rowSize := int(ColSize) * cols
+	matrix := make([]byte, rowSize*Rows)
+	for i := 0; i < Rows; i++ {
+		for j := 0; j < cols; j++ {
+			v := &matrix[i*int(rowSize)+j*int(ColSize)]
+			*(*Cell)(unsafe.Pointer(v)) = Cell(i)
+		}
+	}
+	return matrix
 }
 
 func createSliceMatrix() []*[Cols]Cell {
