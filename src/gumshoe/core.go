@@ -45,10 +45,10 @@ type DimensionTable struct {
 }
 
 func NewDimensionTable(name string) *DimensionTable {
-	table := new(DimensionTable)
-	table.Name = name
-	table.ValueToId = make(map[string]int32)
-	return table
+	return &DimensionTable{
+		Name:      name,
+		ValueToId: make(map[string]int32),
+	}
 }
 
 type RowAggregate struct {
