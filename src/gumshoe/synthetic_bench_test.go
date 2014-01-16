@@ -10,8 +10,8 @@ import (
 )
 
 const (
-	Rows = 100000
-	Cols = 50
+	Rows = 160000 // Multiple of 8, for convenience (see synthetic_parallel_bench_test.go)
+	Cols = 64
 )
 
 type Cell int32
@@ -38,6 +38,9 @@ var typeSizes = map[string]uintptr{
 }
 
 func init() {
+	if Rows%8 != 0 {
+		panic("Rows must be divisible by 8.")
+	}
 	for i := 0; i < Rows; i++ {
 		RowIndexSum += SumType(i)
 	}
