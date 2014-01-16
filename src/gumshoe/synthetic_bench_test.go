@@ -14,13 +14,13 @@ const (
 	Cols = 50
 )
 
-type Cell float32
-type SumType float32
+type Cell int32
+type SumType int32
 
 // The "Cell" type and ColSize are compile time constants, but they can be changed by hand to observe the
 // the effect column size and thus row size has on scan speed.
 var (
-	ColSize = typeSizes["float32"]
+	ColSize = typeSizes["int32"]
 	RowSize = ColSize * Cols
 
 	RowIndexSum SumType
@@ -31,6 +31,7 @@ var typeSizes = map[string]uintptr{
 	"int8":    unsafe.Sizeof(*new(int8)),
 	"int16":   unsafe.Sizeof(*new(int16)),
 	"int32":   unsafe.Sizeof(*new(int32)),
+	"int64":   unsafe.Sizeof(*new(int64)),
 	"uint32":  unsafe.Sizeof(*new(uint32)),
 	"float32": unsafe.Sizeof(*new(float32)),
 	"float64": unsafe.Sizeof(*new(float64)),
@@ -44,7 +45,7 @@ func init() {
 
 func checkExpectedSum(b *testing.B, got SumType) {
 	if got != RowIndexSum {
-		b.Fatalf("Expected %.1f, but got %.1f", RowIndexSum, got)
+		b.Fatalf("Expected %v, but got %v", RowIndexSum, got)
 	}
 }
 
