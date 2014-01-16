@@ -1,18 +1,21 @@
 package gumshoe
 
 import (
+	"io/ioutil"
 	"os"
+	"path/filepath"
 	"testing"
 
 	. "github.com/cespare/a"
 )
 
-const testingFolder = "/tmp/gumshoedb_tests"
-
 func TestPersistenceEndToEnd(t *testing.T) {
-	tableFilePath := testingFolder + "/test"
-	os.RemoveAll(testingFolder)
-	os.Mkdir(testingFolder, os.ModeDir|0700)
+	tempDir, err := ioutil.TempDir("", "gumshoe-persistence-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tempDir)
+	tableFilePath := filepath.Join(tempDir, "test")
 
 	table := NewFactTable(tableFilePath, []string{"col1", "col2"})
 	table.SaveToDisk()

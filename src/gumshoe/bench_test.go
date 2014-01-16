@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"gumshoe"
@@ -104,7 +105,7 @@ func setupFactTable() (table *gumshoe.FactTable, dbTempDir string) {
 	if err != nil {
 		panic(err)
 	}
-	table = gumshoe.NewFactTable(tempDir, columnNames)
+	table = gumshoe.NewFactTable(filepath.Join(tempDir, "db"), columnNames)
 	populateTableWithTestingData(table)
 	return table, tempDir
 }
