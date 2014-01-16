@@ -186,7 +186,7 @@ func (table *DimensionTable) addRow(rowValue string) int32 {
 // Scans all rows in the table, aggregating columns, filtering and grouping rows.
 // This logic is performance critical.
 // TODO(philc): make the groupByColumnName parameter be an integer, for consistency
-func (table *FactTable) scanTable(filters []FactTableFilterFunc, columnIndices []int,
+func (table *FactTable) scan(filters []FactTableFilterFunc, columnIndices []int,
 	groupByColumnName string, groupByColumnTransformFn func(Cell) Cell) []RowAggregate {
 	columnIndexToGroupBy, useGrouping := table.ColumnNameToIndex[groupByColumnName]
 	// This maps the values of the group-by column => RowAggregate.
@@ -241,12 +241,12 @@ outerLoop:
 }
 
 // TODO(philc): This function probably be inlined.
-func (table *FactTable) getColumnIndiciesFromQuery(query *Query) []int {
-	columnIndicies := make([]int, 0)
+func (table *FactTable) getColumnIndicesFromQuery(query *Query) []int {
+	columnIndices := make([]int, 0)
 	for _, queryAggregate := range query.Aggregates {
-		columnIndicies = append(columnIndicies, table.ColumnNameToIndex[queryAggregate.Column])
+		columnIndices = append(columnIndices, table.ColumnNameToIndex[queryAggregate.Column])
 	}
-	return columnIndicies
+	return columnIndices
 }
 
 func (table *FactTable) mapRowAggregatesToJsonResultsFormat(query *Query,
@@ -389,7 +389,7 @@ func convertTimeTransformToFunc(transformFunctionName string) func(Cell) Cell {
 }
 
 func (table *FactTable) InvokeQuery(query *Query) map[string]Untyped {
-	columnIndicies := table.getColumnIndiciesFromQuery(query)
+	columnIndices := table.getColumnIndicesFromQuery(query)
 	var groupByColumn string
 	var groupByTransformFunc func(Cell) Cell
 	// NOTE(philc): For now, only support one level of grouping. We intend to support multiple levels.
@@ -406,7 +406,7 @@ func (table *FactTable) InvokeQuery(query *Query) map[string]Untyped {
 		filterFuncs = append(filterFuncs, convertQueryFilterToFilterFunc(queryFilter, table))
 	}
 
-	results := table.scanTable(filterFuncs, columnIndicies, groupByColumn, groupByTransformFunc)
+	results := table.scan(filterFuncs, columnIndices, groupByColumn, groupByTransformFunc)
 	jsonResultRows := table.mapRowAggregatesToJsonResultsFormat(query, results)
 	return map[string]Untyped{
 		"results": jsonResultRows,
