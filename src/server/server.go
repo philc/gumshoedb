@@ -27,7 +27,8 @@ const saveDurationInSecs = 10
 var table *gumshoe.FactTable
 
 func writeJsonResponse(responseWriter http.ResponseWriter, objectToSerialize interface{}) {
-	if jsonResult, err := json.Marshal(objectToSerialize); err != nil {
+	jsonResult, err := json.Marshal(objectToSerialize)
+	if err != nil {
 		log.Print(err)
 		http.Error(responseWriter, err.Error(), 500)
 		return
@@ -43,9 +44,9 @@ func handleInsertRoute(responseWriter http.ResponseWriter, request *http.Request
 		return
 	}
 
-	requestBody, _ := ioutil.ReadAll(request.Body)
-	jsonBody := make([](map[string]gumshoe.Untyped), 0)
-	if err := json.Unmarshal([]byte(requestBody), &jsonBody); err != nil {
+	decoder := json.NewDecoder(request.Body)
+	jsonBody := []map[string]gumshoe.Untyped{}
+	if err := decoder.Decode(&jsonBody); err != nil {
 		log.Print(err)
 		http.Error(responseWriter, err.Error(), 500)
 		return
