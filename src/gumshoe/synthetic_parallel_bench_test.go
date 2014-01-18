@@ -20,10 +20,10 @@ func BenchmarkParallelMatrix128Col8Threads(b *testing.B) { runParallelBenchmark(
 func runParallelBenchmark(b *testing.B, cols, parallelism int) {
 	rowSize := ColSize * uintptr(cols)
 	matrix := createContiguousSliceByteMatrix(cols)
-	var sum SumType
+	var totalSum SumType
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
-		sum = 0
+		totalSum = 0
 		var wg sync.WaitGroup
 		wg.Add(parallelism)
 		sums := make(chan SumType)
@@ -32,12 +32,12 @@ func runParallelBenchmark(b *testing.B, cols, parallelism int) {
 			p := uintptr(unsafe.Pointer(&matrix[0])) + uintptr(i)*rowSize*uintptr(rowsPerWorker)
 			go func(p uintptr) {
 				defer wg.Done()
-				var s SumType
+				var sum SumType
 				for i := 0; i < rowsPerWorker; i++ {
-					s += *(*SumType)(unsafe.Pointer(p))
+					sum += *(*SumType)(unsafe.Pointer(p))
 					p += rowSize
 				}
-				sums <- s
+				sums <- sum
 			}(p)
 		}
 		done := make(chan bool)
@@ -48,13 +48,13 @@ func runParallelBenchmark(b *testing.B, cols, parallelism int) {
 	wait:
 		for {
 			select {
-			case s := <-sums:
-				sum += s
+			case sum := <-sums:
+				totalSum += sum
 			case <-done:
 				break wait
 			}
 		}
 	}
 	b.StopTimer()
-	checkExpectedSum(b, sum)
+	checkExpectedSum(b, totalSum)
 }
