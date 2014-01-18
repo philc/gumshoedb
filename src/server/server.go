@@ -38,6 +38,8 @@ func writeJsonResponse(responseWriter http.ResponseWriter, objectToSerialize int
 }
 
 // Given an array of JSON rows, insert them.
+// TODO(philc): We need to enforce that there are no inserts happening concurrently. This http route should
+// block until the previous insert is finished.
 func handleInsertRoute(responseWriter http.ResponseWriter, request *http.Request) {
 	if request.Method != "PUT" {
 		http.Error(responseWriter, "", 404)
