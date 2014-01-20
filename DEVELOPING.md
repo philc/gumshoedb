@@ -40,7 +40,8 @@ the ideal benchmarks -- ideally within 20%.
 
 High level performance observations
 -----------------------------------
-* Iterating over two-dimensional slices is twice as slow as regular arrays.
+* Iterating over two-dimensional slices is twice as slow as contiguous slices/arrays, because of pointer
+  indirection.
 * Scan speed scales linearly with the bit-width of the row
 
 REST API
