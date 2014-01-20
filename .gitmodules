@@ -10,3 +10,6 @@
 [submodule "vendor/src/github.com/codegangsta/martini"]
 	path = vendor/src/github.com/codegangsta/martini
 	url = https://github.com/codegangsta/martini.git
+[submodule "vendor/src/github.com/BurntSushi/toml"]
+	path = vendor/src/github.com/BurntSushi/toml
+	url = git://github.com/BurntSushi/toml
