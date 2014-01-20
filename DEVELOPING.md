@@ -3,11 +3,11 @@ Getting started
 
 Run the tests:
 
-    make run-tests
+    make test
 
 Run the benchmarks:
 
-    make run-benchmarks
+    make benchmark
 
 Major todos
 -----------
@@ -30,7 +30,8 @@ The benchmark suite is a critical tool for evaluating different implementation s
 
 To run:
 
-    make run-benchmarks
+    make benchmark
+    make synthetic-benchmark
 
 The synthetic suite benchmarks small, narrow techniques and represents the upper-bound of performance. It
 provides a clean, isolated view on how fast a technique is.
@@ -47,3 +48,16 @@ High level performance observations
 REST API
 --------
 The query API JSON format is inspired by [Druid's](https://github.com/metamx/druid/wiki/Querying).
+
+Go-localpath
+------------
+Install and use [go-localpath](https://github.com/cespare/go-localpath) for greater ease of development. This
+is a small tool that lets you call the `go` tool with a modified `$GOPATH` (the way the Makefile does).
+go-localpath uses the `.glp` file to know what to do.
+
+If you're using go-localpath (and you've set it up to replace the `go` command -- see directions on the
+go-localpath readme), then you can use the go tool directly:
+
+    $ go build -o build/gumshoe_server server
+    $ go test -run=Persistence gumshoe
+    $ go test -run=NONE -bench=Parallel synthetic

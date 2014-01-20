@@ -20,7 +20,7 @@ run-web: web
 benchmark:
 	go test -run=NONE -bench=. gumshoe
 
-synthetic-benchmarks:
+synthetic-benchmark:
 	go test -run=NONE -bench=. synthetic
 
 fmt:
