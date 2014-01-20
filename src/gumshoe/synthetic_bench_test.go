@@ -102,7 +102,7 @@ func BenchmarkSumOneUnrolledLoop(b *testing.B) {
 }
 
 // Sums columns over a virtual matrix stored in a contiguous slice.
-func BenchmarkContiguousSliceMatrix(b *testing.B) {
+func BenchmarkSumContiguousSliceMatrix(b *testing.B) {
 	matrix := createContiguousSliceMatrix()
 	var sum SumType
 	b.ResetTimer()
@@ -117,7 +117,7 @@ func BenchmarkContiguousSliceMatrix(b *testing.B) {
 }
 
 // Sums columns over a virtual byte matrix stored in a contiguous slice.
-func BenchmarkContiguousSliceByteMatrix(b *testing.B) {
+func BenchmarkSumContiguousSliceByteMatrix(b *testing.B) {
 	matrix := createContiguousSliceByteMatrix(Cols)
 	var sum SumType
 	b.ResetTimer()
