@@ -1,4 +1,4 @@
-package gumshoe_test
+package synthetic
 
 import (
 	"testing"

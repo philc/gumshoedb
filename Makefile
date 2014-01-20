@@ -18,7 +18,10 @@ run-web: web
 	bin/gumshoe_server
 
 benchmark:
-	go test -run=NONE -bench=. $(SUBPACKAGES)
+	go test -run=NONE -bench=. gumshoe
+
+synthetic-benchmarks:
+	go test -run=NONE -bench=. synthetic
 
 fmt:
 	gofmt -s -l -w src
