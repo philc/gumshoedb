@@ -1,3 +1,4 @@
 pkg
 bin
 db/*
+/private_config.toml

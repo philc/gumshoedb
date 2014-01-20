@@ -4,6 +4,7 @@ package main
 
 import (
 	"encoding/json"
+	"flag"
 	"io/ioutil"
 	"log"
 	"math"
@@ -14,14 +15,14 @@ import (
 
 	"gumshoe"
 
+	"github.com/BurntSushi/toml"
 	"github.com/codegangsta/martini"
 )
 
-// TODO(philc): Add the ability to specify schema and persistence settings via a config file.
-const tableFilePath = "db/table"
-
-// How often to persist tables to disk.
-const saveDurationInSecs = 10
+var (
+	configFile = flag.String("config", "config.toml", "Configuration file to use")
+	config     *Config
+)
 
 // This table is referenced by all of the routes.
 var table *gumshoe.FactTable
@@ -121,20 +122,33 @@ func handleQueryRoute(responseWriter http.ResponseWriter, request *http.Request)
 // Loads the fact table from disk if it exists, or creates a new one.
 func loadFactTable() *gumshoe.FactTable {
 	var table *gumshoe.FactTable
-	if _, err := os.Stat(tableFilePath + ".json"); os.IsNotExist(err) {
-		log.Printf("Table \"%s\" does not exist, creating... ", tableFilePath)
-		table = gumshoe.NewFactTable(tableFilePath, columnNames)
+	if _, err := os.Stat(config.TableFilePath + ".json"); os.IsNotExist(err) {
+		log.Printf("Table \"%s\" does not exist, creating... ", config.TableFilePath)
+		table = gumshoe.NewFactTable(config.TableFilePath, config.ColumnNames)
 		table.SaveToDisk()
 		log.Print("done.")
 	} else {
-		log.Printf("Loading \"%s\"... ", tableFilePath)
-		table = gumshoe.LoadFactTableFromDisk(tableFilePath)
+		log.Printf("Loading \"%s\"... ", config.TableFilePath)
+		table = gumshoe.LoadFactTableFromDisk(config.TableFilePath)
 		log.Printf("loaded %d rows.", table.Count)
 	}
 	return table
 }
 
 func main() {
+	flag.Parse()
+	// Set configuration defaults
+	config = &Config{
+		TableFilePath: "db/table",
+		SaveDuration:  duration{10 * time.Second},
+	}
+	if _, err := toml.DecodeFile(*configFile, config); err != nil {
+		log.Fatal(err)
+	}
+	if err := config.Validate(); err != nil {
+		log.Fatal(err)
+	}
+
 	// Use all available cores for servicing requests in parallel.
 	if os.Getenv("GOMAXPROCS") == "" {
 		runtime.GOMAXPROCS(runtime.NumCPU())

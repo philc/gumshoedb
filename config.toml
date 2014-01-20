@@ -1,0 +1,9 @@
+table_file_path = "db/table"
+save_duration = "10s"
+
+column_names = [
+  "name",
+  "age",
+  "country",
+  "clicks",
+]
