@@ -1,7 +1,7 @@
 // Functions for loading and saving tables to disk.
 // A fact table consists of two files:
 // 1. tableName.json: The json-encoded table metadata and dimension tables.
-// 2. tableName.facts.dat: The facts matrix, encoded as raw bytes, which are memorye-mapped at runtime.
+// 2. tableName.facts.dat: The facts matrix, encoded as raw bytes, which are memory-mapped at runtime.
 //
 // NOTE(philc): I would use gobs for serializing the table metadata and dimension tables, but I had trouble
 // getting gobs to fields on a struct which are maps when serializing the top-level FactTable struct.
