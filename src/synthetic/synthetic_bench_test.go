@@ -5,6 +5,8 @@
 package synthetic
 
 import (
+	"math"
+	"reflect"
 	"testing"
 	"unsafe"
 )
@@ -20,10 +22,15 @@ type SumType int32
 // The "Cell" type and ColSize are compile time constants, but they can be changed by hand to observe the
 // the effect column size and thus row size has on scan speed.
 var (
-	ColSize = typeSizes["int32"]
-	RowSize = ColSize * Cols
-
+	ColSize     = typeSizes["int32"]
+	RowSize     = ColSize * Cols
 	RowIndexSum SumType
+
+	// Specs for tables which have mixed column types in the same row.
+	MixedColumnSizeEven = typeSizes["int32"]
+	MixedColumnSizeOdd  = typeSizes["int8"]
+	MixedRowSize        = uintptr(int(math.Ceil(Cols/2))*int(MixedColumnSizeEven) +
+		(Cols/2)*int(MixedColumnSizeOdd))
 )
 
 var typeSizes = map[string]uintptr{
@@ -171,6 +178,33 @@ func BenchmarkSumByteMatrix(b *testing.B) {
 	setBytes(b, RowSize)
 	checkExpectedSum(b, sum)
 }
+
+// Sum columns where the column types are mixed. Since the row width is smaller because some columns are
+// smaller, this should improve performance when memory bandwidth is the bottleneck.
+func BenchmarkSumByteMatrixMixedColumns(b *testing.B) {
+	matrix := createSliceByteMatrixWithMixedColumns()
+	var sum SumType
+	var columnTypes [Cols]int
+	columnOffsets := [Cols]uintptr{uintptr(0), uintptr(4)} // Prepared before-hand based on the column type.
+	columnIndex := 0
+	b.ResetTimer()
+	for n := 0; n < b.N; n++ {
+		sum = 0
+		p := uintptr(matrix)
+		for i := 0; i < Rows; i++ {
+			columnPtr := unsafe.Pointer(p + columnOffsets[columnIndex])
+			switch columnTypes[columnIndex] {
+			case 0:
+				sum += SumType(*(*int32)(columnPtr))
+			case 1:
+				sum += SumType(*(*int8)(columnPtr))
+			}
+			p += MixedRowSize
+		}
+	}
+
+	b.StopTimer()
+	setBytes(b, MixedRowSize)
 	checkExpectedSum(b, sum)
 }
 
@@ -230,6 +264,28 @@ func BenchmarkSumUsingInlineFilterFn(b *testing.B) {
 func createByteMatrix() unsafe.Pointer {
 	matrix := createArrayMatrix()
 	return unsafe.Pointer(matrix)
+}
+
+// Creates a byte matrix with mixed column widths. Even columns are int32 and odd columns are int8. This
+// simulates the gains from leveraging smaller column types to achieve narrower rows.
+func createSliceByteMatrixWithMixedColumns() unsafe.Pointer {
+	rowSize := int(math.Ceil(Cols/2))*int(MixedColumnSizeEven) + int(Cols/2)*int(MixedColumnSizeOdd)
+	matrix := make([]byte, rowSize*Rows)
+	for i := 0; i < Rows; i++ {
+		columnOffset := 0
+		for j := 0; j < Cols; j++ {
+			v := &matrix[i*int(rowSize)+columnOffset]
+			if j%2 == 0 {
+				*(*int32)(unsafe.Pointer(v)) = int32(i)
+				columnOffset += int(MixedColumnSizeEven)
+			} else {
+				*(*int8)(unsafe.Pointer(v)) = int8(j)
+				columnOffset += int(MixedColumnSizeOdd)
+			}
+		}
+	}
+	headerPtr := (*reflect.SliceHeader)(unsafe.Pointer(&matrix))
+	return unsafe.Pointer(headerPtr.Data)
 }
 
 func createArrayMatrix() *[Rows][Cols]Cell {
