@@ -57,10 +57,6 @@ func LoadFactTableFromDisk(tableFilePath string) *FactTable {
 	if err := json.Unmarshal(file, &table); err != nil {
 		panic(err)
 	}
-
-	if err != nil {
-		panic(err)
-	}
 	table.memoryMap, table.rows = memoryMapFactRows(factsDataFilePath(tableFilePath))
 	return &table
 }
@@ -74,14 +70,12 @@ func memoryMapFactRows(filename string) (*mmap.MMap, *[ROWS]FactRow) {
 	if err != nil {
 		panic(err)
 	}
-	file.Close()
-	if err != nil {
+	if err := file.Close(); err != nil {
 		panic(err)
 	}
 	sliceHeader := *(*reflect.SliceHeader)(unsafe.Pointer(&mmap))
 	table := (*[ROWS]FactRow)(unsafe.Pointer(sliceHeader.Data))
-	err = mmap.Flush()
-	if err != nil {
+	if err := mmap.Flush(); err != nil {
 		panic(err)
 	}
 	return &mmap, table
