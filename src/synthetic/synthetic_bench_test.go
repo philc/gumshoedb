@@ -64,6 +64,7 @@ func BenchmarkSumArrayMatrix(b *testing.B) {
 		}
 	}
 	b.StopTimer()
+	setBytes(b, RowSize)
 	checkExpectedSum(b, sum)
 }
 
@@ -79,6 +80,7 @@ func BenchmarkSumOneRolledLoop(b *testing.B) {
 		}
 	}
 	b.StopTimer()
+	setBytes(b, RowSize)
 	checkExpectedSum(b, sum)
 }
 
@@ -98,6 +100,7 @@ func BenchmarkSumOneUnrolledLoop(b *testing.B) {
 		}
 	}
 	b.StopTimer()
+	setBytes(b, RowSize)
 	checkExpectedSum(b, sum)
 }
 
@@ -113,6 +116,7 @@ func BenchmarkSumContiguousSliceMatrix(b *testing.B) {
 		}
 	}
 	b.StopTimer()
+	setBytes(b, RowSize)
 	checkExpectedSum(b, sum)
 }
 
@@ -129,6 +133,7 @@ func BenchmarkSumContiguousSliceByteMatrix(b *testing.B) {
 		}
 	}
 	b.StopTimer()
+	setBytes(b, RowSize)
 	checkExpectedSum(b, sum)
 }
 
@@ -144,6 +149,7 @@ func BenchmarkSumSliceOfSliceMatrix(b *testing.B) {
 		}
 	}
 	b.StopTimer()
+	setBytes(b, RowSize)
 	checkExpectedSum(b, sum)
 }
 
@@ -162,6 +168,9 @@ func BenchmarkSumByteMatrix(b *testing.B) {
 		}
 	}
 	b.StopTimer()
+	setBytes(b, RowSize)
+	checkExpectedSum(b, sum)
+}
 	checkExpectedSum(b, sum)
 }
 
@@ -180,6 +189,7 @@ func BenchmarkSumUsingFilterFn(b *testing.B) {
 		}
 	}
 	b.StopTimer()
+	setBytes(b, RowSize)
 	checkExpectedSum(b, sum)
 }
 
@@ -197,6 +207,7 @@ func BenchmarkSumUsingInlineFilterFn(b *testing.B) {
 		}
 	}
 	b.StopTimer()
+	setBytes(b, RowSize)
 	checkExpectedSum(b, sum)
 }
 
@@ -271,4 +282,8 @@ func createSliceOfSliceMatrix() [][]Cell {
 		}
 	}
 	return matrix
+}
+
+func setBytes(b *testing.B, rowSize uintptr) {
+	b.SetBytes(int64(Rows * int(rowSize)))
 }
