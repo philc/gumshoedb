@@ -56,5 +56,6 @@ func runParallelBenchmark(b *testing.B, cols, parallelism int) {
 		}
 	}
 	b.StopTimer()
+	setBytes(b, rowSize)
 	checkExpectedSum(b, totalSum)
 }

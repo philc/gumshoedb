@@ -31,6 +31,7 @@ func BenchmarkFilterSliceUnrolled(b *testing.B) {
 		}
 	}
 	b.StopTimer()
+	setBytes(b, RowSize)
 	checkExpectedSum(b, sum)
 }
 
@@ -60,5 +61,6 @@ func BenchmarkFilterSlice(b *testing.B) {
 		}
 	}
 	b.StopTimer()
+	setBytes(b, RowSize)
 	checkExpectedSum(b, sum)
 }
