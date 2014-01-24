@@ -25,6 +25,10 @@ func tableMetadataFilePath(tableFilePath string) string {
 	return tableFilePath + ".json"
 }
 
+func tmpFilePath(filePath string) string {
+	return filePath + ".tmp"
+}
+
 // Creates a new file on disk which is large enough to hold the entire facts table, and maps that file
 // into memory to be accessed and modified.
 func CreateMemoryMappedFactTableStorage(tableFilePath string, rows int) (*mmap.MMap, *[ROWS]FactRow) {
@@ -86,10 +90,7 @@ func memoryMapFactRows(filename string) (*mmap.MMap, *[ROWS]FactRow) {
 // Persist this database to disk. This blocks until all table metadata has been written, and until the memory
 // map has finished being synced.
 func (table *FactTable) SaveToDisk() {
-	// TODO(philc): Make this writing method safer. If this writing process is interrupted, we lose/corrupt the
-	// entire table. Instead, we should serialize the fact table's metadata and dimension tables to a temporary
-	// file and then atomically rename it to the destination file.
-	file, err := os.Create(tableMetadataFilePath(table.FilePath))
+	file, err := os.Create(tmpFilePath(tableMetadataFilePath(table.FilePath)))
 	if err != nil {
 		panic(err)
 	}
@@ -101,6 +102,9 @@ func (table *FactTable) SaveToDisk() {
 
 	file.Write(bytesBuffer)
 	file.Close()
+
 	// TODO(caleb): Handle a flush error
 	table.memoryMap.Flush() // Sync the memory map to disk synchronously.
+
+	os.Rename(tmpFilePath(tableMetadataFilePath(table.FilePath)), tableMetadataFilePath(table.FilePath))
 }
