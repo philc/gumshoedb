@@ -63,11 +63,6 @@ func handleInsertRoute(responseWriter http.ResponseWriter, request *http.Request
 	}
 }
 
-// Save the database to disk, blocking until it's written.
-func handleSaveRoute(request *http.Request) {
-	table.SaveToDisk()
-}
-
 // A debugging route to list the contents of a table. Returns up to 1000 rows.
 func handleFactTableRoute(responseWriter http.ResponseWriter, request *http.Request) {
 	// For now, only return up to 1000 rows. We can't serialize the entire table unless we stream the response,
@@ -135,6 +130,15 @@ func loadFactTable() *gumshoe.FactTable {
 	return table
 }
 
+func runBackgroundSaves() {
+	for {
+		time.Sleep(config.SaveDuration.Duration)
+		log.Println("Saving to disk...")
+		table.SaveToDisk()
+		log.Println("...done saving to disk")
+	}
+}
+
 func main() {
 	flag.Parse()
 	// Set configuration defaults
@@ -160,10 +164,12 @@ func main() {
 	m.Handlers(martini.Logger(), martini.Static("public"))
 
 	// TODO(philc): Make these REST routes more consistent.
-	m.Post("/save", handleSaveRoute)
 	m.Put("/insert", handleInsertRoute)
 	m.Get("/tables/facts", handleFactTableRoute)
 	m.Get("/tables/dimensions", handleDimensionsTableRoute)
 	m.Post("/tables/facts/query", handleQueryRoute)
-	log.Fatal(http.ListenAndServe(":9000", m))
+
+	go runBackgroundSaves()
+
+	go log.Fatal(http.ListenAndServe(":9000", m))
 }

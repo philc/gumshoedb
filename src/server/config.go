@@ -6,11 +6,9 @@ import (
 )
 
 type Config struct {
-	TableFilePath string `toml:"table_file_path"`
-	// TODO(caleb): I added the save duration field because it was a constant before the configuration file
-	// existed, but it's currently unused.
-	SaveDuration duration `toml:"save_duration"`
-	ColumnNames  []string `toml:"column_names"`
+	TableFilePath string   `toml:"table_file_path"`
+	SaveDuration  duration `toml:"save_duration"`
+	ColumnNames   []string `toml:"column_names"`
 }
 
 func (c *Config) Validate() error {

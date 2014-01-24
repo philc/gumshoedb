@@ -1,4 +1,6 @@
 table_file_path = "db/table"
+
+# The amount of time between saves to disk.
 save_duration = "10s"
 
 column_names = [
