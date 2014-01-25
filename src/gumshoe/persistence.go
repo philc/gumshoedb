@@ -17,17 +17,9 @@ import (
 	mmap "github.com/edsrzf/mmap-go"
 )
 
-func factsDataFilePath(tableFilePath string) string {
-	return tableFilePath + ".facts.dat"
-}
-
-func tableMetadataFilePath(tableFilePath string) string {
-	return tableFilePath + ".json"
-}
-
-func tmpFilePath(filePath string) string {
-	return filePath + ".tmp"
-}
+func factsDataFilePath(tableFilePath string) string     { return tableFilePath + ".facts.dat" }
+func tableMetadataFilePath(tableFilePath string) string { return tableFilePath + ".json" }
+func tmpFilePath(filePath string) string                { return filePath + ".tmp" }
 
 // Creates a new file on disk which is large enough to hold the entire facts table, and maps that file
 // into memory to be accessed and modified.
