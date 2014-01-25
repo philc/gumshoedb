@@ -85,8 +85,14 @@ func (table *FactTable) SaveToDisk() {
 	file.Write(bytesBuffer)
 	file.Close()
 
-	// TODO(caleb): Handle a flush error
-	table.memoryMap.Flush() // Sync the memory map to disk synchronously.
+	// TODO(caleb): Add real error handling
+	// Sync the memory map to disk synchronously.
+	if err := table.memoryMap.Flush(); err != nil {
+		panic(err)
+	}
 
-	os.Rename(tmpFilePath(tableMetadataFilePath(table.FilePath)), tableMetadataFilePath(table.FilePath))
+	err = os.Rename(tmpFilePath(tableMetadataFilePath(table.FilePath)), tableMetadataFilePath(table.FilePath))
+	if err != nil {
+		panic(err)
+	}
 }
