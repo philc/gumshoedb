@@ -24,7 +24,7 @@ func TestPersistenceEndToEnd(t *testing.T) {
 
 	table = LoadFactTableFromDisk(tableFilePath)
 	Assert(t, table.FilePath, Equals, tableFilePath)
-	denormalizedRow := table.DenormalizeRow(&table.Rows()[0])
+	denormalizedRow := table.DenormalizeRow(table.getRowSlice(0))
 
 	Assert(t, int(denormalizedRow["col1"].(Cell)), Equals, int(rowMap["col1"].(int)))
 }

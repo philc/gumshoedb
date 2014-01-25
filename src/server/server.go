@@ -71,13 +71,7 @@ func handleFactTableRoute(responseWriter http.ResponseWriter, request *http.Requ
 	// and for debugging, we only need a few rows to inspect that importing is working correctly.
 	maxRowsToReturn := 1000
 	rowCount := int(math.Min(float64(table.Count), float64(maxRowsToReturn)))
-	results := make([]map[string]gumshoe.Untyped, 0, rowCount)
-	rows := table.Rows()
-	for i := 0; i < rowCount; i++ {
-		row := rows[i]
-		results = append(results, table.DenormalizeRow(&row))
-	}
-	writeJsonResponse(responseWriter, &results)
+	writeJsonResponse(responseWriter, table.GetRowMaps(0, rowCount))
 }
 
 // Returns the contents of the all of the dimensions tables, for use when debugging.

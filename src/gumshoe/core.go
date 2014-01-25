@@ -3,6 +3,8 @@ package gumshoe
 
 import (
 	"fmt"
+	"reflect"
+	"unsafe"
 
 	mmap "github.com/edsrzf/mmap-go"
 )
@@ -13,13 +15,12 @@ const ROWS = 10000000
 const COLS = 42
 
 type Cell float32
-type FactRow [COLS]Cell
 
 // A fixed sized table of rows.
 // When we insert more rows than the table's capacity, we wrap around and begin inserting rows at index 0.
 type FactTable struct {
 	// We serialize this struct using JSON. The unexported fields are fields we don't want to serialize.
-	rows     *[ROWS]FactRow
+	rows     *[]byte
 	FilePath string // Path to this table on disk, where we will periodically snapshot it to.
 	// The mmap bookkeeping object which contains the file descriptor we are mapping the table rows to.
 	memoryMap          *mmap.MMap
@@ -27,12 +28,14 @@ type FactTable struct {
 	Count              int                   // The number of used rows currently in the table. This is <= ROWS.
 	ColumnCount        int                   // The number of columns in use in the table. This is <= COLS.
 	Capacity           int                   // For now, this is an alias for the ROWS constant.
+	RowSize            int                   // In bytes
+	ColumnSize         int                   // TODO(philc): Remove this once we stop using fixed-type columns
 	DimensionTables    [COLS]*DimensionTable // A mapping from column index => column's DimensionTable.
 	ColumnNameToIndex  map[string]int
 	ColumnIndexToName  []string
 }
 
-func (table *FactTable) Rows() *[ROWS]FactRow {
+func (table *FactTable) Rows() *[]byte {
 	return table.rows
 }
 
@@ -57,7 +60,7 @@ type RowAggregate struct {
 	Count        int
 }
 
-type FactTableFilterFunc func(*FactRow) bool
+type FactTableFilterFunc func(uintptr) bool
 
 // Allocates a new FactTable. If a non-empty filePath is specified, this table's rows are immediately
 // persisted to disk in the form of a memory-mapped file.
@@ -72,13 +75,17 @@ func NewFactTable(filePath string, columnNames []string) *FactTable {
 		table.DimensionTables[i] = NewDimensionTable(name)
 	}
 	table.FilePath = filePath
+	table.ColumnSize = 4
+	table.RowSize = COLS * table.ColumnSize
+	tableSize := ROWS * table.RowSize
 	if filePath == "" {
 		// Create an in-memory database only, without a file backing.
-		table.rows = new([ROWS]FactRow)
+		slice := make([]byte, tableSize)
+		table.rows = &slice
 	} else {
-		table.memoryMap, table.rows = CreateMemoryMappedFactTableStorage(table.FilePath, ROWS)
+		table.memoryMap, table.rows = CreateMemoryMappedFactTableStorage(table.FilePath, tableSize)
 	}
-	table.Capacity = len(table.rows)
+	table.Capacity = ROWS
 	table.ColumnCount = len(columnNames)
 	table.ColumnIndexToName = make([]string, len(columnNames))
 	table.ColumnNameToIndex = make(map[string]int, len(columnNames))
@@ -87,6 +94,18 @@ func NewFactTable(filePath string, columnNames []string) *FactTable {
 		table.ColumnNameToIndex[name] = i
 	}
 	return table
+}
+
+// Return a set of row maps. Useful for debugging the contents of the table.
+func (table *FactTable) GetRowMaps(startIndex, endIndexExclusive int) []map[string]Untyped {
+	results := make([]map[string]Untyped, 0, table.Count)
+	if startIndex > endIndexExclusive {
+		panic("Invalid indices passed to GetRowMaps")
+	}
+	for i := startIndex; i < endIndexExclusive; i++ {
+		results = append(results, table.DenormalizeRow(table.getRowSlice(i)))
+	}
+	return results
 }
 
 // Given a cell from a row vector, returns either the cell if this column isn't already normalized,
@@ -102,13 +121,16 @@ func (table *FactTable) denormalizeColumnValue(columnValue Cell, columnIndex int
 	}
 }
 
-// Takes a normalized FactRow vector and returns a map consistent of column names and values pulled from
-// the dimension tables.
+// Takes a normalized row vector and returns a map consisting of column names and values pulled from the
+// dimension tables.
 // e.g. [0, 1, 17] => {"country": "Japan", "browser": "Chrome", "age": 17}
-func (table *FactTable) DenormalizeRow(row *FactRow) map[string]Untyped {
+func (table *FactTable) DenormalizeRow(row *[]byte) map[string]Untyped {
 	result := make(map[string]Untyped)
+	rowDataPtr := (*reflect.SliceHeader)(unsafe.Pointer(row)).Data
 	for i := 0; i < table.ColumnCount; i++ {
-		result[table.ColumnIndexToName[i]] = table.denormalizeColumnValue(row[i], i)
+		value := *(*Cell)(unsafe.Pointer(rowDataPtr))
+		result[table.ColumnIndexToName[i]] = table.denormalizeColumnValue(value, i)
+		rowDataPtr += uintptr(table.ColumnSize)
 	}
 	return result
 }
@@ -129,18 +151,30 @@ func (table *FactTable) convertRowMapToRowArray(rowMap map[string]Untyped) ([]Un
 	return result, nil
 }
 
-// Takes a row of mixed types, like strings and ints, and converts it to a FactRow (a vector of ints). For
-// every string column, replaces its value with the matching ID from the dimension table, inserting a row into
-// the dimension table if one doesn't already exist.
+func (table *FactTable) getRowOffset(row int) int {
+	return row * table.RowSize
+}
+
+func (table *FactTable) getRowSlice(row int) *[]byte {
+	rowOffset := table.getRowOffset(row)
+	newSlice := (*table.Rows())[rowOffset : rowOffset+table.RowSize]
+	return &newSlice
+}
+
+// Takes a row of mixed types, like strings and ints, and converts it to a fact row (a vector of integer
+// types). For every string column, replaces its value with the matching ID from the dimension table,
+// inserting a row into the dimension table if one doesn't already exist.
 // e.g. {"country": "Japan", "browser": "Chrome", "age": 17} => [0, 1, 17]
-func (table *FactTable) normalizeRow(rowMap map[string]Untyped) (*FactRow, error) {
+func (table *FactTable) normalizeRow(rowMap map[string]Untyped) (*[]byte, error) {
 	rowAsArray, err := table.convertRowMapToRowArray(rowMap)
 	if err != nil {
 		return nil, err
 	}
-	var row FactRow
+	rowSlice := make([]byte, table.RowSize)
+	rowDataPtr := (*reflect.SliceHeader)(unsafe.Pointer(&rowSlice)).Data
 	for columnIndex, value := range rowAsArray {
 		usesDimensionTable := isString(value)
+		columnOffset := uintptr(columnIndex * table.ColumnSize)
 		if usesDimensionTable {
 			stringValue := value.(string)
 			dimensionTable := table.DimensionTables[columnIndex]
@@ -148,16 +182,16 @@ func (table *FactTable) normalizeRow(rowMap map[string]Untyped) (*FactRow, error
 			if !ok {
 				dimensionRowId = dimensionTable.addRow(stringValue)
 			}
-			row[columnIndex] = Cell(dimensionRowId)
+			*(*Cell)(unsafe.Pointer(rowDataPtr + columnOffset)) = Cell(dimensionRowId)
 		} else {
-			row[columnIndex] = Cell(convertUntypedToFloat64(value))
+			*(*Cell)(unsafe.Pointer(rowDataPtr + columnOffset)) = Cell(convertUntypedToFloat64(value))
 		}
 	}
-	return &row, nil
+	return &rowSlice, nil
 }
 
-func (table *FactTable) insertNormalizedRow(row *FactRow) {
-	table.rows[table.NextInsertPosition] = *row
+func (table *FactTable) insertNormalizedRow(row *[]byte) {
+	copy(*table.getRowSlice(table.NextInsertPosition), *row)
 	table.NextInsertPosition = (table.NextInsertPosition + 1) % table.Capacity
 	if table.Count < table.Capacity {
 		table.Count++
@@ -195,21 +229,24 @@ func (table *FactTable) scan(filters []FactTableFilterFunc, columnIndices []int,
 	rowAggregatesMap := make(map[Cell]*RowAggregate)
 	// When the query has no group-by clause, we accumulate results into a single RowAggregate.
 	rowAggregate := new(RowAggregate)
-	rows := table.rows
 	rowCount := table.Count
 	columnCountInQuery := len(columnIndices)
 	filterCount := len(filters)
+	rowPtr := (*reflect.SliceHeader)(unsafe.Pointer(table.rows)).Data
+	rowSize := uintptr(table.RowSize)
+	groupByColumnOffset := uintptr(columnIndexToGroupBy * 4)
+
 outerLoop:
 	for i := 0; i < rowCount; i++ {
-		row := &rows[i]
 		for filterIndex := 0; filterIndex < filterCount; filterIndex++ {
-			if !filters[filterIndex](row) {
+			if !filters[filterIndex](rowPtr) {
+				rowPtr += rowSize
 				continue outerLoop
 			}
 		}
 
 		if useGrouping {
-			groupByValue := row[columnIndexToGroupBy]
+			groupByValue := *(*Cell)(unsafe.Pointer(rowPtr + groupByColumnOffset))
 			if groupByColumnTransformFn != nil {
 				groupByValue = groupByColumnTransformFn(groupByValue)
 			}
@@ -224,9 +261,13 @@ outerLoop:
 
 		for j := 0; j < columnCountInQuery; j++ {
 			columnIndex := columnIndices[j]
-			(*rowAggregate).Sums[columnIndex] += float64(row[columnIndex])
+			// TODO(philc): Pre-compute these offsets.
+			columnOffset := uintptr(4 * columnIndex)
+			columnValue := *(*Cell)(unsafe.Pointer(rowPtr + columnOffset))
+			(*rowAggregate).Sums[columnIndex] += float64(columnValue)
 		}
 		(*rowAggregate).Count++
+		rowPtr += rowSize
 	}
 
 	results := make([]RowAggregate, 0)
@@ -287,7 +328,7 @@ func (table *DimensionTable) getDimensionRowIdsForValues(values []string) []Cell
 	return rowIds
 }
 
-// Given a QueryFilter, return a filter function that can be tested against a FactRow.
+// Given a QueryFilter, return a filter function that can be tested against a row.
 func convertQueryFilterToFilterFunc(queryFilter QueryFilter, table *FactTable) FactTableFilterFunc {
 	columnIndex := table.ColumnNameToIndex[queryFilter.Column]
 	var f FactTableFilterFunc
@@ -322,7 +363,7 @@ func convertQueryFilterToFilterFunc(queryFilter QueryFilter, table *FactTable) F
 			dimensionTable := table.DimensionTables[columnIndex]
 			matchingRowIds := dimensionTable.getDimensionRowIdsForValues([]string{queryFilter.Value.(string)})
 			if len(matchingRowIds) == 0 {
-				return func(row *FactRow) bool { return false }
+				return func(row uintptr) bool { return false }
 			} else {
 				valueAsCell = matchingRowIds[0]
 			}
@@ -331,33 +372,45 @@ func convertQueryFilterToFilterFunc(queryFilter QueryFilter, table *FactTable) F
 		}
 	}
 
+	columnOffset := uintptr(columnIndex * table.ColumnSize)
+
 	switch queryFilter.Type {
 	case "greaterThan", ">":
-		f = func(row *FactRow) bool {
-			return row[columnIndex] > valueAsCell
+		f = func(row uintptr) bool {
+			columnValue := *(*Cell)(unsafe.Pointer(row + columnOffset))
+			return columnValue > valueAsCell
 		}
 	case "greaterThanOrEqualTo", ">=":
-		f = func(row *FactRow) bool {
-			return row[columnIndex] >= valueAsCell
+		f = func(row uintptr) bool {
+			columnValue := *(*Cell)(unsafe.Pointer(row + columnOffset))
+			return columnValue >= valueAsCell
 		}
 	case "lessThan", "<":
-		f = func(row *FactRow) bool {
-			return row[columnIndex] < valueAsCell
+		f = func(row uintptr) bool {
+			columnValue := *(*Cell)(unsafe.Pointer(row + columnOffset))
+			return columnValue < valueAsCell
 		}
 	case "lessThanOrEqualTo", "<=":
-		f = func(row *FactRow) bool {
-			return row[columnIndex] <= valueAsCell
+		f = func(row uintptr) bool {
+			columnValue := *(*Cell)(unsafe.Pointer(row + columnOffset))
+			return columnValue <= valueAsCell
+		}
+	case "notequal", "!=":
+		f = func(row uintptr) bool {
+			columnValue := *(*Cell)(unsafe.Pointer(row + columnOffset))
+			return columnValue != valueAsCell
 		}
 	case "equal", "=":
-		f = func(row *FactRow) bool {
-			return row[columnIndex] == valueAsCell
+		f = func(row uintptr) bool {
+			columnValue := *(*Cell)(unsafe.Pointer(row + columnOffset))
+			return columnValue == valueAsCell
 		}
 	case "in":
 		count := len(valueAsCells)
 		// TODO(philc): A hash table may be more efficient for longer lists. We should determine what that list
 		// size is and use a hash table in that case.
-		f = func(row *FactRow) bool {
-			columnValue := row[columnIndex]
+		f = func(row uintptr) bool {
+			columnValue := *(*Cell)(unsafe.Pointer(row + columnOffset))
 			for i := 0; i < count; i++ {
 				if columnValue == valueAsCells[i] {
 					return true
