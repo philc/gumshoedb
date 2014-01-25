@@ -3,9 +3,9 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"flag"
-	"fmt"
 	"io/ioutil"
 	"log"
 	"math"
@@ -143,8 +143,12 @@ func handleMetricz(responseWriter http.ResponseWriter) {
 		http.Error(responseWriter, err.Error(), 500)
 	}
 
-	// TODO(dmac) Format this json more nicely
-	fmt.Fprintln(responseWriter, string(metriczJson))
+	var buf bytes.Buffer
+	if err := json.Indent(&buf, metriczJson, "", "    "); err != nil {
+		log.Print(err)
+		http.Error(responseWriter, err.Error(), 500)
+	}
+	buf.WriteTo(responseWriter)
 }
 
 // Loads the fact table from disk if it exists, or creates a new one.
