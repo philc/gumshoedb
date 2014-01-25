@@ -17,7 +17,7 @@ func TestPersistenceEndToEnd(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 	tableFilePath := filepath.Join(tempDir, "test")
 
-	table := NewFactTable(tableFilePath, []string{"col1", "col2"})
+	table := NewFactTable(tableFilePath, 1, []string{"col1", "col2"})
 	table.SaveToDisk()
 	rowMap := map[string]Untyped{"col1": 12, "col2": 34}
 	table.InsertRowMaps([]map[string]Untyped{rowMap})

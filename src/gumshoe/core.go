@@ -11,9 +11,6 @@ import (
 
 // The size of the fact table is currently a compile time constant, so we can use native arrays instead of
 // ranges. In the future we'll use byte arrays so we that rows can be composites of many column types.
-const ROWS = 10000000
-const COLS = 42
-
 type Cell float32
 
 // A fixed sized table of rows.
@@ -25,12 +22,12 @@ type FactTable struct {
 	// The mmap bookkeeping object which contains the file descriptor we are mapping the table rows to.
 	memoryMap          *mmap.MMap
 	NextInsertPosition int
-	Count              int                   // The number of used rows currently in the table. This is <= ROWS.
-	ColumnCount        int                   // The number of columns in use in the table. This is <= COLS.
-	Capacity           int                   // For now, this is an alias for the ROWS constant.
-	RowSize            int                   // In bytes
-	ColumnSize         int                   // TODO(philc): Remove this once we stop using fixed-type columns
-	DimensionTables    [COLS]*DimensionTable // A mapping from column index => column's DimensionTable.
+	Count              int               // The number of used rows currently in the table. This is <= ROWS.
+	ColumnCount        int               // The number of columns in use in the table. This is <= COLS.
+	Capacity           int               // For now, this is an alias for the ROWS constant.
+	RowSize            int               // In bytes
+	ColumnSize         int               // TODO(philc): Remove this once we stop using fixed-type columns
+	DimensionTables    []*DimensionTable // A mapping from column index => column's DimensionTable.
 	ColumnNameToIndex  map[string]int
 	ColumnIndexToName  []string
 }
@@ -56,7 +53,7 @@ func NewDimensionTable(name string) *DimensionTable {
 
 type RowAggregate struct {
 	GroupByValue Cell
-	Sums         [COLS]float64
+	Sums         []float64
 	Count        int
 }
 
@@ -64,20 +61,18 @@ type FactTableFilterFunc func(uintptr) bool
 
 // Allocates a new FactTable. If a non-empty filePath is specified, this table's rows are immediately
 // persisted to disk in the form of a memory-mapped file.
-func NewFactTable(filePath string, columnNames []string) *FactTable {
-	if len(columnNames) > COLS {
-		panic(fmt.Sprintf("You provided %d columns, but this table is configured to have only %d columns.",
-			len(columnNames), COLS))
-	}
-
+func NewFactTable(filePath string, rowCount int, columnNames []string) *FactTable {
 	table := new(FactTable)
+	table.ColumnCount = len(columnNames)
+	table.DimensionTables = make([]*DimensionTable, table.ColumnCount)
 	for i, name := range columnNames {
 		table.DimensionTables[i] = NewDimensionTable(name)
 	}
 	table.FilePath = filePath
 	table.ColumnSize = 4
-	table.RowSize = COLS * table.ColumnSize
-	tableSize := ROWS * table.RowSize
+	table.Capacity = rowCount
+	table.RowSize = table.ColumnCount * table.ColumnSize
+	tableSize := table.Capacity * table.RowSize
 	if filePath == "" {
 		// Create an in-memory database only, without a file backing.
 		slice := make([]byte, tableSize)
@@ -85,8 +80,6 @@ func NewFactTable(filePath string, columnNames []string) *FactTable {
 	} else {
 		table.memoryMap, table.rows = CreateMemoryMappedFactTableStorage(table.FilePath, tableSize)
 	}
-	table.Capacity = ROWS
-	table.ColumnCount = len(columnNames)
 	table.ColumnIndexToName = make([]string, len(columnNames))
 	table.ColumnNameToIndex = make(map[string]int, len(columnNames))
 	for i, name := range columnNames {
@@ -140,7 +133,7 @@ func (table *FactTable) DenormalizeRow(row *[]byte) map[string]Untyped {
 // e.g. {"country": "Japan", "browser": "Chrome", "age": 17} => ["Chrome", 17, "Japan"]
 // Returns an error if there are unrecognized columns, or if a column is missing.
 func (table *FactTable) convertRowMapToRowArray(rowMap map[string]Untyped) ([]Untyped, error) {
-	result := make([]Untyped, COLS)
+	result := make([]Untyped, table.ColumnCount)
 	for columnName, value := range rowMap {
 		columnIndex, found := table.ColumnNameToIndex[columnName]
 		if !found {
@@ -229,6 +222,7 @@ func (table *FactTable) scan(filters []FactTableFilterFunc, columnIndices []int,
 	rowAggregatesMap := make(map[Cell]*RowAggregate)
 	// When the query has no group-by clause, we accumulate results into a single RowAggregate.
 	rowAggregate := new(RowAggregate)
+	rowAggregate.Sums = make([]float64, table.ColumnCount)
 	rowCount := table.Count
 	columnCountInQuery := len(columnIndices)
 	filterCount := len(filters)
@@ -254,6 +248,7 @@ outerLoop:
 			rowAggregate, found = rowAggregatesMap[groupByValue]
 			if !found {
 				rowAggregate = new(RowAggregate)
+				rowAggregate.Sums = make([]float64, table.ColumnCount)
 				(*rowAggregate).GroupByValue = groupByValue
 				rowAggregatesMap[groupByValue] = rowAggregate
 			}

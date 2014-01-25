@@ -12,17 +12,14 @@ import (
 )
 
 const (
-	BenchmarkRows = 100000 // The row count to use in these benchmarks.
-	tempDir       = "/tmp/gumshoe_benchmark"
+	BenchmarkRows    = 100000 // The row count to use in these benchmarks.
+	BenchmarkColumns = 42
+	tempDir          = "/tmp/gumshoe_benchmark"
 )
 
 var factTable *gumshoe.FactTable
 
 func init() {
-	if BenchmarkRows > gumshoe.ROWS {
-		panic("BenchmarkRows is larger than gumshoe.ROWS.")
-	}
-
 	factTable = setupFactTable()
 	populateTableWithTestingData(factTable)
 }
@@ -100,13 +97,13 @@ func createQueryAggregates(columns []string) []gumshoe.QueryAggregate {
 }
 
 func setupFactTable() (table *gumshoe.FactTable) { //, dbTempDir string) {
-	columnNames := make([]string, gumshoe.COLS)
+	columnNames := make([]string, BenchmarkColumns)
 	for i := range columnNames {
 		columnNames[i] = fmt.Sprintf("column%d", i)
 	}
 	os.RemoveAll(tempDir)
 	os.MkdirAll(tempDir, 0755)
-	table = gumshoe.NewFactTable(tempDir+"/db", columnNames)
+	table = gumshoe.NewFactTable(tempDir+"/db", BenchmarkRows, columnNames)
 	populateTableWithTestingData(table)
 	return table //, tempDir
 }
@@ -128,5 +125,5 @@ func populateTableWithTestingData(table *gumshoe.FactTable) {
 }
 
 func setBytes(b *testing.B) {
-	b.SetBytes(int64(BenchmarkRows * gumshoe.COLS * unsafe.Sizeof(gumshoe.Cell(0))))
+	b.SetBytes(int64(BenchmarkRows * BenchmarkColumns * unsafe.Sizeof(gumshoe.Cell(0))))
 }

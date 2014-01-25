@@ -8,7 +8,7 @@ import (
 )
 
 func tableFixture() *FactTable {
-	return NewFactTable("", []string{"col1", "col2"})
+	return NewFactTable("", 3, []string{"col1", "col2"})
 }
 
 func insertRow(table *FactTable, column1Value Untyped, column2Value Untyped) {
