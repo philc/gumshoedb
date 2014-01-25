@@ -29,53 +29,53 @@ var (
 // This table is referenced by all of the routes.
 var table *gumshoe.FactTable
 
-func writeJsonResponse(responseWriter http.ResponseWriter, objectToSerialize interface{}) {
+func writeJSONResponse(w http.ResponseWriter, objectToSerialize interface{}) {
 	jsonResult, err := json.Marshal(objectToSerialize)
 	if err != nil {
 		log.Print(err)
-		http.Error(responseWriter, err.Error(), 500)
+		http.Error(w, err.Error(), 500)
 		return
 	}
-	responseWriter.Header().Set("Content-Type", "application/json")
-	responseWriter.Write(jsonResult)
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(jsonResult)
 }
 
 // Given an array of JSON rows, insert them.
 // TODO(philc): We need to enforce that there are no inserts happening concurrently. This http route should
 // block until the previous insert is finished.
-func handleInsertRoute(responseWriter http.ResponseWriter, request *http.Request) {
-	if request.Method != "PUT" {
-		http.Error(responseWriter, "", 404)
+func handleInsertRoute(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "PUT" {
+		http.Error(w, "", 404)
 		return
 	}
 
-	decoder := json.NewDecoder(request.Body)
+	decoder := json.NewDecoder(r.Body)
 	jsonBody := []map[string]gumshoe.Untyped{}
 	if err := decoder.Decode(&jsonBody); err != nil {
 		log.Print(err)
-		http.Error(responseWriter, err.Error(), 500)
+		http.Error(w, err.Error(), 500)
 		return
 	}
 	log.Printf("Inserting %d rows", len(jsonBody))
 
 	if err := table.InsertRowMaps(jsonBody); err != nil {
 		log.Print(err)
-		http.Error(responseWriter, err.Error(), 500)
+		http.Error(w, err.Error(), 500)
 		return
 	}
 }
 
 // A debugging route to list the contents of a table. Returns up to 1000 rows.
-func handleFactTableRoute(responseWriter http.ResponseWriter, request *http.Request) {
+func handleFactTableRoute(w http.ResponseWriter, r *http.Request) {
 	// For now, only return up to 1000 rows. We can't serialize the entire table unless we stream the response,
 	// and for debugging, we only need a few rows to inspect that importing is working correctly.
 	maxRowsToReturn := 1000
 	rowCount := int(math.Min(float64(table.Count), float64(maxRowsToReturn)))
-	writeJsonResponse(responseWriter, table.GetRowMaps(0, rowCount))
+	writeJSONResponse(w, table.GetRowMaps(0, rowCount))
 }
 
 // Returns the contents of the all of the dimensions tables, for use when debugging.
-func handleDimensionsTableRoute(responseWriter http.ResponseWriter, request *http.Request) {
+func handleDimensionsTableRoute(w http.ResponseWriter, r *http.Request) {
 	// Assembles the map: {dimensionTableName => [ [0 value0] [1 value1] ... ]}
 	results := make(map[string][][2]gumshoe.Untyped)
 	for _, dimensionTable := range table.DimensionTables[:table.ColumnCount] {
@@ -86,28 +86,28 @@ func handleDimensionsTableRoute(responseWriter http.ResponseWriter, request *htt
 		}
 		results[dimensionTable.Name] = rows
 	}
-	writeJsonResponse(responseWriter, &results)
+	writeJSONResponse(w, &results)
 }
 
 // Evaluate a query and returns an aggregated result set.
 // See the README for the query JSON structure and the structure of the reuslts.
-func handleQueryRoute(responseWriter http.ResponseWriter, request *http.Request) {
+func handleQueryRoute(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
-	requestBody, _ := ioutil.ReadAll(request.Body)
-	query, err := gumshoe.ParseJsonQuery(string(requestBody))
+	requestBody, _ := ioutil.ReadAll(r.Body)
+	query, err := gumshoe.ParseJSONQuery(string(requestBody))
 	if err != nil {
 		log.Print(err)
-		http.Error(responseWriter, err.Error(), 500)
+		http.Error(w, err.Error(), 500)
 		return
 	}
 	if err = gumshoe.ValidateQuery(table, query); err != nil {
 		log.Print(err)
-		http.Error(responseWriter, err.Error(), 500)
+		http.Error(w, err.Error(), 500)
 		return
 	}
 	results := table.InvokeQuery(query)
 	results["duration"] = (time.Since(start)).Nanoseconds() / (1000.0 * 1000.0)
-	writeJsonResponse(responseWriter, results)
+	writeJSONResponse(w, results)
 }
 
 type Metricz struct {
@@ -116,7 +116,7 @@ type Metricz struct {
 	DimensionTables map[string]map[string]int
 }
 
-func handleMetricz(responseWriter http.ResponseWriter) {
+func handleMetricz(w http.ResponseWriter) {
 	dimensionTables := make(map[string]map[string]int)
 	for _, dimensionTable := range table.DimensionTables {
 		if dimensionTable != nil {
@@ -127,22 +127,22 @@ func handleMetricz(responseWriter http.ResponseWriter) {
 		}
 	}
 
-	metriczJson, err := json.Marshal(&Metricz{
+	metriczJSON, err := json.Marshal(&Metricz{
 		FactTableRows:   table.Count,
 		FactTableBytes:  table.Capacity * table.RowSize,
 		DimensionTables: dimensionTables,
 	})
 	if err != nil {
 		log.Print(err)
-		http.Error(responseWriter, err.Error(), 500)
+		http.Error(w, err.Error(), 500)
 	}
 
 	var buf bytes.Buffer
-	if err := json.Indent(&buf, metriczJson, "", "    "); err != nil {
+	if err := json.Indent(&buf, metriczJSON, "", "    "); err != nil {
 		log.Print(err)
-		http.Error(responseWriter, err.Error(), 500)
+		http.Error(w, err.Error(), 500)
 	}
-	buf.WriteTo(responseWriter)
+	buf.WriteTo(w)
 }
 
 // Loads the fact table from disk if it exists, or creates a new one.

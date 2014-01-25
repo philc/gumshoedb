@@ -20,7 +20,7 @@ func createQuery() Query {
 	return query
 }
 
-func convertToJsonAndBack(o interface{}) interface{} {
+func convertToJSONAndBack(o interface{}) interface{} {
 	b, err := json.Marshal(o)
 	if err != nil {
 		panic(err)
@@ -31,9 +31,9 @@ func convertToJsonAndBack(o interface{}) interface{} {
 }
 
 // A variant of DeepEquals which is less finicky about which numeric type you're using in maps.
-func HasEqualJson(args ...interface{}) (ok bool, message string) {
-	o1 := convertToJsonAndBack(args[0])
-	o2 := convertToJsonAndBack(args[1])
+func HasEqualJSON(args ...interface{}) (ok bool, message string) {
+	o1 := convertToJSONAndBack(args[0])
+	o2 := convertToJSONAndBack(args[1])
 	return DeepEquals(o1, o2)
 }
 
@@ -102,9 +102,9 @@ func TestInvokeQueryWorksWhenGroupingByAStringColumn(t *testing.T) {
 	insertRow(table, 2, "stringvalue1")
 	insertRow(table, 5, "stringvalue2")
 	result := runWithGroupBy(table, QueryGrouping{"", "col2", "groupbykey"})
-	Assert(t, result[0], HasEqualJson,
+	Assert(t, result[0], HasEqualJSON,
 		map[string]Untyped{"groupbykey": "stringvalue1", "rowCount": 2, "col1": 3})
-	Assert(t, result[1], HasEqualJson,
+	Assert(t, result[1], HasEqualJSON,
 		map[string]Untyped{"groupbykey": "stringvalue2", "rowCount": 1, "col1": 5})
 }
 
@@ -116,6 +116,6 @@ func TestGroupingWithATimeTransformFunctionWorks(t *testing.T) {
 	insertRow(table, 120, "")
 	insertRow(table, 150, "")
 	result := runWithGroupBy(table, QueryGrouping{"minute", "col1", "groupbykey"})
-	Assert(t, result[0], HasEqualJson, map[string]Untyped{"groupbykey": 0, "rowCount": 1, "col1": 0})
-	Assert(t, result[1], HasEqualJson, map[string]Untyped{"groupbykey": 120, "rowCount": 2, "col1": 270})
+	Assert(t, result[0], HasEqualJSON, map[string]Untyped{"groupbykey": 0, "rowCount": 1, "col1": 0})
+	Assert(t, result[1], HasEqualJSON, map[string]Untyped{"groupbykey": 120, "rowCount": 2, "col1": 270})
 }

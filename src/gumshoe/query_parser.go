@@ -64,7 +64,7 @@ func ValidateQuery(table *FactTable, query *Query) error {
 	return nil
 }
 
-func ParseJsonQuery(jsonString string) (*Query, error) {
+func ParseJSONQuery(jsonString string) (*Query, error) {
 	result := new(Query)
 	err := json.Unmarshal([]byte(jsonString), result)
 	if err != nil {

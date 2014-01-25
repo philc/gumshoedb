@@ -285,7 +285,7 @@ func (table *FactTable) getColumnIndicesFromQuery(query *Query) []int {
 	return columnIndices
 }
 
-func (table *FactTable) mapRowAggregatesToJsonResultsFormat(query *Query,
+func (table *FactTable) mapRowAggregatesToJSONResultsFormat(query *Query,
 	rowAggregates []RowAggregate) [](map[string]Untyped) {
 	jsonRows := make([](map[string]Untyped), 0)
 	for _, rowAggregate := range rowAggregates {
@@ -455,7 +455,7 @@ func (table *FactTable) InvokeQuery(query *Query) map[string]Untyped {
 	}
 
 	results := table.scan(filterFuncs, columnIndices, groupByColumn, groupByTransformFunc)
-	jsonResultRows := table.mapRowAggregatesToJsonResultsFormat(query, results)
+	jsonResultRows := table.mapRowAggregatesToJSONResultsFormat(query, results)
 	return map[string]Untyped{
 		"results": jsonResultRows,
 	}
