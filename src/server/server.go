@@ -139,7 +139,8 @@ func handleMetricz(responseWriter http.ResponseWriter) {
 		DimensionTables: dimensionTables,
 	})
 	if err != nil {
-		panic(err)
+		log.Print(err)
+		http.Error(responseWriter, err.Error(), 500)
 	}
 
 	// TODO(dmac) Format this json more nicely
