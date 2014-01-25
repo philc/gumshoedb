@@ -204,5 +204,5 @@ func main() {
 
 	go runBackgroundSaves()
 
-	go log.Fatal(http.ListenAndServe(":9000", m))
+	log.Fatal(http.ListenAndServe(":9000", m))
 }
