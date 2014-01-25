@@ -129,7 +129,7 @@ func handleMetricz(responseWriter http.ResponseWriter) {
 
 	metriczJson, err := json.Marshal(&Metricz{
 		FactTableRows:   table.Count,
-		FactTableBytes:  table.Count * int(unsafe.Sizeof(gumshoe.FactRow{})),
+		FactTableBytes:  table.Capacity * table.RowSize,
 		DimensionTables: dimensionTables,
 	})
 	if err != nil {
@@ -150,7 +150,9 @@ func loadFactTable() *gumshoe.FactTable {
 	var table *gumshoe.FactTable
 	if _, err := os.Stat(config.TableFilePath + ".json"); os.IsNotExist(err) {
 		log.Printf("Table \"%s\" does not exist, creating... ", config.TableFilePath)
-		table = gumshoe.NewFactTable(config.TableFilePath, config.ColumnNames)
+		// TODO(philc): Pull this row count from the config file
+		rowCount := 100000
+		table = gumshoe.NewFactTable(config.TableFilePath, rowCount, config.ColumnNames)
 		table.SaveToDisk()
 		log.Print("done.")
 	} else {
