@@ -5,6 +5,7 @@ package main
 import (
 	"encoding/json"
 	"flag"
+	"fmt"
 	"io/ioutil"
 	"log"
 	"math"
@@ -12,6 +13,7 @@ import (
 	"os"
 	"runtime"
 	"time"
+	"unsafe"
 
 	"gumshoe"
 
@@ -114,6 +116,36 @@ func handleQueryRoute(responseWriter http.ResponseWriter, request *http.Request)
 	writeJsonResponse(responseWriter, results)
 }
 
+type Metricz struct {
+	FactTableRows   int
+	FactTableBytes  int
+	DimensionTables map[string]map[string]int
+}
+
+func handleMetricz(responseWriter http.ResponseWriter) {
+	dimensionTables := make(map[string]map[string]int)
+	for _, dimensionTable := range table.DimensionTables {
+		if dimensionTable != nil {
+			dimensionTables[dimensionTable.Name] = map[string]int{
+				"Rows":  len(dimensionTable.Rows),
+				"Bytes": len(dimensionTable.Rows) * int(unsafe.Sizeof(*dimensionTable)),
+			}
+		}
+	}
+
+	metriczJson, err := json.Marshal(&Metricz{
+		FactTableRows:   table.Count,
+		FactTableBytes:  table.Count * int(unsafe.Sizeof(gumshoe.FactRow{})),
+		DimensionTables: dimensionTables,
+	})
+	if err != nil {
+		panic(err)
+	}
+
+	// TODO(dmac) Format this json more nicely
+	fmt.Fprintln(responseWriter, string(metriczJson))
+}
+
 // Loads the fact table from disk if it exists, or creates a new one.
 func loadFactTable() *gumshoe.FactTable {
 	var table *gumshoe.FactTable
@@ -164,6 +196,7 @@ func main() {
 	m.Handlers(martini.Logger(), martini.Static("public"))
 
 	// TODO(philc): Make these REST routes more consistent.
+	m.Get("/metricz", handleMetricz)
 	m.Put("/insert", handleInsertRoute)
 	m.Get("/tables/facts", handleFactTableRoute)
 	m.Get("/tables/dimensions", handleDimensionsTableRoute)
