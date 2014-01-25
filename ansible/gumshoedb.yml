@@ -1,0 +1,74 @@
+---
+- name : setup and deploy
+  hosts: "{{ hosts }}"
+  vars:
+    - deploy_path: "/opt/gumshoedb/current"
+    - db_path: "/opt/gumshoedb/db"
+  tasks:
+    - name: apt-get update
+      apt: update_cache=yes cache_valid_time=2592000 # one month in seconds
+      sudo: true
+
+    - name: apt-get install packages
+      apt: pkg="{{ item }}"
+      sudo: true
+      with_items:
+        - curl
+        - ntp
+        - vim
+        - htop
+        - runit
+        - tmux
+
+    - name: admin group can passwordless sudo as any user
+      lineinfile: "dest=/etc/sudoers state=present regexp='^%admin' line='%admin ALL=(ALL) NOPASSWD:ALL'"
+      sudo: true
+
+    - name: create deploy directory
+      file: path="{{ deploy_path }}" state=directory owner="{{ ansible_ssh_user }}"
+      sudo: true
+
+    - name: create db directory
+      file: path="{{ db_path }}" state=directory owner="{{ ansible_ssh_user }}"
+      sudo: true
+
+    - name: register build platform
+      local_action: command uname
+      register: uname_result
+
+    - name: compile project (osx)
+      local_action: shell vagrant up && vagrant ssh -c "cd gumshoedb && make web"
+      when: uname_result.stdout == "Darwin"
+
+    - name: compile project (linux)
+      local_action: command cd .. && make web
+      when: uname_result.stdout == "Linux"
+
+    - name: rsync project
+      local_action: >
+        command rsync -az --checksum --itemize-changes
+        --exclude=.git --exclude=.vagrant --exclude=db/ --exclude=pkg
+        ../ {{ inventory_hostname }}:{{ deploy_path }}
+      register: rsync
+      changed_when: rsync.stdout_lines|length > 0
+
+    - name: create environment file
+      template: dest="{{ deploy_path }}/environment.sh" src=templates/environment.sh.j2 validate=". %s"
+
+    - name: create config file
+      template: dest="{{ deploy_path }}/config.toml" src=templates/config.toml.j2
+
+    - name: register gumshoe with runit
+      shell: >
+        mkdir -p /etc/service/gumshoedb/log &&
+        cp {{ deploy_path }}/runit/run /etc/service/gumshoedb &&
+        cp -r {{ deploy_path }}/runit/log/run /etc/service/gumshoedb/log
+      sudo: true
+
+    - name: wait for gumshoe to start
+      pause: seconds=5
+
+    - name: restart gumshoedb
+      command: sv restart gumshoedb
+      ignore_errors: true
+      sudo: true

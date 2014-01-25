@@ -1,0 +1,5 @@
+#!/bin/sh
+
+cd /opt/gumshoedb/current
+. ./environment.sh
+exec chpst -u $GUMSHOEDB_RUN_USER ./bin/gumshoe_server 2>&1

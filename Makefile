@@ -27,4 +27,4 @@ fmt:
 	gofmt -s -l -w src
 
 clean:
-	rm -fr build pkg
+	rm -fr bin build pkg

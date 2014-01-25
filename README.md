@@ -38,3 +38,18 @@ See [DEVELOPING.md](https://github.com/philc/gumshoedb/blob/master/DEVELOPING.md
 and make changes.
 
 Gumshoedb is licensed under [the MIT license](http://www.opensource.org/licenses/mit-license.php).
+
+Deploying
+=========
+
+To deploy gumshoedb, run:
+
+    ansible-playbook ansible/gumshoedb.yml -i ansible/hosts -e 'hosts=vagrant'
+
+Notes
+=====
+
+There is a subtle bug where we are unable to run gumshoedb in vagrant using a db that is located in a shared
+directory on the host machine. See [this][1] stackoverflow question for details.
+
+[1]: http://stackoverflow.com/questions/18420473/invalid-argument-for-read-write-mmap
