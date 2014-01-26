@@ -90,12 +90,12 @@ func NewFactTable(filePath string, rowCount int, columnNames []string) *FactTabl
 }
 
 // Return a set of row maps. Useful for debugging the contents of the table.
-func (table *FactTable) GetRowMaps(startIndex, endIndexExclusive int) []map[string]Untyped {
+func (table *FactTable) GetRowMaps(start, end int) []map[string]Untyped {
 	results := make([]map[string]Untyped, 0, table.Count)
-	if startIndex > endIndexExclusive {
+	if start > end {
 		panic("Invalid indices passed to GetRowMaps")
 	}
-	for i := startIndex; i < endIndexExclusive; i++ {
+	for i := start; i < end; i++ {
 		results = append(results, table.DenormalizeRow(table.getRowSlice(i)))
 	}
 	return results
