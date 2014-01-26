@@ -141,8 +141,13 @@ func (s *Server) HandleMetricz(w http.ResponseWriter) {
 // TODO(caleb): We should probably just do this inside NewServer, but calling separately for now so the test
 // can avoid loading a fact table.
 func (s *Server) loadFactTable() {
-	var table *gumshoe.FactTable
-	if _, err := os.Stat(s.Config.TableFilePath + ".json"); os.IsNotExist(err) {
+	log.Printf(`Trying to load "%s"... `, s.Config.TableFilePath)
+	table, err := gumshoe.LoadFactTableFromDisk(s.Config.TableFilePath)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			// TODO(caleb): handle
+			panic(err)
+		}
 		log.Printf(`Table "%s" does not exist, creating... `, s.Config.TableFilePath)
 		// TODO(philc): Pull this row count from the config file
 		rowCount := 100000
@@ -150,8 +155,6 @@ func (s *Server) loadFactTable() {
 		table.SaveToDisk()
 		log.Print("done.")
 	} else {
-		log.Printf(`Loading "%s"... `, s.Config.TableFilePath)
-		table = gumshoe.LoadFactTableFromDisk(s.Config.TableFilePath)
 		log.Printf("loaded %d rows.", table.Count)
 	}
 	s.Table = table

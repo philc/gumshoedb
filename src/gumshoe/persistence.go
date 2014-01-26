@@ -37,17 +37,17 @@ func CreateMemoryMappedFactTableStorage(tableFilePath string, sizeInBytes int) (
 
 // Load a FactTable from disk. The returned FactTable has its storage memory-mapped to the corresponding
 // file on disk.
-func LoadFactTableFromDisk(tableFilePath string) *FactTable {
+func LoadFactTableFromDisk(tableFilePath string) (*FactTable, error) {
 	var table FactTable
 	file, err := ioutil.ReadFile(tableMetadataFilePath(tableFilePath))
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 	if err := json.Unmarshal(file, &table); err != nil {
-		panic(err)
+		return nil, err
 	}
 	table.memoryMap, table.rows = memoryMapFactRows(factsDataFilePath(tableFilePath))
-	return &table
+	return &table, nil
 }
 
 func memoryMapFactRows(filename string) (mmap.MMap, []byte) {

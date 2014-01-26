@@ -22,7 +22,8 @@ func TestPersistenceEndToEnd(t *testing.T) {
 	rowMap := map[string]Untyped{"col1": 12, "col2": 34}
 	table.InsertRowMaps([]map[string]Untyped{rowMap})
 
-	table = LoadFactTableFromDisk(tableFilePath)
+	table, err = LoadFactTableFromDisk(tableFilePath)
+	Assert(t, err, IsNil)
 	Assert(t, table.FilePath, Equals, tableFilePath)
 	denormalizedRow := table.DenormalizeRow(table.getRowSlice(0))
 
