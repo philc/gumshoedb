@@ -105,7 +105,7 @@ func setupFactTable() (table *gumshoe.FactTable) { //, dbTempDir string) {
 	os.MkdirAll(tempDir, 0755)
 	table = gumshoe.NewFactTable(tempDir+"/db", BenchmarkRows, columnNames)
 	populateTableWithTestingData(table)
-	return table //, tempDir
+	return table
 }
 
 func populateTableWithTestingData(table *gumshoe.FactTable) {
