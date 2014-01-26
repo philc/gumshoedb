@@ -6,6 +6,7 @@ import (
 )
 
 type Config struct {
+	ListenAddr    string   `toml:"listen_addr"`
 	TableFilePath string   `toml:"table_file_path"`
 	SaveDuration  duration `toml:"save_duration"`
 	ColumnNames   []string `toml:"column_names"`

@@ -30,14 +30,13 @@ type Server struct {
 }
 
 func WriteJSONResponse(w http.ResponseWriter, objectToSerialize interface{}) {
-	jsonResult, err := json.Marshal(objectToSerialize)
-	if err != nil {
+	w.Header().Set("Content-Type", "application/json")
+	encoder := json.NewEncoder(w)
+	if err := encoder.Encode(objectToSerialize); err != nil {
 		log.Print(err)
 		http.Error(w, err.Error(), 500)
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(jsonResult)
 }
 
 // Given an array of JSON rows, insert them.
@@ -193,6 +192,15 @@ func NewServer(config *Config) *Server {
 	return s
 }
 
+func (s *Server) ListenAndServe() error {
+	log.Println("Now serving on", s.Config.ListenAddr)
+	server := &http.Server{
+		Addr:    s.Config.ListenAddr,
+		Handler: s,
+	}
+	return server.ListenAndServe()
+}
+
 func main() {
 	flag.Parse()
 	// Set configuration defaults
@@ -215,5 +223,5 @@ func main() {
 	server := NewServer(config)
 	server.loadFactTable()
 	go server.RunBackgroundSaves()
-	log.Fatal(http.ListenAndServe(":9000", server))
+	log.Fatal(server.ListenAndServe())
 }
