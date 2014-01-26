@@ -78,7 +78,7 @@ func (s *Server) HandleDimensionsTableRoute(w http.ResponseWriter, r *http.Reque
 		}
 		results[dimensionTable.Name] = rows
 	}
-	WriteJSONResponse(w, &results)
+	WriteJSONResponse(w, results)
 }
 
 // Evaluate a query and returns an aggregated result set.
