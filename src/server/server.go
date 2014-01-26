@@ -143,14 +143,14 @@ func (s *Server) HandleMetricz(w http.ResponseWriter) {
 func (s *Server) loadFactTable() {
 	var table *gumshoe.FactTable
 	if _, err := os.Stat(s.Config.TableFilePath + ".json"); os.IsNotExist(err) {
-		log.Printf("Table \"%s\" does not exist, creating... ", s.Config.TableFilePath)
+		log.Printf(`Table "%s" does not exist, creating... `, s.Config.TableFilePath)
 		// TODO(philc): Pull this row count from the config file
 		rowCount := 100000
 		table = gumshoe.NewFactTable(s.Config.TableFilePath, rowCount, s.Config.ColumnNames)
 		table.SaveToDisk()
 		log.Print("done.")
 	} else {
-		log.Printf("Loading \"%s\"... ", s.Config.TableFilePath)
+		log.Printf(`Loading "%s"... `, s.Config.TableFilePath)
 		table = gumshoe.LoadFactTableFromDisk(s.Config.TableFilePath)
 		log.Printf("loaded %d rows.", table.Count)
 	}
