@@ -41,11 +41,6 @@ func WriteJSONResponse(w http.ResponseWriter, objectToSerialize interface{}) {
 
 // Given an array of JSON rows, insert them.
 func (s *Server) HandleInsertRoute(w http.ResponseWriter, r *http.Request) {
-	if r.Method != "PUT" {
-		http.Error(w, "", 404)
-		return
-	}
-
 	decoder := json.NewDecoder(r.Body)
 	jsonBody := []map[string]gumshoe.Untyped{}
 	if err := decoder.Decode(&jsonBody); err != nil {
