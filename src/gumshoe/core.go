@@ -4,6 +4,7 @@ package gumshoe
 import (
 	"fmt"
 	"reflect"
+	"sync"
 	"unsafe"
 
 	mmap "github.com/edsrzf/mmap-go"
@@ -20,7 +21,12 @@ type FactTable struct {
 	rows     []byte
 	FilePath string // Path to this table on disk, where we will periodically snapshot it to.
 	// The mmap bookkeeping object which contains the file descriptor we are mapping the table rows to.
-	memoryMap          mmap.MMap
+	memoryMap mmap.MMap
+	// This mutex must be held by each writer to prevent concurrent writes.
+	// TODO(caleb): This is not enough. Reads still race with writes. We need to fix this, possibly by removing
+	// the circular writes and instead persisting historic chunks to disk (or deleting them) and allocating
+	// fresh tables.
+	insertLock         *sync.Mutex
 	NextInsertPosition int
 	Count              int               // The number of used rows currently in the table. This is <= ROWS.
 	ColumnCount        int               // The number of columns in use in the table. This is <= COLS.
@@ -62,15 +68,17 @@ type FactTableFilterFunc func(uintptr) bool
 // Allocates a new FactTable. If a non-empty filePath is specified, this table's rows are immediately
 // persisted to disk in the form of a memory-mapped file.
 func NewFactTable(filePath string, rowCount int, columnNames []string) *FactTable {
-	table := new(FactTable)
-	table.ColumnCount = len(columnNames)
+	table := &FactTable{
+		ColumnCount: len(columnNames),
+		FilePath:    filePath,
+		insertLock:  new(sync.Mutex),
+		ColumnSize:  4,
+		Capacity:    rowCount,
+	}
 	table.DimensionTables = make([]*DimensionTable, table.ColumnCount)
 	for i, name := range columnNames {
 		table.DimensionTables[i] = NewDimensionTable(name)
 	}
-	table.FilePath = filePath
-	table.ColumnSize = 4
-	table.Capacity = rowCount
 	table.RowSize = table.ColumnCount * table.ColumnSize
 	tableSize := table.Capacity * table.RowSize
 	if filePath == "" {
@@ -193,6 +201,9 @@ func (table *FactTable) insertNormalizedRow(row *[]byte) {
 
 // Inserts the given rows into the table. Returns an error if one of the rows contains an unrecognized column.
 func (table *FactTable) InsertRowMaps(rows []map[string]Untyped) error {
+	table.insertLock.Lock()
+	defer table.insertLock.Unlock()
+
 	for _, rowMap := range rows {
 		normalizedRow, err := table.normalizeRow(rowMap)
 		if err != nil {
