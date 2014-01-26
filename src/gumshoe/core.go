@@ -17,10 +17,10 @@ type Cell float32
 // When we insert more rows than the table's capacity, we wrap around and begin inserting rows at index 0.
 type FactTable struct {
 	// We serialize this struct using JSON. The unexported fields are fields we don't want to serialize.
-	rows     *[]byte
+	rows     []byte
 	FilePath string // Path to this table on disk, where we will periodically snapshot it to.
 	// The mmap bookkeeping object which contains the file descriptor we are mapping the table rows to.
-	memoryMap          *mmap.MMap
+	memoryMap          mmap.MMap
 	NextInsertPosition int
 	Count              int               // The number of used rows currently in the table. This is <= ROWS.
 	ColumnCount        int               // The number of columns in use in the table. This is <= COLS.
@@ -32,7 +32,7 @@ type FactTable struct {
 	ColumnIndexToName  []string
 }
 
-func (table *FactTable) Rows() *[]byte {
+func (table *FactTable) Rows() []byte {
 	return table.rows
 }
 
@@ -76,7 +76,7 @@ func NewFactTable(filePath string, rowCount int, columnNames []string) *FactTabl
 	if filePath == "" {
 		// Create an in-memory database only, without a file backing.
 		slice := make([]byte, tableSize)
-		table.rows = &slice
+		table.rows = slice
 	} else {
 		table.memoryMap, table.rows = CreateMemoryMappedFactTableStorage(table.FilePath, tableSize)
 	}
@@ -150,7 +150,7 @@ func (table *FactTable) getRowOffset(row int) int {
 
 func (table *FactTable) getRowSlice(row int) *[]byte {
 	rowOffset := table.getRowOffset(row)
-	newSlice := (*table.Rows())[rowOffset : rowOffset+table.RowSize]
+	newSlice := table.Rows()[rowOffset : rowOffset+table.RowSize]
 	return &newSlice
 }
 
@@ -226,7 +226,7 @@ func (table *FactTable) scan(filters []FactTableFilterFunc, columnIndices []int,
 	rowCount := table.Count
 	columnCountInQuery := len(columnIndices)
 	filterCount := len(filters)
-	rowPtr := (*reflect.SliceHeader)(unsafe.Pointer(table.rows)).Data
+	rowPtr := (*reflect.SliceHeader)(unsafe.Pointer(&table.rows)).Data
 	rowSize := uintptr(table.RowSize)
 	groupByColumnOffset := uintptr(columnIndexToGroupBy * 4)
 

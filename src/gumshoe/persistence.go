@@ -21,7 +21,7 @@ func tmpFilePath(filePath string) string                { return filePath + ".tm
 
 // Creates a new file on disk which is large enough to hold the entire facts table, and maps that file
 // into memory to be accessed and modified.
-func CreateMemoryMappedFactTableStorage(tableFilePath string, sizeInBytes int) (*mmap.MMap, *[]byte) {
+func CreateMemoryMappedFactTableStorage(tableFilePath string, sizeInBytes int) (mmap.MMap, []byte) {
 	file, err := os.Create(factsDataFilePath(tableFilePath))
 	if err != nil {
 		panic(err)
@@ -50,7 +50,7 @@ func LoadFactTableFromDisk(tableFilePath string) *FactTable {
 	return &table
 }
 
-func memoryMapFactRows(filename string) (*mmap.MMap, *[]byte) {
+func memoryMapFactRows(filename string) (mmap.MMap, []byte) {
 	file, err := os.OpenFile(filename, os.O_RDWR, 0600)
 	if err != nil {
 		panic(err)
@@ -66,7 +66,7 @@ func memoryMapFactRows(filename string) (*mmap.MMap, *[]byte) {
 		panic(err)
 	}
 	mmapAsByteSlice := []byte(mmap)
-	return &mmap, &mmapAsByteSlice
+	return mmap, mmapAsByteSlice
 }
 
 // Persist this database to disk. This blocks until all table metadata has been written, and until the memory
