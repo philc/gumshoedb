@@ -16,6 +16,9 @@ import (
 // TODO(philc): Get rid of this Cell data type.
 type Cell float32
 
+// Note that the 64 bit types are not supported in schemas at the moment. This is because we serialize column
+// values to JSON as float64 and we accumulate values in the scan loop as float64s; if columns themselves are
+// > 32 bit, we could corrupt the value when casting it to a float64.
 const (
 	Uint8Type = iota
 	Int8Type
@@ -23,10 +26,7 @@ const (
 	Int16Type
 	Uint32Type
 	Int32Type
-	Uint64Type
-	Int64Type
 	Float32Type
-	Float64Type
 )
 
 var typeSizes = map[int]int{
@@ -36,10 +36,7 @@ var typeSizes = map[int]int{
 	Int16Type:   int(unsafe.Sizeof(*new(int16))),
 	Uint32Type:  int(unsafe.Sizeof(*new(uint32))),
 	Int32Type:   int(unsafe.Sizeof(*new(int32))),
-	Uint64Type:  int(unsafe.Sizeof(*new(uint64))),
-	Int64Type:   int(unsafe.Sizeof(*new(int64))),
 	Float32Type: int(unsafe.Sizeof(*new(float32))),
-	Float64Type: int(unsafe.Sizeof(*new(float64))),
 }
 
 type Schema struct {
@@ -291,14 +288,8 @@ func (table *FactTable) getColumnValue(row []byte, column int) Untyped {
 		return *(*uint32)(columnPtr)
 	case Int32Type:
 		return *(*int32)(columnPtr)
-	case Uint64Type:
-		return *(*uint64)(columnPtr)
-	case Int64Type:
-		return *(*int64)(columnPtr)
 	case Float32Type:
 		return *(*float32)(columnPtr)
-	case Float64Type:
-		return *(*float64)(columnPtr)
 	}
 	return nil
 }
@@ -319,14 +310,8 @@ func (table *FactTable) setColumnValue(row []byte, column int, value float64) {
 		*(*uint32)(columnPtr) = uint32(value)
 	case Int32Type:
 		*(*int32)(columnPtr) = int32(value)
-	case Uint64Type:
-		*(*uint64)(columnPtr) = uint64(value)
-	case Int64Type:
-		*(*int64)(columnPtr) = int64(value)
 	case Float32Type:
 		*(*float32)(columnPtr) = float32(value)
-	case Float64Type:
-		*(*float64)(columnPtr) = float64(value)
 	}
 }
 

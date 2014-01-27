@@ -32,10 +32,7 @@ var stringToSchemaType = map[string]int{
 	"int16":   gumshoe.Int16Type,
 	"uint32":  gumshoe.Uint32Type,
 	"int32":   gumshoe.Int32Type,
-	"uint64":  gumshoe.Uint64Type,
-	"int64":   gumshoe.Int64Type,
 	"float32": gumshoe.Float32Type,
-	"float64": gumshoe.Float64Type,
 }
 
 // Produces a Schema based on the config file's values.
