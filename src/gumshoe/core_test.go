@@ -7,19 +7,6 @@ import (
 	. "github.com/cespare/a"
 )
 
-func tableFixture() *FactTable {
-	return NewFactTable("", 3, []string{"col1", "col2"})
-}
-
-func insertRow(table *FactTable, column1Value Untyped, column2Value Untyped) {
-	table.InsertRowMaps([]map[string]Untyped{{"col1": column1Value, "col2": column2Value}})
-}
-
-func createQuery() Query {
-	query := Query{"", []QueryAggregate{{"sum", "col1", "col1"}}, nil, nil}
-	return query
-}
-
 func convertToJSONAndBack(o interface{}) interface{} {
 	b, err := json.Marshal(o)
 	if err != nil {
@@ -37,6 +24,22 @@ func HasEqualJSON(args ...interface{}) (ok bool, message string) {
 	return DeepEquals(o1, o2)
 }
 
+func tableFixture() *FactTable {
+	schema := *NewSchema()
+	schema.NumericColumns = map[string]int{"col1": Float32Type}
+	schema.StringColumns = map[string]int{"col2": Float32Type}
+	return NewFactTable("", 3, schema)
+}
+
+func insertRow(table *FactTable, column1Value Untyped, column2Value Untyped) {
+	table.InsertRowMaps([]map[string]Untyped{{"col1": column1Value, "col2": column2Value}})
+}
+
+func createQuery() Query {
+	query := Query{"", []QueryAggregate{{"sum", "col1", "col1"}}, nil, nil}
+	return query
+}
+
 func TestConvertRowMapToRowArrayThrowsErrorForUnrecognizedColumn(t *testing.T) {
 	_, err := tableFixture().convertRowMapToRowArray(map[string]Untyped{"col1": 5, "unknownColumn": 10})
 	Assert(t, err, NotNil)
@@ -44,8 +47,8 @@ func TestConvertRowMapToRowArrayThrowsErrorForUnrecognizedColumn(t *testing.T) {
 
 func createTableFixtureForFilterTests() *FactTable {
 	table := tableFixture()
-	insertRow(table, 1, "stringvalue1")
-	insertRow(table, 2, "stringvalue2")
+	insertRow(table, 1.0, "stringvalue1")
+	insertRow(table, 2.0, "stringvalue2")
 	return table
 }
 
@@ -98,9 +101,9 @@ func TestInvokeQueryFiltersRowsUsingIn(t *testing.T) {
 
 func TestInvokeQueryWorksWhenGroupingByAStringColumn(t *testing.T) {
 	table := tableFixture()
-	insertRow(table, 1, "stringvalue1")
-	insertRow(table, 2, "stringvalue1")
-	insertRow(table, 5, "stringvalue2")
+	insertRow(table, 1.0, "stringvalue1")
+	insertRow(table, 2.0, "stringvalue1")
+	insertRow(table, 5.0, "stringvalue2")
 	result := runWithGroupBy(table, QueryGrouping{"", "col2", "groupbykey"})
 	Assert(t, result[0], HasEqualJSON,
 		map[string]Untyped{"groupbykey": "stringvalue1", "rowCount": 2, "col1": 3})
@@ -112,9 +115,9 @@ func TestGroupingWithATimeTransformFunctionWorks(t *testing.T) {
 	table := tableFixture()
 	// col1 will be truncated into minutes when we group by it, so these rows represent 0 and 2 minutes
 	// respectively.
-	insertRow(table, 0, "")
-	insertRow(table, 120, "")
-	insertRow(table, 150, "")
+	insertRow(table, 0.0, "")
+	insertRow(table, 120.0, "")
+	insertRow(table, 150.0, "")
 	result := runWithGroupBy(table, QueryGrouping{"minute", "col1", "groupbykey"})
 	Assert(t, result[0], HasEqualJSON, map[string]Untyped{"groupbykey": 0, "rowCount": 1, "col1": 0})
 	Assert(t, result[1], HasEqualJSON, map[string]Untyped{"groupbykey": 120, "rowCount": 2, "col1": 270})

@@ -4,6 +4,7 @@ package gumshoe
 import (
 	"fmt"
 	"reflect"
+	"sort"
 	"sync"
 	"unsafe"
 
@@ -12,6 +13,7 @@ import (
 
 // The size of the fact table is currently a compile time constant, so we can use native arrays instead of
 // ranges. In the future we'll use byte arrays so we that rows can be composites of many column types.
+// TODO(philc): Get rid of this Cell data type.
 type Cell float32
 
 const (
@@ -26,6 +28,20 @@ const (
 	Float32Type
 	Float64Type
 )
+
+var typeSizes = map[int]int{
+	Uint8Type:   int(unsafe.Sizeof(*new(uint8))),
+	Int8Type:    int(unsafe.Sizeof(*new(int8))),
+	Uint16Type:  int(unsafe.Sizeof(*new(uint16))),
+	Int16Type:   int(unsafe.Sizeof(*new(int16))),
+	Uint32Type:  int(unsafe.Sizeof(*new(uint32))),
+	Int32Type:   int(unsafe.Sizeof(*new(int32))),
+	Uint64Type:  int(unsafe.Sizeof(*new(uint64))),
+	Int64Type:   int(unsafe.Sizeof(*new(int64))),
+	Float32Type: int(unsafe.Sizeof(*new(float32))),
+	Float64Type: int(unsafe.Sizeof(*new(float64))),
+}
+
 type Schema struct {
 	NumericColumns map[string]int // name => size
 	StringColumns  map[string]int // name => size
@@ -44,22 +60,22 @@ type FactTable struct {
 	// We serialize this struct using JSON. The unexported fields are fields we don't want to serialize.
 	rows     []byte
 	FilePath string // Path to this table on disk, where we will periodically snapshot it to.
-	// The mmap bookkeeping object which contains the file descriptor we are mapping the table rows to.
-	memoryMap mmap.MMap
-	// This mutex must be held by each writer to prevent concurrent writes.
 	// TODO(caleb): This is not enough. Reads still race with writes. We need to fix this, possibly by removing
 	// the circular writes and instead persisting historic chunks to disk (or deleting them) and allocating
 	// fresh tables.
-	insertLock         *sync.Mutex
-	NextInsertPosition int
-	Count              int               // The number of used rows currently in the table. This is <= ROWS.
-	ColumnCount        int               // The number of columns in use in the table. This is <= COLS.
-	Capacity           int               // For now, this is an alias for the ROWS constant.
-	RowSize            int               // In bytes
-	ColumnSize         int               // TODO(philc): Remove this once we stop using fixed-type columns
-	DimensionTables    []*DimensionTable // A mapping from column index => column's DimensionTable.
-	ColumnNameToIndex  map[string]int
-	ColumnIndexToName  []string
+	insertLock *sync.Mutex
+	// The mmap bookkeeping object which contains the file descriptor we are mapping the table rows to.
+	memoryMap           mmap.MMap
+	NextInsertPosition  int
+	Count               int               // The number of used rows currently in the table. This is <= ROWS.
+	ColumnCount         int               // The number of columns in use in the table. This is <= COLS.
+	Capacity            int               // For now, this is an alias for the ROWS constant.
+	RowSize             int               // In bytes
+	DimensionTables     []*DimensionTable // A mapping from column index => column's DimensionTable.
+	ColumnNameToIndex   map[string]int
+	ColumnIndexToName   []string
+	ColumnIndexToOffset []uintptr // The byte offset of each column from the beggining byte of the row
+	ColumnIndexToType   []int     // Index => one of the type constants (e.g. Uint8Type).
 }
 
 func (table *FactTable) Rows() []byte {
@@ -89,21 +105,55 @@ type RowAggregate struct {
 
 type FactTableFilterFunc func(uintptr) bool
 
+// Returns the keys from a map in sorted order.
+func getSortedKeys(m map[string]int) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
 // Allocates a new FactTable. If a non-empty filePath is specified, this table's rows are immediately
 // persisted to disk in the form of a memory-mapped file.
-func NewFactTable(filePath string, rowCount int, columnNames []string) *FactTable {
+// String columns appear first, and then numeric columns, for no particular reason other than
+// implementation convenience in a few places.
+func NewFactTable(filePath string, rowCount int, schema Schema) *FactTable {
+	stringColumnNames := getSortedKeys(schema.StringColumns)
+	numericColumnNames := getSortedKeys(schema.NumericColumns)
+	allColumnNames := append(stringColumnNames, numericColumnNames...)
 	table := &FactTable{
-		ColumnCount: len(columnNames),
+		ColumnCount: len(allColumnNames),
 		FilePath:    filePath,
 		insertLock:  new(sync.Mutex),
-		ColumnSize:  4,
 		Capacity:    rowCount,
 	}
-	table.DimensionTables = make([]*DimensionTable, table.ColumnCount)
-	for i, name := range columnNames {
-		table.DimensionTables[i] = NewDimensionTable(name)
+
+	columnToType := make(map[string]int)
+	for k, v := range schema.StringColumns {
+		columnToType[k] = v
 	}
-	table.RowSize = table.ColumnCount * table.ColumnSize
+	for k, v := range schema.NumericColumns {
+		columnToType[k] = v
+	}
+
+	// Compute the byte offset from the beginning of the row for each column
+	table.ColumnIndexToOffset = make([]uintptr, table.ColumnCount)
+	table.ColumnIndexToType = make([]int, table.ColumnCount)
+	columnOffset := 0
+	for i, name := range allColumnNames {
+		table.ColumnIndexToOffset[i] = uintptr(columnOffset)
+		table.ColumnIndexToType[i] = columnToType[name]
+		columnOffset += typeSizes[columnToType[name]]
+	}
+
+	table.DimensionTables = make([]*DimensionTable, len(stringColumnNames))
+	for i, column := range stringColumnNames {
+		table.DimensionTables[i] = NewDimensionTable(column)
+	}
+
+	table.RowSize = columnOffset
 	tableSize := table.Capacity * table.RowSize
 	if filePath == "" {
 		// Create an in-memory database only, without a file backing.
@@ -112,12 +162,14 @@ func NewFactTable(filePath string, rowCount int, columnNames []string) *FactTabl
 	} else {
 		table.memoryMap, table.rows = CreateMemoryMappedFactTableStorage(table.FilePath, tableSize)
 	}
-	table.ColumnIndexToName = make([]string, len(columnNames))
-	table.ColumnNameToIndex = make(map[string]int, len(columnNames))
-	for i, name := range columnNames {
+
+	table.ColumnIndexToName = make([]string, len(allColumnNames))
+	table.ColumnNameToIndex = make(map[string]int, len(allColumnNames))
+	for i, name := range allColumnNames {
 		table.ColumnIndexToName[i] = name
 		table.ColumnNameToIndex[name] = i
 	}
+
 	return table
 }
 
@@ -125,7 +177,7 @@ func NewFactTable(filePath string, rowCount int, columnNames []string) *FactTabl
 func (table *FactTable) GetRowMaps(start, end int) []map[string]Untyped {
 	results := make([]map[string]Untyped, 0, table.Count)
 	if start > end {
-		panic("Invalid indices passed to GetRowMaps")
+		panic("Invalid row indices passed to GetRowMaps")
 	}
 	for i := start; i < end; i++ {
 		results = append(results, table.DenormalizeRow(table.getRowSlice(i)))
@@ -133,29 +185,27 @@ func (table *FactTable) GetRowMaps(start, end int) []map[string]Untyped {
 	return results
 }
 
-// Given a cell from a row vector, returns either the cell if this column isn't already normalized,
-// or the denormalized value. E.g. denormalizeColumnValue(213, 1) => "Japan"
-func (table *FactTable) denormalizeColumnValue(columnValue Cell, columnIndex int) Untyped {
-	// TODO(philc): I'm using the implicit condition that if a dimension table is empty, this column isn't a
-	// normalized dimension. This should be represented explicitly by a user-defined schema.
-	dimensionTable := table.DimensionTables[columnIndex]
-	if len(dimensionTable.Rows) > 0 {
-		return dimensionTable.Rows[int(columnValue)]
+// Given a column value from a row vector, return either the column value if it's a numeric column, or the
+// corresponding string if it's a normalized string column.
+// E.g. denormalizeColumnValue(213, 1) => "Japan"
+func (table *FactTable) denormalizeColumnValue(value Untyped, columnIndex int) Untyped {
+	if table.columnUsesDimensionTable(columnIndex) {
+		dimensionTable := table.DimensionTables[columnIndex]
+		return dimensionTable.Rows[int(convertUntypedToFloat64(value))]
 	} else {
-		return columnValue
+		return value
 	}
 }
 
 // Takes a normalized row vector and returns a map consisting of column names and values pulled from the
 // dimension tables.
 // e.g. [0, 1, 17] => {"country": "Japan", "browser": "Chrome", "age": 17}
-func (table *FactTable) DenormalizeRow(row *[]byte) map[string]Untyped {
+func (table *FactTable) DenormalizeRow(row []byte) map[string]Untyped {
 	result := make(map[string]Untyped)
-	rowDataPtr := (*reflect.SliceHeader)(unsafe.Pointer(row)).Data
 	for i := 0; i < table.ColumnCount; i++ {
-		value := *(*Cell)(unsafe.Pointer(rowDataPtr))
-		result[table.ColumnIndexToName[i]] = table.denormalizeColumnValue(value, i)
-		rowDataPtr += uintptr(table.ColumnSize)
+		name := table.ColumnIndexToName[i]
+		value := table.getColumnValue(row, i)
+		result[name] = table.denormalizeColumnValue(value, i)
 	}
 	return result
 }
@@ -180,43 +230,108 @@ func (table *FactTable) getRowOffset(row int) int {
 	return row * table.RowSize
 }
 
-func (table *FactTable) getRowSlice(row int) *[]byte {
+func (table *FactTable) getRowSlice(row int) []byte {
 	rowOffset := table.getRowOffset(row)
 	newSlice := table.Rows()[rowOffset : rowOffset+table.RowSize]
-	return &newSlice
+	return newSlice
 }
 
-// Takes a row of mixed types, like strings and ints, and converts it to a fact row (a vector of integer
-// types). For every string column, replaces its value with the matching ID from the dimension table,
-// inserting a row into the dimension table if one doesn't already exist.
+func (table *FactTable) columnUsesDimensionTable(columnIndex int) bool {
+	// This expression is valid because we put the string columns at the beginning of the row.
+	return columnIndex < len(table.DimensionTables)
+}
+
+// Takes a row of mixed types and replaces all string columns with the ID of the matching string in the
+// corresponding dimension table (creating a new row in the dimension table if the dimension table doesn't
+// already contain the string).
+// Note that all numeric values are assumed to be float64 (this is what Go's JSON unmarshaller produces).
 // e.g. {"country": "Japan", "browser": "Chrome", "age": 17} => [0, 1, 17]
+// TODO(philc): Make this return []byte
 func (table *FactTable) normalizeRow(rowMap map[string]Untyped) (*[]byte, error) {
 	rowAsArray, err := table.convertRowMapToRowArray(rowMap)
 	if err != nil {
 		return nil, err
 	}
 	rowSlice := make([]byte, table.RowSize)
-	rowDataPtr := (*reflect.SliceHeader)(unsafe.Pointer(&rowSlice)).Data
 	for columnIndex, value := range rowAsArray {
-		usesDimensionTable := isString(value)
-		columnOffset := uintptr(columnIndex * table.ColumnSize)
-		if usesDimensionTable {
+		var valueAsFloat64 float64
+		if table.columnUsesDimensionTable(columnIndex) {
+			if !isString(value) {
+				return nil, fmt.Errorf("Cannot insert a non-string value into column %s.",
+					table.ColumnIndexToName[columnIndex])
+			}
 			stringValue := value.(string)
 			dimensionTable := table.DimensionTables[columnIndex]
 			dimensionRowId, ok := dimensionTable.ValueToId[stringValue]
 			if !ok {
 				dimensionRowId = dimensionTable.addRow(stringValue)
 			}
-			*(*Cell)(unsafe.Pointer(rowDataPtr + columnOffset)) = Cell(dimensionRowId)
+			valueAsFloat64 = float64(dimensionRowId)
 		} else {
-			*(*Cell)(unsafe.Pointer(rowDataPtr + columnOffset)) = Cell(convertUntypedToFloat64(value))
+			valueAsFloat64 = value.(float64)
 		}
+		table.setColumnValue(rowSlice, columnIndex, valueAsFloat64)
 	}
 	return &rowSlice, nil
 }
 
+func (table *FactTable) getColumnValue(row []byte, column int) Untyped {
+	rowPtr := uintptr(unsafe.Pointer(&row[0]))
+	columnPtr := unsafe.Pointer(rowPtr + table.ColumnIndexToOffset[column])
+	switch table.ColumnIndexToType[column] {
+	case Uint8Type:
+		return *(*uint8)(columnPtr)
+	case Int8Type:
+		return *(*int8)(columnPtr)
+	case Uint16Type:
+		return *(*uint16)(columnPtr)
+	case Int16Type:
+		return *(*int16)(columnPtr)
+	case Uint32Type:
+		return *(*uint32)(columnPtr)
+	case Int32Type:
+		return *(*int32)(columnPtr)
+	case Uint64Type:
+		return *(*uint64)(columnPtr)
+	case Int64Type:
+		return *(*int64)(columnPtr)
+	case Float32Type:
+		return *(*float32)(columnPtr)
+	case Float64Type:
+		return *(*float64)(columnPtr)
+	}
+	return nil
+}
+
+func (table *FactTable) setColumnValue(row []byte, column int, value float64) {
+	rowPtr := uintptr(unsafe.Pointer(&row[0]))
+	columnPtr := unsafe.Pointer(rowPtr + table.ColumnIndexToOffset[column])
+	switch table.ColumnIndexToType[column] {
+	case Uint8Type:
+		*(*uint8)(columnPtr) = uint8(value)
+	case Int8Type:
+		*(*int8)(columnPtr) = int8(value)
+	case Uint16Type:
+		*(*uint16)(columnPtr) = uint16(value)
+	case Int16Type:
+		*(*int16)(columnPtr) = int16(value)
+	case Uint32Type:
+		*(*uint32)(columnPtr) = uint32(value)
+	case Int32Type:
+		*(*int32)(columnPtr) = int32(value)
+	case Uint64Type:
+		*(*uint64)(columnPtr) = uint64(value)
+	case Int64Type:
+		*(*int64)(columnPtr) = int64(value)
+	case Float32Type:
+		*(*float32)(columnPtr) = float32(value)
+	case Float64Type:
+		*(*float64)(columnPtr) = float64(value)
+	}
+}
+
 func (table *FactTable) insertNormalizedRow(row *[]byte) {
-	copy(*table.getRowSlice(table.NextInsertPosition), *row)
+	copy(table.getRowSlice(table.NextInsertPosition), *row)
 	table.NextInsertPosition = (table.NextInsertPosition + 1) % table.Capacity
 	if table.Count < table.Capacity {
 		table.Count++
@@ -402,7 +517,7 @@ func convertQueryFilterToFilterFunc(queryFilter QueryFilter, table *FactTable) F
 		}
 	}
 
-	columnOffset := uintptr(columnIndex * table.ColumnSize)
+	columnOffset := table.ColumnIndexToOffset[columnIndex]
 
 	switch queryFilter.Type {
 	case "greaterThan", ">":
@@ -497,7 +612,6 @@ func (table *FactTable) InvokeQuery(query *Query) map[string]Untyped {
 }
 
 func isString(value interface{}) bool {
-	// TODO(philc): There must be a built-in for this.
 	result := false
 	switch value.(type) {
 	case string:
@@ -513,6 +627,14 @@ func convertUntypedToFloat64(v Untyped) float64 {
 		result = float64(v.(float32))
 	case float64:
 		result = v.(float64)
+	case uint8:
+		result = float64(v.(uint8))
+	case uint16:
+		result = float64(v.(uint16))
+	case uint32:
+		result = float64(v.(uint32))
+	case uint64:
+		result = float64(v.(uint64))
 	case int:
 		result = float64(v.(int))
 	case int8:
@@ -521,6 +643,10 @@ func convertUntypedToFloat64(v Untyped) float64 {
 		result = float64(v.(int32))
 	case int64:
 		result = float64(v.(int64))
+	case Cell:
+		result = float64(v.(Cell))
+	default:
+		panic(fmt.Sprintf("Unrecognized type: %s", reflect.TypeOf(v)))
 	}
 	return result
 }

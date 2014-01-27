@@ -103,7 +103,11 @@ func setupFactTable() (table *gumshoe.FactTable) { //, dbTempDir string) {
 	}
 	os.RemoveAll(tempDir)
 	os.MkdirAll(tempDir, 0755)
-	table = gumshoe.NewFactTable(tempDir+"/db", BenchmarkRows, columnNames)
+	schema := *gumshoe.NewSchema()
+	for _, column := range columnNames {
+		schema.NumericColumns[column] = gumshoe.Int32Type
+	}
+	table = gumshoe.NewFactTable(tempDir+"/db", BenchmarkRows, schema)
 	populateTableWithTestingData(table)
 	return table
 }
@@ -114,7 +118,7 @@ func populateTableWithTestingData(table *gumshoe.FactTable) {
 	for i := range rows {
 		row := make(map[string]gumshoe.Untyped, table.ColumnCount)
 		for j := 0; j < table.ColumnCount; j++ {
-			row[table.ColumnIndexToName[j]] = i % 10
+			row[table.ColumnIndexToName[j]] = float64(i % 10)
 		}
 		rows[i] = row
 	}

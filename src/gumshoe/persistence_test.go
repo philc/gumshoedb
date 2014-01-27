@@ -17,15 +17,15 @@ func TestPersistenceEndToEnd(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 	tableFilePath := filepath.Join(tempDir, "test")
 
-	table := NewFactTable(tableFilePath, 1, []string{"col1", "col2"})
+	schema := *NewSchema()
+	schema.NumericColumns = map[string]int{"col1": Uint8Type, "col2": Uint8Type}
+	table := NewFactTable(tableFilePath, 1, schema)
 	table.SaveToDisk()
-	rowMap := map[string]Untyped{"col1": 12, "col2": 34}
+	rowMap := map[string]Untyped{"col1": 12.0, "col2": 34.0}
 	table.InsertRowMaps([]map[string]Untyped{rowMap})
 
 	table, err = LoadFactTableFromDisk(tableFilePath)
 	Assert(t, err, IsNil)
 	Assert(t, table.FilePath, Equals, tableFilePath)
-	denormalizedRow := table.DenormalizeRow(table.getRowSlice(0))
-
-	Assert(t, int(denormalizedRow["col1"].(Cell)), Equals, int(rowMap["col1"].(int)))
+	Assert(t, rowMap, HasEqualJSON, table.GetRowMaps(0, 1)[0])
 }

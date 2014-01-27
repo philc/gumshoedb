@@ -151,7 +151,7 @@ func (s *Server) loadFactTable() {
 		log.Printf(`Table "%s" does not exist, creating... `, s.Config.TableFilePath)
 		// TODO(philc): Pull this row count from the config file
 		rowCount := 100000
-		table = gumshoe.NewFactTable(s.Config.TableFilePath, rowCount, s.Config.ColumnNames)
+		table = gumshoe.NewFactTable(s.Config.TableFilePath, rowCount, s.Config.ToSchema())
 		table.SaveToDisk()
 		log.Print("done.")
 	} else {
