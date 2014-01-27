@@ -5,9 +5,12 @@ table_file_path = "db/table"
 # The amount of time between saves to disk.
 save_duration = "10s"
 
-column_names = [
-  "name",
-  "age",
-  "country",
-  "clicks",
+numeric_columns = [
+  ["clicks", "uint16"],
+  ["age", "uint8"]
+]
+
+string_columns = [
+  ["name", "uint16"],
+  ["country", "uint8"]
 ]

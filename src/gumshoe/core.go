@@ -14,6 +14,30 @@ import (
 // ranges. In the future we'll use byte arrays so we that rows can be composites of many column types.
 type Cell float32
 
+const (
+	Uint8Type = iota
+	Int8Type
+	Uint16Type
+	Int16Type
+	Uint32Type
+	Int32Type
+	Uint64Type
+	Int64Type
+	Float32Type
+	Float64Type
+)
+type Schema struct {
+	NumericColumns map[string]int // name => size
+	StringColumns  map[string]int // name => size
+}
+
+func NewSchema() *Schema {
+	s := new(Schema)
+	s.NumericColumns = make(map[string]int)
+	s.StringColumns = make(map[string]int)
+	return s
+}
+
 // A fixed sized table of rows.
 // When we insert more rows than the table's capacity, we wrap around and begin inserting rows at index 0.
 type FactTable struct {
