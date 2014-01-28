@@ -25,13 +25,13 @@ const (
 )
 
 var typeSizes = map[int]int{
-	TypeUint8:   int(unsafe.Sizeof(*new(uint8))),
-	TypeInt8:    int(unsafe.Sizeof(*new(int8))),
-	TypeUint16:  int(unsafe.Sizeof(*new(uint16))),
-	TypeInt16:   int(unsafe.Sizeof(*new(int16))),
-	TypeUint32:  int(unsafe.Sizeof(*new(uint32))),
-	TypeInt32:   int(unsafe.Sizeof(*new(int32))),
-	TypeFloat32: int(unsafe.Sizeof(*new(float32))),
+	TypeUint8:   int(unsafe.Sizeof(uint8(0))),
+	TypeInt8:    int(unsafe.Sizeof(int8(0))),
+	TypeUint16:  int(unsafe.Sizeof(uint16(0))),
+	TypeInt16:   int(unsafe.Sizeof(int16(0))),
+	TypeUint32:  int(unsafe.Sizeof(uint32(0))),
+	TypeInt32:   int(unsafe.Sizeof(int32(0))),
+	TypeFloat32: int(unsafe.Sizeof(float32(0))),
 }
 
 type Schema struct {
