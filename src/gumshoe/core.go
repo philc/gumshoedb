@@ -11,11 +11,6 @@ import (
 	mmap "github.com/edsrzf/mmap-go"
 )
 
-// The size of the fact table is currently a compile time constant, so we can use native arrays instead of
-// ranges. In the future we'll use byte arrays so we that rows can be composites of many column types.
-// TODO(philc): Get rid of this Cell data type.
-type Cell float32
-
 // Note that the 64 bit types are not supported in schemas at the moment. This is because we serialize column
 // values to JSON as float64 and we accumulate values in the scan loop as float64s; if columns themselves are
 // > 32 bit, we could corrupt the value when casting it to a float64.
@@ -673,8 +668,6 @@ func convertUntypedToFloat64(v Untyped) float64 {
 		result = float64(v.(int32))
 	case int64:
 		result = float64(v.(int64))
-	case Cell:
-		result = float64(v.(Cell))
 	default:
 		panic(fmt.Sprintf("Unrecognized type: %s", reflect.TypeOf(v)))
 	}
