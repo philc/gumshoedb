@@ -17,7 +17,7 @@ func TestPersistenceEndToEnd(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 	tableFilePath := filepath.Join(tempDir, "test")
 
-	schema := *NewSchema()
+	schema := NewSchema()
 	schema.NumericColumns = map[string]int{"col1": TypeUint8, "col2": TypeUint8}
 	table := NewFactTable(tableFilePath, 1, schema)
 	table.SaveToDisk()

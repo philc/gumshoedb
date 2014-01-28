@@ -139,7 +139,7 @@ func setupFactTable() (table *gumshoe.FactTable) { //, dbTempDir string) {
 	}
 	os.RemoveAll(tempDir)
 	os.MkdirAll(tempDir, 0755)
-	schema := *gumshoe.NewSchema()
+	schema := gumshoe.NewSchema()
 	for _, column := range columnNames {
 		schema.NumericColumns[column] = gumshoe.TypeInt32
 	}
