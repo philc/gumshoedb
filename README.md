@@ -12,26 +12,35 @@ To run:
 
 This starts a GumshoeDB daemon at [localhost:9000](http://localhost:9000).
 
-You can interact with GumshoeDB over HTTP. Here's a representative query, assuming the columns "country",
-"age", and "clicks".
+GumshoeDB can be interacted with over HTTP. Test data can be imported into the database with a PUT request:
 
-    curl -XPOST localhost:9000/tables/facts
+    curl -iX PUT 'localhost:9000/insert' -d '
+    [{"clicks": 1, "age": 21, "name": "Starbuck", "country": "USA"},
+     {"clicks": 2, "age": 22, "name": "Boomer", "country": "USA"},
+     {"clicks": 3, "age": 23, "name": "Helo", "country": "CAN"},
+     {"clicks": 4, "age": 24, "name": "Apollo", "country": "DEU"}
+     ]'
 
+Here's a representative query, assuming the columns "country", "age", and "clicks".
+
+    curl -iX POST localhost:9000/tables/facts/query -d '
     {
-      table: "events",
+      "table": "events",
       "aggregates":[
           {"type": "sum", "name": "clicks", "column": "clicks"},
-          {"type": "avg", "name": "avgAge, "column": "age"}],
-      "filters": [{"type": "greaterThan", "column": "age", "value": 21},
-                  {"type": "in", "column": "country", "value": ["USA", "Japan"]}],
-      "groupings": [{"column": "at", "name":"date", "timeTransform": "day"}]
+          {"type": "average", "name": "avgAge", "column": "age"}],
+      "filters": [{"type": "greaterThan", "column": "age", "value": 20},
+                  {"type": "in", "column": "country", "value": ["USA", "CAN"]}],
+      "groupings": [{"column": "country", "name":"country"}]
     }
+    '
 
     Results:
     {
-      results:
-        [{date: "2013-12-01", country: "Japan", clicks: 123, rowCount: 145},
-         {date: "2013-12-01", country: "USA", clicks: 123, rowCount: 145}]
+      "duration": 0,
+      "results":
+        [{"avgAge": 21.5, "clicks": 3, "country": "USA", "rowCount": 2},
+         {"avgAge": 23, "clicks": 3, "country": "CAN", "rowCount": 1}]
     }
 
 See [DEVELOPING.md](https://github.com/philc/gumshoedb/blob/master/DEVELOPING.md) for how to navigate the code
