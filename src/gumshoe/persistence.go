@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"io/ioutil"
 	"os"
+	"sync"
 
 	mmap "github.com/edsrzf/mmap-go"
 )
@@ -46,6 +47,7 @@ func LoadFactTableFromDisk(tableFilePath string) (*FactTable, error) {
 	if err := json.Unmarshal(file, &table); err != nil {
 		return nil, err
 	}
+	table.insertLock = new(sync.Mutex)
 	table.memoryMap, table.rows = memoryMapFactRows(factsDataFilePath(tableFilePath))
 	return &table, nil
 }
