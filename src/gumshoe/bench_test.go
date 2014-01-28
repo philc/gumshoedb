@@ -26,9 +26,6 @@ func init() {
 	factTable = setupFactTable()
 }
 
-func checkExpectedSum(b *testing.B, got SumType) {
-	if got != RowIndexSum {
-		b.Fatalf("Expected %v, but got %v", RowIndexSum, got)
 // TODO(philc): This is duplicated from core_test.go. What's the best way to share it?
 func convertToJSONAndBack(o interface{}) interface{} {
 	b, err := json.Marshal(o)
@@ -46,45 +43,59 @@ func HasEqualJSON(args ...interface{}) (ok bool, message string) {
 	o2 := convertToJSONAndBack(args[1])
 	return DeepEquals(o1, o2)
 }
+
+func checkResult(b *testing.B, actual interface{}, expected interface{}) {
+	ok, message := HasEqualJSON(actual, expected)
+	if !ok {
+		b.Fatalf(message)
 	}
 }
 
 // A query which only sums aggregates.
 func BenchmarkAggregateQuery(b *testing.B) {
-	setBytes(b)
 	query := createQuery(nil, nil)
 	if err := gumshoe.ValidateQuery(factTable, query); err != nil {
 		b.Fatal(err)
 	}
 	b.ResetTimer()
+	var result map[string]gumshoe.Untyped
 	for i := 0; i < b.N; i++ {
-		factTable.InvokeQuery(query)
+		result = factTable.InvokeQuery(query)
 	}
+	checkResult(b, result["results"],
+		[]map[string]gumshoe.Untyped{map[string]gumshoe.Untyped{"column001": BenchmarkRows,
+			"rowCount": BenchmarkRows}})
 	setBytes(b)
 }
 
 // A query which filters rows by a single, simple filter function.
 func BenchmarkFilterQuery(b *testing.B) {
-	setBytes(b)
-	query := createQuery(nil, []gumshoe.QueryFilter{{">", "column2", 5}})
+	// column2 cycles between 0 and 1, so this will filter out 1/2 the columns.
+	query := createQuery(nil, []gumshoe.QueryFilter{{">", "column002", 0}})
 	if err := gumshoe.ValidateQuery(factTable, query); err != nil {
 		b.Fatal(err)
 	}
 	b.ResetTimer()
+	var result map[string]gumshoe.Untyped
 	for i := 0; i < b.N; i++ {
-		factTable.InvokeQuery(query)
+		result = factTable.InvokeQuery(query)
 	}
+	checkResult(b, result["results"],
+		[]map[string]int{map[string]int{"column001": BenchmarkRows / 2, "rowCount": BenchmarkRows / 2}})
+	setBytes(b)
 }
 
 // A query which groups by a column. Each column has 10 possible values, so the result set will contain 10 row
 // aggregates.
 func BenchmarkGroupByQuery(b *testing.B) {
 	setBytes(b)
-	query := createQuery([]gumshoe.QueryGrouping{{"", "column2", "column2"}}, nil)
+	// This creates 10 groupings.
+	query := createQuery([]gumshoe.QueryGrouping{{"", "column003", "column003"}}, nil)
 	if err := gumshoe.ValidateQuery(factTable, query); err != nil {
 		panic(err)
 	}
 	b.ResetTimer()
+	// TODO(philc): Check this result.
 	for i := 0; i < b.N; i++ {
 		factTable.InvokeQuery(query)
 	}
@@ -92,8 +103,7 @@ func BenchmarkGroupByQuery(b *testing.B) {
 
 // A query which groups by a column that is transformed using a time transform function.
 func BenchmarkGroupByWithTimeTransformQuery(b *testing.B) {
-	setBytes(b)
-	query := createQuery([]gumshoe.QueryGrouping{{"hour", "column2", "column2"}}, nil)
+	query := createQuery([]gumshoe.QueryGrouping{{"hour", "column002", "column002"}}, nil)
 	if err := gumshoe.ValidateQuery(factTable, query); err != nil {
 		panic(err)
 	}
@@ -101,12 +111,13 @@ func BenchmarkGroupByWithTimeTransformQuery(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		factTable.InvokeQuery(query)
 	}
+	setBytes(b)
 }
 
 func createQuery(groupings []gumshoe.QueryGrouping, filters []gumshoe.QueryFilter) *gumshoe.Query {
 	return &gumshoe.Query{
 		TableName:  "tableName",
-		Aggregates: createQueryAggregates([]string{"column1"}),
+		Aggregates: createQueryAggregates([]string{"column001"}),
 		Groupings:  groupings,
 		Filters:    filters,
 	}
@@ -124,13 +135,15 @@ func createQueryAggregates(columns []string) []gumshoe.QueryAggregate {
 func setupFactTable() (table *gumshoe.FactTable) { //, dbTempDir string) {
 	columnNames := make([]string, BenchmarkColumns)
 	for i := range columnNames {
-		columnNames[i] = fmt.Sprintf("column%d", i)
+		// The columns are named columni where i has up to 2 leading zeros.
+		columnNames[i] = fmt.Sprintf("column%03d", i)
 	}
 	os.RemoveAll(tempDir)
 	os.MkdirAll(tempDir, 0755)
 	schema := *gumshoe.NewSchema()
 	for _, column := range columnNames {
-		schema.NumericColumns[column] = gumshoe.Int32Type
+		// TODO(philc): Change this to Int32Type
+		schema.NumericColumns[column] = gumshoe.Float32Type
 	}
 	table = gumshoe.NewFactTable(tempDir+"/db", BenchmarkRows, schema)
 	populateTableWithTestingData(table)
@@ -142,9 +155,13 @@ func populateTableWithTestingData(table *gumshoe.FactTable) {
 
 	for i := range rows {
 		row := make(map[string]gumshoe.Untyped, table.ColumnCount)
-		for j := 0; j < table.ColumnCount; j++ {
+		for j := 3; j < table.ColumnCount; j++ {
 			row[table.ColumnIndexToName[j]] = float64(i % 10)
 		}
+		// We use properties of these column values to construct sanity-check assertions in our benchmarks.
+		row[table.ColumnIndexToName[0]] = float64(0)
+		row[table.ColumnIndexToName[1]] = float64(1)
+		row[table.ColumnIndexToName[2]] = float64(i % 2)
 		rows[i] = row
 	}
 
