@@ -1,6 +1,9 @@
 SUBPACKAGES=$(shell find src -mindepth 1 -maxdepth 1 -type d -exec basename {} \;)
+PLATFORM=$(shell uname)
 
 export GOPATH=$(PWD):$(PWD)/vendor
+
+default: web
 
 build: deps
 	go install gumshoe
@@ -28,3 +31,11 @@ fmt:
 
 clean:
 	rm -fr bin build pkg
+
+release:
+ifeq ($(PLATFORM), Darwin)
+	vagrant up
+	vagrant ssh -c 'cd gumshoedb && make release'
+else
+	make web
+endif

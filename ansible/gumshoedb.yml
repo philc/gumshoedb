@@ -36,13 +36,8 @@
       local_action: command uname
       register: uname_result
 
-    - name: compile project (osx)
-      local_action: shell vagrant up && vagrant ssh -c "cd gumshoedb && make web"
-      when: uname_result.stdout == "Darwin"
-
-    - name: compile project (linux)
-      local_action: command cd .. && make web
-      when: uname_result.stdout == "Linux"
+    - name: compile project
+      local_action: shell cd .. && make release
 
     - name: rsync project
       local_action: >
