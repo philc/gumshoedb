@@ -41,6 +41,9 @@ func (c *Config) ToSchema() *gumshoe.Schema {
 	for _, columnPair := range c.NumericColumns {
 		schema.NumericColumns[columnPair[0]] = stringToSchemaType[columnPair[1]]
 	}
+	for _, columnPair := range c.StringColumns {
+		schema.StringColumns[columnPair[0]] = stringToSchemaType[columnPair[1]]
+	}
 	return schema
 }
 
