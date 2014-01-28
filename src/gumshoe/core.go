@@ -95,7 +95,7 @@ func NewDimensionTable(name string) *DimensionTable {
 }
 
 type RowAggregate struct {
-	GroupByValue Cell
+	GroupByValue float64
 	Sums         []float64
 	Count        int
 }
@@ -349,12 +349,11 @@ func (table *DimensionTable) addRow(rowValue string) int32 {
 // This logic is performance critical.
 // TODO(philc): make the groupByColumnName parameter be an integer, for consistency
 func (table *FactTable) scan(filters []FactTableFilterFunc, columnIndices []int,
-	groupByColumnName string, groupByColumnTransformFn func(Cell) Cell) []RowAggregate {
+	groupByColumnName string, groupByColumnTransformFn func(float64) float64) []RowAggregate {
 	columnIndexToGroupBy, useGrouping := table.ColumnNameToIndex[groupByColumnName]
 	// This maps the values of the group-by column => RowAggregate.
-	// Due to laziness, only one level of grouping is supported. TODO(philc): Support multiple levels of
-	// grouping.
-	rowAggregatesMap := make(map[Cell]*RowAggregate)
+	// Due to laziness, only one level of grouping is currently supported.
+	rowAggregatesMap := make(map[float64]*RowAggregate)
 	// When the query has no group-by clause, we accumulate results into a single RowAggregate.
 	rowAggregate := new(RowAggregate)
 	rowAggregate.Sums = make([]float64, table.ColumnCount)
@@ -363,7 +362,10 @@ func (table *FactTable) scan(filters []FactTableFilterFunc, columnIndices []int,
 	filterCount := len(filters)
 	rowPtr := (*reflect.SliceHeader)(unsafe.Pointer(&table.rows)).Data
 	rowSize := uintptr(table.RowSize)
-	groupByColumnOffset := uintptr(columnIndexToGroupBy * 4)
+	groupByColumnOffset := table.ColumnIndexToOffset[columnIndexToGroupBy]
+	groupByColumnType := table.ColumnIndexToType[columnIndexToGroupBy]
+	columnIndexToOffset := table.ColumnIndexToOffset
+	columnIndexToType := table.ColumnIndexToType
 
 outerLoop:
 	for i := 0; i < rowCount; i++ {
@@ -375,7 +377,7 @@ outerLoop:
 		}
 
 		if useGrouping {
-			groupByValue := *(*Cell)(unsafe.Pointer(rowPtr + groupByColumnOffset))
+			groupByValue := getColumnValueAsFloat64(rowPtr, groupByColumnOffset, groupByColumnType)
 			if groupByColumnTransformFn != nil {
 				groupByValue = groupByColumnTransformFn(groupByValue)
 			}
@@ -391,10 +393,27 @@ outerLoop:
 
 		for j := 0; j < columnCountInQuery; j++ {
 			columnIndex := columnIndices[j]
-			// TODO(philc): Pre-compute these offsets.
-			columnOffset := uintptr(4 * columnIndex)
-			columnValue := *(*Cell)(unsafe.Pointer(rowPtr + columnOffset))
-			(*rowAggregate).Sums[columnIndex] += float64(columnValue)
+			columnOffset := columnIndexToOffset[columnIndex]
+			columnPtr := unsafe.Pointer(rowPtr + columnOffset)
+			var columnValue float64
+			columnType := columnIndexToType[columnIndex]
+			switch columnType {
+			case Uint8Type:
+				columnValue = float64(*(*uint8)(columnPtr))
+			case Int8Type:
+				columnValue = float64(*(*int8)(columnPtr))
+			case Uint16Type:
+				columnValue = float64(*(*uint16)(columnPtr))
+			case Int16Type:
+				columnValue = float64(*(*int16)(columnPtr))
+			case Uint32Type:
+				columnValue = float64(*(*uint32)(columnPtr))
+			case Int32Type:
+				columnValue = float64(*(*int32)(columnPtr))
+			case Float32Type:
+				columnValue = float64(*(*float32)(columnPtr))
+			}
+			(*rowAggregate).Sums[columnIndex] += columnValue
 		}
 		(*rowAggregate).Count++
 		rowPtr += rowSize
@@ -409,6 +428,31 @@ outerLoop:
 		results = append(results, *rowAggregate)
 	}
 	return results
+}
+
+// A helper method used by the grouping and filtering functions in the scan method.
+// TODO(philc): Consider inlining this for better performance.
+func getColumnValueAsFloat64(row uintptr, columnOffset uintptr, columnType int) float64 {
+	columnPtr := unsafe.Pointer(row + columnOffset)
+	switch columnType {
+	case Uint8Type:
+		return float64(*(*uint8)(columnPtr))
+	case Int8Type:
+		return float64(*(*int8)(columnPtr))
+	case Uint16Type:
+		return float64(*(*uint16)(columnPtr))
+	case Int16Type:
+		return float64(*(*int16)(columnPtr))
+	case Uint32Type:
+		return float64(*(*uint32)(columnPtr))
+	case Int32Type:
+		return float64(*(*int32)(columnPtr))
+	case Float32Type:
+		return float64(*(*float32)(columnPtr))
+	default:
+		panic("Unrecognized column type.")
+	}
+	return 0
 }
 
 // TODO(philc): This function probably be inlined.
@@ -448,11 +492,11 @@ func (table *FactTable) mapRowAggregatesToJSONResultsFormat(query *Query,
 
 // Given a list of values, looks up the corresponding row IDs for those values. If those values don't
 // exist in the dimension table, they're omitted.
-func (table *DimensionTable) getDimensionRowIdsForValues(values []string) []Cell {
-	rowIds := make([]Cell, 0)
+func (table *DimensionTable) getDimensionRowIdsForValues(values []string) []float64 {
+	rowIds := make([]float64, 0)
 	for _, value := range values {
 		if id, ok := table.ValueToId[value]; ok {
-			rowIds = append(rowIds, Cell(id))
+			rowIds = append(rowIds, float64(id))
 		}
 	}
 	return rowIds
@@ -465,8 +509,8 @@ func convertQueryFilterToFilterFunc(queryFilter QueryFilter, table *FactTable) F
 
 	// The query value can either be a single value (in the case of =, >, < queries) or an array of values (in
 	// the case of "in", "not in" queries.
-	var valueAsCell Cell
-	var valueAsCells []Cell
+	var value float64
+	var values []float64
 
 	queryValueIsList := queryFilter.Type == "in"
 
@@ -476,16 +520,16 @@ func convertQueryFilterToFilterFunc(queryFilter QueryFilter, table *FactTable) F
 		if shouldTranslateToDimensionColumnIds {
 			// Convert this slice of untyped objects to []string. We encounter a panic if we try to cast straight
 			// to []string; I'm not sure why.
-			queryValuesAstrings := make([]string, 0, len(untypedQueryValues))
+			valuesAsStrings := make([]string, 0, len(untypedQueryValues))
 			for _, value := range untypedQueryValues {
-				queryValuesAstrings = append(queryValuesAstrings, value.(string))
+				valuesAsStrings = append(valuesAsStrings, value.(string))
 			}
 			dimensionTable := table.DimensionTables[columnIndex]
-			valueAsCells = dimensionTable.getDimensionRowIdsForValues(queryValuesAstrings)
+			values = dimensionTable.getDimensionRowIdsForValues(valuesAsStrings)
 		} else {
-			valueAsCells = make([]Cell, 0, len(untypedQueryValues))
+			values = make([]float64, 0, len(untypedQueryValues))
 			for _, value := range untypedQueryValues {
-				valueAsCells = append(valueAsCells, (Cell(convertUntypedToFloat64(value))))
+				values = append(values, float64(convertUntypedToFloat64(value)))
 			}
 		}
 	} else {
@@ -495,54 +539,55 @@ func convertQueryFilterToFilterFunc(queryFilter QueryFilter, table *FactTable) F
 			if len(matchingRowIds) == 0 {
 				return func(row uintptr) bool { return false }
 			} else {
-				valueAsCell = matchingRowIds[0]
+				value = matchingRowIds[0]
 			}
 		} else {
-			valueAsCell = Cell(convertUntypedToFloat64(queryFilter.Value))
+			value = convertUntypedToFloat64(queryFilter.Value)
 		}
 	}
 
 	columnOffset := table.ColumnIndexToOffset[columnIndex]
+	columnType := table.ColumnIndexToType[columnIndex]
 
 	switch queryFilter.Type {
 	case "greaterThan", ">":
 		f = func(row uintptr) bool {
-			columnValue := *(*Cell)(unsafe.Pointer(row + columnOffset))
-			return columnValue > valueAsCell
+			columnValue := getColumnValueAsFloat64(row, columnOffset, columnType)
+			return columnValue > value
 		}
 	case "greaterThanOrEqualTo", ">=":
 		f = func(row uintptr) bool {
-			columnValue := *(*Cell)(unsafe.Pointer(row + columnOffset))
-			return columnValue >= valueAsCell
+			columnValue := getColumnValueAsFloat64(row, columnOffset, columnType)
+			return columnValue >= value
 		}
 	case "lessThan", "<":
 		f = func(row uintptr) bool {
-			columnValue := *(*Cell)(unsafe.Pointer(row + columnOffset))
-			return columnValue < valueAsCell
+			columnValue := getColumnValueAsFloat64(row, columnOffset, columnType)
+			return columnValue < value
 		}
 	case "lessThanOrEqualTo", "<=":
 		f = func(row uintptr) bool {
-			columnValue := *(*Cell)(unsafe.Pointer(row + columnOffset))
-			return columnValue <= valueAsCell
+			columnValue := getColumnValueAsFloat64(row, columnOffset, columnType)
+			return columnValue <= value
 		}
 	case "notequal", "!=":
 		f = func(row uintptr) bool {
-			columnValue := *(*Cell)(unsafe.Pointer(row + columnOffset))
-			return columnValue != valueAsCell
+			columnValue := getColumnValueAsFloat64(row, columnOffset, columnType)
+			return columnValue != value
 		}
 	case "equal", "=":
 		f = func(row uintptr) bool {
-			columnValue := *(*Cell)(unsafe.Pointer(row + columnOffset))
-			return columnValue == valueAsCell
+			columnValue := getColumnValueAsFloat64(row, columnOffset, columnType)
+			return columnValue == value
 		}
 	case "in":
-		count := len(valueAsCells)
+		count := len(values)
 		// TODO(philc): A hash table may be more efficient for longer lists. We should determine what that list
 		// size is and use a hash table in that case.
 		f = func(row uintptr) bool {
-			columnValue := *(*Cell)(unsafe.Pointer(row + columnOffset))
+			columnValue := getColumnValueAsFloat64(row, columnOffset, columnType)
 			for i := 0; i < count; i++ {
-				if columnValue == valueAsCells[i] {
+				if columnValue == values[i] {
 					return true
 				}
 			}
@@ -554,7 +599,7 @@ func convertQueryFilterToFilterFunc(queryFilter QueryFilter, table *FactTable) F
 
 // Returns a function which, given a cell, performs a date-truncation transformation.
 // - transformFunctionName: one of [minute, hour, day].
-func convertTimeTransformToFunc(transformFunctionName string) func(Cell) Cell {
+func convertTimeTransformToFunc(transformFunctionName string) func(float64) float64 {
 	var divisor int
 	switch transformFunctionName {
 	case "minute":
@@ -564,17 +609,17 @@ func convertTimeTransformToFunc(transformFunctionName string) func(Cell) Cell {
 	case "day":
 		divisor = 60 * 60 * 24
 	}
-	return func(cell Cell) Cell {
+	return func(cell float64) float64 {
 		cellInt := int(cell)
 		remainder := cellInt % divisor
-		return Cell(cellInt - remainder)
+		return float64(cellInt - remainder)
 	}
 }
 
 func (table *FactTable) InvokeQuery(query *Query) map[string]Untyped {
 	columnIndices := table.getColumnIndicesFromQuery(query)
 	var groupByColumn string
-	var groupByTransformFunc func(Cell) Cell
+	var groupByTransformFunc func(float64) float64
 	// NOTE(philc): For now, only support one level of grouping. We intend to support multiple levels.
 	if len(query.Groupings) > 0 {
 		grouping := query.Groupings[0]

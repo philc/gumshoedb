@@ -142,8 +142,7 @@ func setupFactTable() (table *gumshoe.FactTable) { //, dbTempDir string) {
 	os.MkdirAll(tempDir, 0755)
 	schema := *gumshoe.NewSchema()
 	for _, column := range columnNames {
-		// TODO(philc): Change this to Int32Type
-		schema.NumericColumns[column] = gumshoe.Float32Type
+		schema.NumericColumns[column] = gumshoe.Int32Type
 	}
 	table = gumshoe.NewFactTable(tempDir+"/db", BenchmarkRows, schema)
 	populateTableWithTestingData(table)
@@ -171,5 +170,5 @@ func populateTableWithTestingData(table *gumshoe.FactTable) {
 }
 
 func setBytes(b *testing.B) {
-	b.SetBytes(int64(BenchmarkRows * BenchmarkColumns * unsafe.Sizeof(gumshoe.Cell(0))))
+	b.SetBytes(int64(BenchmarkRows * BenchmarkColumns * unsafe.Sizeof(float32(0))))
 }
