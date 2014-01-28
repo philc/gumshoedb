@@ -55,6 +55,16 @@ To deploy gumshoedb, run:
 
     ansible-playbook ansible/gumshoedb.yml -i ansible/hosts -e 'hosts=vagrant'
 
+Implementation
+==============
+
+The data in GumshoeDB is represented as a flat byte array. Rows are laid out in 8, 16, 32, or 64-bit slots
+according to their type. The final block of memory in each row is reserved for "nil-bits" which indicate
+which columns, if any, should be interpreted as nil. This is to differentiate nil from 0.
+
+[...c0...][.......c1.......][...c2...][...c3...][.......c4.......][01001000] // c1 and c4 are nil
+|-------------------------- table.RowSize ---------------------------------|
+
 Notes
 =====
 

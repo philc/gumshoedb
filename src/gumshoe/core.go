@@ -131,7 +131,7 @@ func NewFactTable(filePath string, rowCount int, schema *Schema) *FactTable {
 	}
 
 	// Compute the byte offset from the beginning of the row for each column
-	table.ColumnIndexToOffset = make([]uintptr, table.ColumnCount)
+	table.ColumnIndexToOffset = make([]uintptr, table.ColumnCount+1) // The final offset points to the nilBytes
 	table.ColumnIndexToType = make([]int, table.ColumnCount)
 	columnOffset := 0
 	for i, name := range allColumnNames {
@@ -139,13 +139,17 @@ func NewFactTable(filePath string, rowCount int, schema *Schema) *FactTable {
 		table.ColumnIndexToType[i] = columnToType[name]
 		columnOffset += typeSizes[columnToType[name]]
 	}
+	// Set the nilBytes offset
+	table.ColumnIndexToOffset[table.ColumnCount] = uintptr(columnOffset)
 
 	table.DimensionTables = make([]*DimensionTable, len(stringColumnNames))
 	for i, column := range stringColumnNames {
 		table.DimensionTables[i] = NewDimensionTable(column)
 	}
 
-	table.RowSize = columnOffset
+	// Allocate space for the nil bits at the end of each row, one bit per column.
+	table.RowSize = columnOffset + table.numNilBytes()
+
 	tableSize := table.Capacity * table.RowSize
 	if filePath == "" {
 		// Create an in-memory database only, without a file backing.
@@ -165,6 +169,21 @@ func NewFactTable(filePath string, rowCount int, schema *Schema) *FactTable {
 	return table
 }
 
+// Returns the number of bytes a row requires in order to have one nil-byte per column.
+func (table *FactTable) numNilBytes() int {
+	byteSize := 8
+	numNilBits := byteSize
+	for numNilBits < table.ColumnCount {
+		numNilBits += byteSize
+	}
+	return numNilBits / byteSize
+}
+
+// Returns the offset from the start of a row to the byte which contains the nil bit for this column.
+func (table *FactTable) nilByteOffset(column int) uintptr {
+	return table.ColumnIndexToOffset[table.ColumnCount] + uintptr(column/8)
+}
+
 // Return a set of row maps. Useful for debugging the contents of the table.
 func (table *FactTable) GetRowMaps(start, end int) []map[string]Untyped {
 	results := make([]map[string]Untyped, 0, table.Count)
@@ -181,7 +200,9 @@ func (table *FactTable) GetRowMaps(start, end int) []map[string]Untyped {
 // corresponding string if it's a normalized string column.
 // E.g. denormalizeColumnValue(213, 1) => "Japan"
 func (table *FactTable) denormalizeColumnValue(value Untyped, columnIndex int) Untyped {
-	if table.columnUsesDimensionTable(columnIndex) {
+	if value == nil {
+		return value
+	} else if table.columnUsesDimensionTable(columnIndex) {
 		dimensionTable := table.DimensionTables[columnIndex]
 		return dimensionTable.Rows[int(convertUntypedToFloat64(value))]
 	} else {
@@ -246,23 +267,27 @@ func (table *FactTable) normalizeRow(rowMap map[string]Untyped) (*[]byte, error)
 	}
 	rowSlice := make([]byte, table.RowSize)
 	for columnIndex, value := range rowAsArray {
-		var valueAsFloat64 float64
-		if table.columnUsesDimensionTable(columnIndex) {
-			if !isString(value) {
-				return nil, fmt.Errorf("Cannot insert a non-string value into column %s.",
-					table.ColumnIndexToName[columnIndex])
-			}
-			stringValue := value.(string)
-			dimensionTable := table.DimensionTables[columnIndex]
-			dimensionRowId, ok := dimensionTable.ValueToId[stringValue]
-			if !ok {
-				dimensionRowId = dimensionTable.addRow(stringValue)
-			}
-			valueAsFloat64 = float64(dimensionRowId)
+		if value == nil {
+			table.setColumnValue(rowSlice, columnIndex, value)
 		} else {
-			valueAsFloat64 = value.(float64)
+			var valueAsFloat64 float64
+			if table.columnUsesDimensionTable(columnIndex) {
+				if !isString(value) {
+					return nil, fmt.Errorf("Cannot insert a non-string value into column %s.",
+						table.ColumnIndexToName[columnIndex])
+				}
+				stringValue := value.(string)
+				dimensionTable := table.DimensionTables[columnIndex]
+				dimensionRowId, ok := dimensionTable.ValueToId[stringValue]
+				if !ok {
+					dimensionRowId = dimensionTable.addRow(stringValue)
+				}
+				valueAsFloat64 = float64(dimensionRowId)
+			} else {
+				valueAsFloat64 = value.(float64)
+			}
+			table.setColumnValue(rowSlice, columnIndex, valueAsFloat64)
 		}
-		table.setColumnValue(rowSlice, columnIndex, valueAsFloat64)
 	}
 	return &rowSlice, nil
 }
@@ -270,6 +295,16 @@ func (table *FactTable) normalizeRow(rowMap map[string]Untyped) (*[]byte, error)
 func (table *FactTable) getColumnValue(row []byte, column int) Untyped {
 	rowPtr := uintptr(unsafe.Pointer(&row[0]))
 	columnPtr := unsafe.Pointer(rowPtr + table.ColumnIndexToOffset[column])
+
+	// Handle nil values
+	nilByteOffset := table.nilByteOffset(column)
+	nilBytePtr := unsafe.Pointer(rowPtr + nilByteOffset)
+	nilBitIndex := uint(column) % 8
+	isNil := (*(*uint8)(nilBytePtr) >> (7 - nilBitIndex)) & uint8(1)
+	if isNil == 1 {
+		return nil
+	}
+
 	switch table.ColumnIndexToType[column] {
 	case TypeUint8:
 		return *(*uint8)(columnPtr)
@@ -289,25 +324,48 @@ func (table *FactTable) getColumnValue(row []byte, column int) Untyped {
 	return nil
 }
 
-func (table *FactTable) setColumnValue(row []byte, column int, value float64) {
+func (table *FactTable) setColumnValue(row []byte, column int, value Untyped) {
 	rowPtr := uintptr(unsafe.Pointer(&row[0]))
-	columnPtr := unsafe.Pointer(rowPtr + table.ColumnIndexToOffset[column])
-	switch table.ColumnIndexToType[column] {
-	case TypeUint8:
-		*(*uint8)(columnPtr) = uint8(value)
-	case TypeInt8:
-		*(*int8)(columnPtr) = int8(value)
-	case TypeUint16:
-		*(*uint16)(columnPtr) = uint16(value)
-	case TypeInt16:
-		*(*int16)(columnPtr) = int16(value)
-	case TypeUint32:
-		*(*uint32)(columnPtr) = uint32(value)
-	case TypeInt32:
-		*(*int32)(columnPtr) = int32(value)
-	case TypeFloat32:
-		*(*float32)(columnPtr) = float32(value)
+	if value == nil {
+		nilByteOffset := table.nilByteOffset(column)
+		nilBytePtr := unsafe.Pointer(rowPtr + nilByteOffset)
+		nilBitIndex := uint(column) % 8
+		mask := uint8(1 << (7 - nilBitIndex))
+		*(*uint8)(nilBytePtr) = *(*uint8)(nilBytePtr) | mask
+	} else {
+		value := value.(float64)
+		columnPtr := unsafe.Pointer(rowPtr + table.ColumnIndexToOffset[column])
+		switch table.ColumnIndexToType[column] {
+		case TypeUint8:
+			*(*uint8)(columnPtr) = uint8(value)
+		case TypeInt8:
+			*(*int8)(columnPtr) = int8(value)
+		case TypeUint16:
+			*(*uint16)(columnPtr) = uint16(value)
+		case TypeInt16:
+			*(*int16)(columnPtr) = int16(value)
+		case TypeUint32:
+			*(*uint32)(columnPtr) = uint32(value)
+		case TypeInt32:
+			*(*int32)(columnPtr) = int32(value)
+		case TypeFloat32:
+			*(*float32)(columnPtr) = float32(value)
+		}
 	}
+}
+
+// Useful for inspecting the nil bits of a row when debugging.
+func (table *FactTable) getNilBitsAsInts(row int) []int {
+	rowSlice := table.getRowSlice(row)
+	nilBytesPtr := unsafe.Pointer(uintptr(unsafe.Pointer(&rowSlice[0])) + table.nilByteOffset(0))
+	nilBitsAsInts := make([]int, 8*table.numNilBytes())
+	var byteNum, bitIndex uint
+	for byteNum = 0; byteNum < uint(table.numNilBytes()); byteNum++ {
+		for bitIndex = 0; bitIndex < 8; bitIndex++ {
+			nilBitsAsInts[byteNum*8+bitIndex] = int((*(*uint8)(nilBytesPtr) >> (7 - bitIndex)) & 1)
+		}
+	}
+	return nilBitsAsInts
 }
 
 func (table *FactTable) insertNormalizedRow(row *[]byte) {

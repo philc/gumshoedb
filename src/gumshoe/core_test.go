@@ -122,3 +122,17 @@ func TestGroupingWithATimeTransformFunctionWorks(t *testing.T) {
 	Assert(t, result[0], HasEqualJSON, map[string]Untyped{"groupbykey": 0, "rowCount": 1, "col1": 0})
 	Assert(t, result[1], HasEqualJSON, map[string]Untyped{"groupbykey": 120, "rowCount": 2, "col1": 270})
 }
+
+func TestInsertAndReadNullValues(t *testing.T) {
+	table := tableFixture()
+	insertRow(table, nil, "a")
+	insertRow(table, 1.0, nil)
+	insertRow(table, nil, nil)
+	results := table.GetRowMaps(0, table.Count)
+	Assert(t, results[0]["col1"], Equals, nil)
+	Assert(t, results[0]["col2"], Equals, "a")
+	Assert(t, results[1]["col1"].(float32), Equals, float32(1.0))
+	Assert(t, results[1]["col2"], Equals, nil)
+	Assert(t, results[2]["col1"], Equals, nil)
+	Assert(t, results[2]["col2"], Equals, nil)
+}
