@@ -24,7 +24,6 @@ var factTable *gumshoe.FactTable
 
 func init() {
 	factTable = setupFactTable()
-	populateTableWithTestingData(factTable)
 }
 
 func checkExpectedSum(b *testing.B, got SumType) {
