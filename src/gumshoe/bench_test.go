@@ -63,7 +63,7 @@ func BenchmarkAggregateQuery(b *testing.B) {
 		result = factTable.InvokeQuery(query)
 	}
 	checkResult(b, result["results"],
-		[]map[string]gumshoe.Untyped{map[string]gumshoe.Untyped{"column001": BenchmarkRows,
+		[]map[string]gumshoe.Untyped{{"column001": BenchmarkRows,
 			"rowCount": BenchmarkRows}})
 	setBytes(b)
 }
@@ -81,7 +81,7 @@ func BenchmarkFilterQuery(b *testing.B) {
 		result = factTable.InvokeQuery(query)
 	}
 	checkResult(b, result["results"],
-		[]map[string]int{map[string]int{"column001": BenchmarkRows / 2, "rowCount": BenchmarkRows / 2}})
+		[]map[string]int{{"column001": BenchmarkRows / 2, "rowCount": BenchmarkRows / 2}})
 	setBytes(b)
 }
 

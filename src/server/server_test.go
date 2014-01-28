@@ -7,7 +7,7 @@ import (
 )
 
 func TestSanity(t *testing.T) {
-	config := &Config{TableFilePath: "", NumericColumns: [][]string{[]string{"col1", "uint8"}}}
+	config := &Config{TableFilePath: "", NumericColumns: [][]string{{"col1", "uint8"}}}
 	server := httptest.NewServer(NewServer(config))
 	defer server.Close()
 	resp, err := http.Get(server.URL + "/")
