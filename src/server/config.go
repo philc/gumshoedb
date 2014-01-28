@@ -36,8 +36,8 @@ var stringToSchemaType = map[string]int{
 }
 
 // Produces a Schema based on the config file's values.
-func (c *Config) ToSchema() gumshoe.Schema {
-	schema := *gumshoe.NewSchema()
+func (c *Config) ToSchema() *gumshoe.Schema {
+	schema := gumshoe.NewSchema()
 	for _, columnPair := range c.NumericColumns {
 		schema.NumericColumns[columnPair[0]] = stringToSchemaType[columnPair[1]]
 	}

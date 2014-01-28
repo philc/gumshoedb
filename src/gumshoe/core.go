@@ -111,7 +111,7 @@ func getSortedKeys(m map[string]int) []string {
 // persisted to disk in the form of a memory-mapped file.
 // String columns appear first, and then numeric columns, for no particular reason other than
 // implementation convenience in a few places.
-func NewFactTable(filePath string, rowCount int, schema Schema) *FactTable {
+func NewFactTable(filePath string, rowCount int, schema *Schema) *FactTable {
 	stringColumnNames := getSortedKeys(schema.StringColumns)
 	numericColumnNames := getSortedKeys(schema.NumericColumns)
 	allColumnNames := append(stringColumnNames, numericColumnNames...)
