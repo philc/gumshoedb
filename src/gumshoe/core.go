@@ -15,23 +15,23 @@ import (
 // values to JSON as float64 and we accumulate values in the scan loop as float64s; if columns themselves are
 // > 32 bit, we could corrupt the value when casting it to a float64.
 const (
-	Uint8Type = iota
-	Int8Type
-	Uint16Type
-	Int16Type
-	Uint32Type
-	Int32Type
-	Float32Type
+	TypeUint8 = iota
+	TypeInt8
+	TypeUint16
+	TypeInt16
+	TypeUint32
+	TypeInt32
+	TypeFloat32
 )
 
 var typeSizes = map[int]int{
-	Uint8Type:   int(unsafe.Sizeof(*new(uint8))),
-	Int8Type:    int(unsafe.Sizeof(*new(int8))),
-	Uint16Type:  int(unsafe.Sizeof(*new(uint16))),
-	Int16Type:   int(unsafe.Sizeof(*new(int16))),
-	Uint32Type:  int(unsafe.Sizeof(*new(uint32))),
-	Int32Type:   int(unsafe.Sizeof(*new(int32))),
-	Float32Type: int(unsafe.Sizeof(*new(float32))),
+	TypeUint8:   int(unsafe.Sizeof(*new(uint8))),
+	TypeInt8:    int(unsafe.Sizeof(*new(int8))),
+	TypeUint16:  int(unsafe.Sizeof(*new(uint16))),
+	TypeInt16:   int(unsafe.Sizeof(*new(int16))),
+	TypeUint32:  int(unsafe.Sizeof(*new(uint32))),
+	TypeInt32:   int(unsafe.Sizeof(*new(int32))),
+	TypeFloat32: int(unsafe.Sizeof(*new(float32))),
 }
 
 type Schema struct {
@@ -67,7 +67,7 @@ type FactTable struct {
 	ColumnNameToIndex   map[string]int
 	ColumnIndexToName   []string
 	ColumnIndexToOffset []uintptr // The byte offset of each column from the beggining byte of the row
-	ColumnIndexToType   []int     // Index => one of the type constants (e.g. Uint8Type).
+	ColumnIndexToType   []int     // Index => one of the type constants (e.g. TypeUint8).
 }
 
 func (table *FactTable) Rows() []byte {
@@ -271,19 +271,19 @@ func (table *FactTable) getColumnValue(row []byte, column int) Untyped {
 	rowPtr := uintptr(unsafe.Pointer(&row[0]))
 	columnPtr := unsafe.Pointer(rowPtr + table.ColumnIndexToOffset[column])
 	switch table.ColumnIndexToType[column] {
-	case Uint8Type:
+	case TypeUint8:
 		return *(*uint8)(columnPtr)
-	case Int8Type:
+	case TypeInt8:
 		return *(*int8)(columnPtr)
-	case Uint16Type:
+	case TypeUint16:
 		return *(*uint16)(columnPtr)
-	case Int16Type:
+	case TypeInt16:
 		return *(*int16)(columnPtr)
-	case Uint32Type:
+	case TypeUint32:
 		return *(*uint32)(columnPtr)
-	case Int32Type:
+	case TypeInt32:
 		return *(*int32)(columnPtr)
-	case Float32Type:
+	case TypeFloat32:
 		return *(*float32)(columnPtr)
 	}
 	return nil
@@ -293,19 +293,19 @@ func (table *FactTable) setColumnValue(row []byte, column int, value float64) {
 	rowPtr := uintptr(unsafe.Pointer(&row[0]))
 	columnPtr := unsafe.Pointer(rowPtr + table.ColumnIndexToOffset[column])
 	switch table.ColumnIndexToType[column] {
-	case Uint8Type:
+	case TypeUint8:
 		*(*uint8)(columnPtr) = uint8(value)
-	case Int8Type:
+	case TypeInt8:
 		*(*int8)(columnPtr) = int8(value)
-	case Uint16Type:
+	case TypeUint16:
 		*(*uint16)(columnPtr) = uint16(value)
-	case Int16Type:
+	case TypeInt16:
 		*(*int16)(columnPtr) = int16(value)
-	case Uint32Type:
+	case TypeUint32:
 		*(*uint32)(columnPtr) = uint32(value)
-	case Int32Type:
+	case TypeInt32:
 		*(*int32)(columnPtr) = int32(value)
-	case Float32Type:
+	case TypeFloat32:
 		*(*float32)(columnPtr) = float32(value)
 	}
 }
@@ -393,19 +393,19 @@ outerLoop:
 			var columnValue float64
 			columnType := columnIndexToType[columnIndex]
 			switch columnType {
-			case Uint8Type:
+			case TypeUint8:
 				columnValue = float64(*(*uint8)(columnPtr))
-			case Int8Type:
+			case TypeInt8:
 				columnValue = float64(*(*int8)(columnPtr))
-			case Uint16Type:
+			case TypeUint16:
 				columnValue = float64(*(*uint16)(columnPtr))
-			case Int16Type:
+			case TypeInt16:
 				columnValue = float64(*(*int16)(columnPtr))
-			case Uint32Type:
+			case TypeUint32:
 				columnValue = float64(*(*uint32)(columnPtr))
-			case Int32Type:
+			case TypeInt32:
 				columnValue = float64(*(*int32)(columnPtr))
-			case Float32Type:
+			case TypeFloat32:
 				columnValue = float64(*(*float32)(columnPtr))
 			}
 			(*rowAggregate).Sums[columnIndex] += columnValue
@@ -430,19 +430,19 @@ outerLoop:
 func getColumnValueAsFloat64(row uintptr, columnOffset uintptr, columnType int) float64 {
 	columnPtr := unsafe.Pointer(row + columnOffset)
 	switch columnType {
-	case Uint8Type:
+	case TypeUint8:
 		return float64(*(*uint8)(columnPtr))
-	case Int8Type:
+	case TypeInt8:
 		return float64(*(*int8)(columnPtr))
-	case Uint16Type:
+	case TypeUint16:
 		return float64(*(*uint16)(columnPtr))
-	case Int16Type:
+	case TypeInt16:
 		return float64(*(*int16)(columnPtr))
-	case Uint32Type:
+	case TypeUint32:
 		return float64(*(*uint32)(columnPtr))
-	case Int32Type:
+	case TypeInt32:
 		return float64(*(*int32)(columnPtr))
-	case Float32Type:
+	case TypeFloat32:
 		return float64(*(*float32)(columnPtr))
 	default:
 		panic("Unrecognized column type.")

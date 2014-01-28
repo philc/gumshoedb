@@ -26,8 +26,8 @@ func HasEqualJSON(args ...interface{}) (ok bool, message string) {
 
 func tableFixture() *FactTable {
 	schema := *NewSchema()
-	schema.NumericColumns = map[string]int{"col1": Float32Type}
-	schema.StringColumns = map[string]int{"col2": Float32Type}
+	schema.NumericColumns = map[string]int{"col1": TypeFloat32}
+	schema.StringColumns = map[string]int{"col2": TypeFloat32}
 	return NewFactTable("", 3, schema)
 }
 

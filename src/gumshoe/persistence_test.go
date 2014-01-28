@@ -18,7 +18,7 @@ func TestPersistenceEndToEnd(t *testing.T) {
 	tableFilePath := filepath.Join(tempDir, "test")
 
 	schema := *NewSchema()
-	schema.NumericColumns = map[string]int{"col1": Uint8Type, "col2": Uint8Type}
+	schema.NumericColumns = map[string]int{"col1": TypeUint8, "col2": TypeUint8}
 	table := NewFactTable(tableFilePath, 1, schema)
 	table.SaveToDisk()
 	rowMap := map[string]Untyped{"col1": 12.0, "col2": 34.0}

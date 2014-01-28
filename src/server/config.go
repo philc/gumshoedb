@@ -26,13 +26,13 @@ type duration struct {
 }
 
 var stringToSchemaType = map[string]int{
-	"uint8":   gumshoe.Uint8Type,
-	"int8":    gumshoe.Int8Type,
-	"uint16":  gumshoe.Uint16Type,
-	"int16":   gumshoe.Int16Type,
-	"uint32":  gumshoe.Uint32Type,
-	"int32":   gumshoe.Int32Type,
-	"float32": gumshoe.Float32Type,
+	"uint8":   gumshoe.TypeUint8,
+	"int8":    gumshoe.TypeInt8,
+	"uint16":  gumshoe.TypeUint16,
+	"int16":   gumshoe.TypeInt16,
+	"uint32":  gumshoe.TypeUint32,
+	"int32":   gumshoe.TypeInt32,
+	"float32": gumshoe.TypeFloat32,
 }
 
 // Produces a Schema based on the config file's values.
