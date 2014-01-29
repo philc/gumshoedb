@@ -57,7 +57,7 @@ type FactTable struct {
 	// TODO(caleb): This is not enough. Reads still race with writes. We need to fix this, possibly by removing
 	// the circular writes and instead persisting historic chunks to disk (or deleting them) and allocating
 	// fresh tables.
-	insertLock *sync.Mutex
+	InsertLock *sync.Mutex `json:"-"`
 	// The mmap bookkeeping object which contains the file descriptor we are mapping the table rows to.
 	memoryMap           mmap.MMap
 	NextInsertPosition  int
@@ -120,7 +120,7 @@ func NewFactTable(filePath string, rowCount int, schema *Schema) *FactTable {
 	table := &FactTable{
 		ColumnCount: len(allColumnNames),
 		FilePath:    filePath,
-		insertLock:  new(sync.Mutex),
+		InsertLock:  new(sync.Mutex),
 		Capacity:    rowCount,
 	}
 
@@ -364,8 +364,8 @@ func (table *FactTable) insertNormalizedRow(row *[]byte) {
 
 // Inserts the given rows into the table. Returns an error if one of the rows contains an unrecognized column.
 func (table *FactTable) InsertRowMaps(rows []map[string]Untyped) error {
-	table.insertLock.Lock()
-	defer table.insertLock.Unlock()
+	table.InsertLock.Lock()
+	defer table.InsertLock.Unlock()
 
 	for _, rowMap := range rows {
 		normalizedRow, err := table.normalizeRow(rowMap)

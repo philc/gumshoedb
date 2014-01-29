@@ -47,7 +47,7 @@ func LoadFactTableFromDisk(tableFilePath string) (*FactTable, error) {
 	if err := json.Unmarshal(file, &table); err != nil {
 		return nil, err
 	}
-	table.insertLock = new(sync.Mutex)
+	table.InsertLock = new(sync.Mutex)
 	table.memoryMap, table.rows = memoryMapFactRows(factsDataFilePath(tableFilePath))
 	return &table, nil
 }

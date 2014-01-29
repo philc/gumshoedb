@@ -107,6 +107,8 @@ type Metricz struct {
 	FactTableBytes         int
 	FactTableCapacityBytes int
 	DimensionTables        map[string]map[string]int
+	OldestRow              map[string]gumshoe.Untyped
+	NewestRow              map[string]gumshoe.Untyped
 }
 
 func (s *Server) HandleMetricz(w http.ResponseWriter) {
@@ -120,12 +122,26 @@ func (s *Server) HandleMetricz(w http.ResponseWriter) {
 		}
 	}
 
-	metriczJSON, err := json.Marshal(&Metricz{
+	metricz := &Metricz{
 		FactTableRows:          s.Table.Count,
 		FactTableBytes:         s.Table.Capacity * s.Table.RowSize,
 		FactTableCapacityBytes: s.Table.Count * s.Table.RowSize,
 		DimensionTables:        dimensionTables,
-	})
+	}
+
+	if s.Table.Count > 0 {
+		s.Table.InsertLock.Lock()
+		defer s.Table.InsertLock.Unlock()
+		if s.Table.Count > 1 {
+			oldestRowIndex := (s.Table.NextInsertPosition - s.Table.Count + s.Table.Capacity) % s.Table.Capacity
+			metricz.OldestRow = s.Table.GetRowMaps(oldestRowIndex, oldestRowIndex+1)[0]
+		}
+		newestRowIndex := (s.Table.NextInsertPosition - 1 + s.Table.Capacity) % s.Table.Capacity
+		metricz.NewestRow = s.Table.GetRowMaps(newestRowIndex, newestRowIndex+1)[0]
+	}
+
+	metriczJSON, err := json.Marshal(metricz)
+
 	if err != nil {
 		log.Print(err)
 		http.Error(w, err.Error(), 500)
