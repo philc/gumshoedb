@@ -414,7 +414,7 @@ outerLoop:
 		rowPtr += rowSize
 	}
 
-	results := make([]RowAggregate, 0)
+	results := []RowAggregate{}
 	if useGrouping {
 		for _, value := range rowAggregatesMap {
 			results = append(results, *value)
@@ -452,7 +452,7 @@ func getColumnValueAsFloat64(row uintptr, columnOffset uintptr, columnType int) 
 
 // TODO(philc): This function probably be inlined.
 func (table *FactTable) getColumnIndicesFromQuery(query *Query) []int {
-	columnIndices := make([]int, 0)
+	columnIndices := []int{}
 	for _, queryAggregate := range query.Aggregates {
 		columnIndices = append(columnIndices, table.ColumnNameToIndex[queryAggregate.Column])
 	}
@@ -461,7 +461,7 @@ func (table *FactTable) getColumnIndicesFromQuery(query *Query) []int {
 
 func (table *FactTable) mapRowAggregatesToJSONResultsFormat(query *Query,
 	rowAggregates []RowAggregate) [](map[string]Untyped) {
-	jsonRows := make([](map[string]Untyped), 0)
+	jsonRows := [](map[string]Untyped){}
 	for _, rowAggregate := range rowAggregates {
 		jsonRow := make(map[string]Untyped)
 		for _, queryAggregate := range query.Aggregates {
@@ -488,7 +488,7 @@ func (table *FactTable) mapRowAggregatesToJSONResultsFormat(query *Query,
 // Given a list of values, looks up the corresponding row IDs for those values. If those values don't
 // exist in the dimension table, they're omitted.
 func (table *DimensionTable) getDimensionRowIdsForValues(values []string) []float64 {
-	rowIds := make([]float64, 0)
+	rowIds := []float64{}
 	for _, value := range values {
 		if id, ok := table.ValueToId[value]; ok {
 			rowIds = append(rowIds, float64(id))
