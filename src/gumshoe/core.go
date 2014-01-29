@@ -6,6 +6,7 @@ import (
 	"math"
 	"reflect"
 	"sort"
+	"strings"
 	"sync"
 	"unsafe"
 
@@ -345,17 +346,12 @@ func (table *FactTable) setColumnValue(row []byte, column int, value Untyped) {
 }
 
 // Useful for inspecting the nil bits of a row when debugging.
-func (table *FactTable) getNilBitsAsInts(row int) []int {
-	rowSlice := table.getRowSlice(row)
-	nilBytesPtr := unsafe.Pointer(uintptr(unsafe.Pointer(&rowSlice[0])) + table.nilByteOffset(0))
-	nilBitsAsInts := make([]int, 8*table.numNilBytes())
-	var byteNum, bitIndex uint
-	for byteNum = 0; byteNum < uint(table.numNilBytes()); byteNum++ {
-		for bitIndex = 0; bitIndex < 8; bitIndex++ {
-			nilBitsAsInts[byteNum*8+bitIndex] = int((*(*uint8)(nilBytesPtr) >> (7 - bitIndex)) & 1)
-		}
+func (table *FactTable) nilBitsToString(row int) string {
+	var parts []string
+	for _, b := range table.getRowSlice(row)[0:table.numNilBytes()] {
+		parts = append(parts, fmt.Sprintf("%08b", b))
 	}
-	return nilBitsAsInts
+	return strings.Join(parts, " ")
 }
 
 func (table *FactTable) insertNormalizedRow(row *[]byte) {
