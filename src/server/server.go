@@ -124,8 +124,8 @@ func (s *Server) HandleMetricz(w http.ResponseWriter) {
 
 	metricz := &Metricz{
 		FactTableRows:          s.Table.Count,
-		FactTableBytes:         s.Table.Capacity * s.Table.RowSize,
-		FactTableCapacityBytes: s.Table.Count * s.Table.RowSize,
+		FactTableBytes:         s.Table.Count * s.Table.RowSize,
+		FactTableCapacityBytes: s.Table.Capacity * s.Table.RowSize,
 		DimensionTables:        dimensionTables,
 	}
 
