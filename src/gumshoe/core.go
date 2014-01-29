@@ -290,10 +290,9 @@ func (table *FactTable) getColumnValue(row []byte, column int) Untyped {
 
 	// Handle nil values
 	nilByteOffset := table.nilByteOffset(column)
-	nilBytePtr := unsafe.Pointer(rowPtr + nilByteOffset)
 	nilBitIndex := uint(column) % 8
-	isNil := (*(*uint8)(nilBytePtr) >> (7 - nilBitIndex)) & 1
-	if isNil == 1 {
+	isNil := row[nilByteOffset] & (1 << (7 - nilBitIndex))
+	if isNil > 0 {
 		return nil
 	}
 
@@ -322,8 +321,7 @@ func (table *FactTable) setColumnValue(row []byte, column int, value Untyped) {
 		nilByteOffset := table.nilByteOffset(column)
 		nilBytePtr := unsafe.Pointer(rowPtr + nilByteOffset)
 		nilBitIndex := uint(column) % 8
-		mask := uint8(1 << (7 - nilBitIndex))
-		*(*uint8)(nilBytePtr) = *(*uint8)(nilBytePtr) | mask
+		*(*uint8)(nilBytePtr) = *(*uint8)(nilBytePtr) | (1 << (7 - nilBitIndex))
 	} else {
 		value := value.(float64)
 		columnPtr := unsafe.Pointer(rowPtr + table.ColumnIndexToOffset[column])
