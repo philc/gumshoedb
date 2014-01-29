@@ -3,6 +3,7 @@ package gumshoe
 
 import (
 	"fmt"
+	"math"
 	"reflect"
 	"sort"
 	"sync"
@@ -171,12 +172,7 @@ func NewFactTable(filePath string, rowCount int, schema *Schema) *FactTable {
 
 // Returns the number of bytes a row requires in order to have one nil bit per column.
 func (table *FactTable) numNilBytes() int {
-	byteSize := 8
-	numNilBits := byteSize
-	for numNilBits < table.ColumnCount {
-		numNilBits += byteSize
-	}
-	return numNilBits / byteSize
+	return int(math.Ceil(float64(table.ColumnCount) / 8.0))
 }
 
 // Returns the offset from the start of a row to the byte which contains the nil bit for this column.
@@ -269,25 +265,25 @@ func (table *FactTable) normalizeRow(rowMap map[string]Untyped) (*[]byte, error)
 	for columnIndex, value := range rowAsArray {
 		if value == nil {
 			table.setColumnValue(rowSlice, columnIndex, value)
-		} else {
-			var valueAsFloat64 float64
-			if table.columnUsesDimensionTable(columnIndex) {
-				if !isString(value) {
-					return nil, fmt.Errorf("Cannot insert a non-string value into column %s.",
-						table.ColumnIndexToName[columnIndex])
-				}
-				stringValue := value.(string)
-				dimensionTable := table.DimensionTables[columnIndex]
-				dimensionRowId, ok := dimensionTable.ValueToId[stringValue]
-				if !ok {
-					dimensionRowId = dimensionTable.addRow(stringValue)
-				}
-				valueAsFloat64 = float64(dimensionRowId)
-			} else {
-				valueAsFloat64 = value.(float64)
-			}
-			table.setColumnValue(rowSlice, columnIndex, valueAsFloat64)
+			continue
 		}
+		var valueAsFloat64 float64
+		if table.columnUsesDimensionTable(columnIndex) {
+			if !isString(value) {
+				return nil, fmt.Errorf("Cannot insert a non-string value into column %s.",
+					table.ColumnIndexToName[columnIndex])
+			}
+			stringValue := value.(string)
+			dimensionTable := table.DimensionTables[columnIndex]
+			dimensionRowId, ok := dimensionTable.ValueToId[stringValue]
+			if !ok {
+				dimensionRowId = dimensionTable.addRow(stringValue)
+			}
+			valueAsFloat64 = float64(dimensionRowId)
+		} else {
+			valueAsFloat64 = value.(float64)
+		}
+		table.setColumnValue(rowSlice, columnIndex, valueAsFloat64)
 	}
 	return &rowSlice, nil
 }
@@ -300,7 +296,7 @@ func (table *FactTable) getColumnValue(row []byte, column int) Untyped {
 	nilByteOffset := table.nilByteOffset(column)
 	nilBytePtr := unsafe.Pointer(rowPtr + nilByteOffset)
 	nilBitIndex := uint(column) % 8
-	isNil := (*(*uint8)(nilBytePtr) >> (7 - nilBitIndex)) & uint8(1)
+	isNil := (*(*uint8)(nilBytePtr) >> (7 - nilBitIndex)) & 1
 	if isNil == 1 {
 		return nil
 	}
