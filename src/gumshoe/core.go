@@ -132,25 +132,21 @@ func NewFactTable(filePath string, rowCount int, schema *Schema) *FactTable {
 	}
 
 	// Compute the byte offset from the beginning of the row for each column
-	table.ColumnIndexToOffset = make([]uintptr, table.ColumnCount+1) // The final offset points to the nilBytes
+	table.ColumnIndexToOffset = make([]uintptr, table.ColumnCount)
 	table.ColumnIndexToType = make([]int, table.ColumnCount)
-	columnOffset := 0
+	columnOffset := table.numNilBytes() // Skip space for the nil bytes header
 	for i, name := range allColumnNames {
 		table.ColumnIndexToOffset[i] = uintptr(columnOffset)
 		table.ColumnIndexToType[i] = columnToType[name]
 		columnOffset += typeSizes[columnToType[name]]
 	}
-	// Set the nilBytes offset
-	table.ColumnIndexToOffset[table.ColumnCount] = uintptr(columnOffset)
 
 	table.DimensionTables = make([]*DimensionTable, len(stringColumnNames))
 	for i, column := range stringColumnNames {
 		table.DimensionTables[i] = NewDimensionTable(column)
 	}
 
-	// Allocate space for the nil bits at the end of each row, one bit per column.
-	table.RowSize = columnOffset + table.numNilBytes()
-
+	table.RowSize = columnOffset
 	tableSize := table.Capacity * table.RowSize
 	if filePath == "" {
 		// Create an in-memory database only, without a file backing.
@@ -177,7 +173,7 @@ func (table *FactTable) numNilBytes() int {
 
 // Returns the offset from the start of a row to the byte which contains the nil bit for this column.
 func (table *FactTable) nilByteOffset(column int) uintptr {
-	return table.ColumnIndexToOffset[table.ColumnCount] + uintptr(column/8)
+	return uintptr(column / 8)
 }
 
 // Return a set of row maps. Useful for debugging the contents of the table.
