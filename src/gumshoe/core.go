@@ -179,7 +179,7 @@ func (table *FactTable) nilByteOffset(column int) uintptr {
 
 // Return a set of row maps. Useful for debugging the contents of the table.
 func (table *FactTable) GetRowMaps(start, end int) []map[string]Untyped {
-	results := make([]map[string]Untyped, 0, table.Count)
+	results := make([]map[string]Untyped, 0, end-start)
 	if start > end {
 		panic("Invalid row indices passed to GetRowMaps")
 	}
