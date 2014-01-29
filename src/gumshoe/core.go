@@ -563,7 +563,7 @@ func convertQueryFilterToFilterFunc(queryFilter QueryFilter, table *FactTable) F
 			columnValue := getColumnValueAsFloat64(row, columnOffset, columnType)
 			return columnValue <= value
 		}
-	case "notequal", "!=":
+	case "notEqual", "!=":
 		f = func(row uintptr) bool {
 			columnValue := getColumnValueAsFloat64(row, columnOffset, columnType)
 			return columnValue != value
