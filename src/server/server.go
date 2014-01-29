@@ -103,9 +103,10 @@ func (s *Server) HandleQueryRoute(w http.ResponseWriter, r *http.Request) {
 }
 
 type Metricz struct {
-	FactTableRows   int
-	FactTableBytes  int
-	DimensionTables map[string]map[string]int
+	FactTableRows          int
+	FactTableBytes         int
+	FactTableCapacityBytes int
+	DimensionTables        map[string]map[string]int
 }
 
 func (s *Server) HandleMetricz(w http.ResponseWriter) {
@@ -120,9 +121,10 @@ func (s *Server) HandleMetricz(w http.ResponseWriter) {
 	}
 
 	metriczJSON, err := json.Marshal(&Metricz{
-		FactTableRows:   s.Table.Count,
-		FactTableBytes:  s.Table.Capacity * s.Table.RowSize,
-		DimensionTables: dimensionTables,
+		FactTableRows:          s.Table.Count,
+		FactTableBytes:         s.Table.Capacity * s.Table.RowSize,
+		FactTableCapacityBytes: s.Table.Count * s.Table.RowSize,
+		DimensionTables:        dimensionTables,
 	})
 	if err != nil {
 		log.Print(err)
