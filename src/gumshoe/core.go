@@ -169,7 +169,7 @@ func NewFactTable(filePath string, rowCount int, schema *Schema) *FactTable {
 	return table
 }
 
-// Returns the number of bytes a row requires in order to have one nil-bit per column.
+// Returns the number of bytes a row requires in order to have one nil bit per column.
 func (table *FactTable) numNilBytes() int {
 	byteSize := 8
 	numNilBits := byteSize
