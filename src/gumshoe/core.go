@@ -278,7 +278,13 @@ func (table *FactTable) normalizeRow(rowMap map[string]Untyped) (*[]byte, error)
 			}
 			valueAsFloat64 = float64(dimensionRowId)
 		} else {
-			valueAsFloat64 = value.(float64)
+			switch value.(type) {
+			case float64:
+				valueAsFloat64 = value.(float64)
+			default:
+				return nil, fmt.Errorf("Expected float32 as the type for column %s, but received %s",
+					table.ColumnIndexToName[columnIndex], reflect.TypeOf(value))
+			}
 		}
 		table.setColumnValue(rowSlice, columnIndex, valueAsFloat64)
 	}
