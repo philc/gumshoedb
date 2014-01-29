@@ -52,16 +52,34 @@ func createTableFixtureForFilterTests() *FactTable {
 	return table
 }
 
+func createTableFixtureForNullQueryTests() *FactTable {
+	schema := NewSchema()
+	schema.NumericColumns = map[string]int{"col1": TypeFloat32}
+	schema.StringColumns = map[string]int{"col2": TypeFloat32}
+	table := NewFactTable("", 10, schema)
+	insertRow(table, 1.0, "a")
+	insertRow(table, 2.0, "b")
+	insertRow(table, nil, "a")
+	insertRow(table, 1.0, nil)
+	insertRow(table, 2.0, "a")
+	insertRow(table, 3.0, "b")
+	return table
+}
+
+func runQuery(table *FactTable, query Query) []map[string]Untyped {
+	return table.InvokeQuery(&query)["results"].([]map[string]Untyped)
+}
+
 func runWithFilter(table *FactTable, filter QueryFilter) []map[string]Untyped {
 	query := createQuery()
 	query.Filters = []QueryFilter{filter}
-	return table.InvokeQuery(&query)["results"].([]map[string]Untyped)
+	return runQuery(table, query)
 }
 
 func runWithGroupBy(table *FactTable, filter QueryGrouping) []map[string]Untyped {
 	query := createQuery()
 	query.Groupings = []QueryGrouping{filter}
-	return table.InvokeQuery(&query)["results"].([]map[string]Untyped)
+	return runQuery(table, query)
 }
 
 func TestInvokeQueryFiltersRowsUsingEqualsFilter(t *testing.T) {
@@ -135,4 +153,25 @@ func TestInsertAndReadNullValues(t *testing.T) {
 	Assert(t, results[1]["col2"], Equals, nil)
 	Assert(t, results[2]["col1"], Equals, nil)
 	Assert(t, results[2]["col2"], Equals, nil)
+}
+
+func TestAggregateQueryWithNullValues(t *testing.T) {
+	table := createTableFixtureForNullQueryTests()
+	results := runQuery(table, createQuery())
+	Assert(t, results[0], HasEqualJSON, map[string]Untyped{"col1": 9, "rowCount": 6})
+}
+
+func TestFilterQueryWithNullValues(t *testing.T) {
+	table := createTableFixtureForNullQueryTests()
+	results := runWithFilter(table, QueryFilter{"lessThan", "col1", 2})
+	Assert(t, results[0], HasEqualJSON, map[string]Untyped{"col1": 2, "rowCount": 2})
+}
+
+func TestGroupByQueryWithNullValues(t *testing.T) {
+	table := createTableFixtureForNullQueryTests()
+	results := runWithGroupBy(table, QueryGrouping{"", "col2", "groupbykey"})
+	Assert(t, results, HasEqualJSON, []interface{}{
+		map[string]Untyped{"col1": 3, "groupbykey": "a", "rowCount": 3},
+		map[string]Untyped{"col1": 5, "groupbykey": "b", "rowCount": 2},
+	})
 }

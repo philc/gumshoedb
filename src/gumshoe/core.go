@@ -291,15 +291,19 @@ func (table *FactTable) normalizeRow(rowMap map[string]Untyped) (*[]byte, error)
 	return &rowSlice, nil
 }
 
+func (table *FactTable) columnIsNil(rowPtr uintptr, columnIndex int) bool {
+	nilByteOffset := table.nilByteOffset(columnIndex)
+	nilBytePtr := unsafe.Pointer(rowPtr + nilByteOffset)
+	nilBitIndex := uint(columnIndex) % 8
+	isNil := *(*uint)(nilBytePtr) & (1 << (7 - nilBitIndex))
+	return isNil > 0
+}
+
 func (table *FactTable) getColumnValue(row []byte, column int) Untyped {
 	rowPtr := uintptr(unsafe.Pointer(&row[0]))
 	columnPtr := unsafe.Pointer(rowPtr + table.ColumnIndexToOffset[column])
 
-	// Handle nil values
-	nilByteOffset := table.nilByteOffset(column)
-	nilBitIndex := uint(column) % 8
-	isNil := row[nilByteOffset] & (1 << (7 - nilBitIndex))
-	if isNil > 0 {
+	if table.columnIsNil(rowPtr, column) {
 		return nil
 	}
 
@@ -422,6 +426,11 @@ outerLoop:
 		}
 
 		if useGrouping {
+			// NOTE(dmac): For now, nil values aren't included when grouping on a column.
+			if table.columnIsNil(rowPtr, columnIndexToGroupBy) {
+				rowPtr += rowSize
+				continue
+			}
 			groupByValue := getColumnValueAsFloat64(rowPtr, groupByColumnOffset, groupByColumnType)
 			if groupByColumnTransformFn != nil {
 				groupByValue = groupByColumnTransformFn(groupByValue)
@@ -440,6 +449,11 @@ outerLoop:
 			columnIndex := columnIndices[j]
 			columnOffset := columnIndexToOffset[columnIndex]
 			columnPtr := unsafe.Pointer(rowPtr + columnOffset)
+
+			if table.columnIsNil(rowPtr, columnIndex) {
+				continue
+			}
+
 			var columnValue float64
 			columnType := columnIndexToType[columnIndex]
 			switch columnType {
@@ -595,39 +609,42 @@ func convertQueryFilterToFilterFunc(queryFilter QueryFilter, table *FactTable) F
 	switch queryFilter.Type {
 	case "greaterThan", ">":
 		f = func(row uintptr) bool {
-			columnValue := getColumnValueAsFloat64(row, columnOffset, columnType)
-			return columnValue > value
+			return !table.columnIsNil(row, columnIndex) &&
+				getColumnValueAsFloat64(row, columnOffset, columnType) > value
 		}
 	case "greaterThanOrEqualTo", ">=":
 		f = func(row uintptr) bool {
-			columnValue := getColumnValueAsFloat64(row, columnOffset, columnType)
-			return columnValue >= value
+			return !table.columnIsNil(row, columnIndex) &&
+				getColumnValueAsFloat64(row, columnOffset, columnType) >= value
 		}
 	case "lessThan", "<":
 		f = func(row uintptr) bool {
-			columnValue := getColumnValueAsFloat64(row, columnOffset, columnType)
-			return columnValue < value
+			return !table.columnIsNil(row, columnIndex) &&
+				getColumnValueAsFloat64(row, columnOffset, columnType) < value
 		}
 	case "lessThanOrEqualTo", "<=":
 		f = func(row uintptr) bool {
-			columnValue := getColumnValueAsFloat64(row, columnOffset, columnType)
-			return columnValue <= value
+			return !table.columnIsNil(row, columnIndex) &&
+				getColumnValueAsFloat64(row, columnOffset, columnType) <= value
 		}
 	case "notEqual", "!=":
 		f = func(row uintptr) bool {
-			columnValue := getColumnValueAsFloat64(row, columnOffset, columnType)
-			return columnValue != value
+			return !table.columnIsNil(row, columnIndex) &&
+				getColumnValueAsFloat64(row, columnOffset, columnType) != value
 		}
 	case "equal", "=":
 		f = func(row uintptr) bool {
-			columnValue := getColumnValueAsFloat64(row, columnOffset, columnType)
-			return columnValue == value
+			return !table.columnIsNil(row, columnIndex) &&
+				getColumnValueAsFloat64(row, columnOffset, columnType) == value
 		}
 	case "in":
 		count := len(values)
 		// TODO(philc): A hash table may be more efficient for longer lists. We should determine what that list
 		// size is and use a hash table in that case.
 		f = func(row uintptr) bool {
+			if table.columnIsNil(row, columnIndex) {
+				return false
+			}
 			columnValue := getColumnValueAsFloat64(row, columnOffset, columnType)
 			for i := 0; i < count; i++ {
 				if columnValue == values[i] {
