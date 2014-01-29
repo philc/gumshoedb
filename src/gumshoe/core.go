@@ -444,10 +444,8 @@ func getColumnValueAsFloat64(row uintptr, columnOffset uintptr, columnType int) 
 		return float64(*(*int32)(columnPtr))
 	case TypeFloat32:
 		return float64(*(*float32)(columnPtr))
-	default:
-		panic("Unrecognized column type.")
 	}
-	return 0
+	panic("Unrecognized column type.")
 }
 
 // TODO(philc): This function probably be inlined.
