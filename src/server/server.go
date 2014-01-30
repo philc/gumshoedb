@@ -132,10 +132,8 @@ func (s *Server) HandleMetricz(w http.ResponseWriter) {
 	if s.Table.Count > 0 {
 		s.Table.InsertLock.Lock()
 		defer s.Table.InsertLock.Unlock()
-		if s.Table.Count > 1 {
-			oldestRowIndex := (s.Table.NextInsertPosition - s.Table.Count + s.Table.Capacity) % s.Table.Capacity
-			metricz.OldestRow = s.Table.GetRowMaps(oldestRowIndex, oldestRowIndex+1)[0]
-		}
+		oldestRowIndex := (s.Table.NextInsertPosition - s.Table.Count + s.Table.Capacity) % s.Table.Capacity
+		metricz.OldestRow = s.Table.GetRowMaps(oldestRowIndex, oldestRowIndex+1)[0]
 		newestRowIndex := (s.Table.NextInsertPosition - 1 + s.Table.Capacity) % s.Table.Capacity
 		metricz.NewestRow = s.Table.GetRowMaps(newestRowIndex, newestRowIndex+1)[0]
 	}
