@@ -5,6 +5,9 @@ table_file_path = "db/table"
 # The amount of time between saves to disk.
 save_duration = "10s"
 
+# The maximum size of the DB
+rows = 100000
+
 numeric_columns = [
   ["clicks", "uint16"],
   ["age", "uint8"]

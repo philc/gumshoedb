@@ -7,6 +7,7 @@ import (
 )
 
 type Config struct {
+	Rows           int        `toml:rows"`
 	ListenAddr     string     `toml:"listen_addr"`
 	TableFilePath  string     `toml:"table_file_path"`
 	SaveDuration   duration   `toml:"save_duration"`
@@ -15,6 +16,9 @@ type Config struct {
 }
 
 func (c *Config) Validate() error {
+	if c.Rows <= 0 {
+		return errors.New("Must set the row count to be > 0.")
+	}
 	if len(c.NumericColumns) == 0 && len(c.StringColumns) == 0 {
 		return errors.New("Must provide at least one column in your configuration.")
 	}
