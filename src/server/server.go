@@ -103,12 +103,12 @@ func (s *Server) HandleQueryRoute(w http.ResponseWriter, r *http.Request) {
 }
 
 type Metricz struct {
-	FactTableRows          int
-	FactTableBytes         int
-	FactTableCapacityBytes int
-	DimensionTables        map[string]map[string]int
-	OldestRow              map[string]gumshoe.Untyped
-	NewestRow              map[string]gumshoe.Untyped
+	FactTableRows          int                        `json:"factTableRows"`
+	FactTableBytes         int                        `json:"factTableBytes"`
+	FactTableCapacityBytes int                        `json:"factTableCapacityBytes"`
+	DimensionTables        map[string]map[string]int  `json:"dimensionTablesj"`
+	OldestRow              map[string]gumshoe.Untyped `json:"oldestRow"`
+	NewestRow              map[string]gumshoe.Untyped `json:"newestRow"`
 }
 
 func (s *Server) HandleMetricz(w http.ResponseWriter) {
