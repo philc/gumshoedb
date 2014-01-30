@@ -175,8 +175,7 @@ func (s *Server) loadFactTable() {
 }
 
 func (s *Server) RunBackgroundSaves() {
-	for {
-		time.Sleep(s.Config.SaveDuration.Duration)
+	for _ = range time.Tick(s.Config.SaveDuration.Duration) {
 		log.Println("Saving to disk...")
 		s.Table.SaveToDisk()
 		log.Println("...done saving to disk")
