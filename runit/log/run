@@ -1,4 +1,0 @@
-#!/bin/sh
-
-mkdir -p /mnt/log/gumshoedb/
-exec svlogd -ttt /mnt/log/gumshoedb/

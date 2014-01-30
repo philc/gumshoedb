@@ -2,6 +2,3 @@
 pkg
 bin
 db/*
-/private_config.toml
-/ansible/private_hosts
-/ansible/templates/private_config.toml.j2

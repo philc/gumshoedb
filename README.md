@@ -48,13 +48,6 @@ and make changes.
 
 Gumshoedb is licensed under [the MIT license](http://www.opensource.org/licenses/mit-license.php).
 
-Deploying
-=========
-
-To deploy gumshoedb, run:
-
-    ansible-playbook ansible/gumshoedb.yml -i ansible/hosts -e 'hosts=vagrant'
-
 Implementation
 ==============
 
