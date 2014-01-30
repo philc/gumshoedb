@@ -1,6 +1,5 @@
 SUBPACKAGES=$(shell find src -mindepth 1 -maxdepth 1 -type d -exec basename {} \;)
 PLATFORM=$(shell uname)
-PRETTYBENCH=$(shell which prettybench)
 
 export GOPATH=$(PWD):$(PWD)/vendor
 
@@ -22,18 +21,10 @@ run-web: web
 	bin/gumshoe_server
 
 benchmark:
-ifeq ($(PRETTYBENCH),)
 	go test -run=NONE -bench=. gumshoe
-else
-	go test -run=NONE -bench=. gumshoe | prettybench
-endif
 
 synthetic-benchmark:
-ifeq ($(PRETTYBENCH),)
 	go test -run=NONE -bench=. synthetic
-else
-	go test -run=NONE -bench=. synthetic | prettybench
-endif
 
 fmt:
 	gofmt -s -l -w src
