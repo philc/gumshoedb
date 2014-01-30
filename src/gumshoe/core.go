@@ -172,11 +172,6 @@ func (table *FactTable) numNilBytes() int {
 	return int(math.Ceil(float64(table.ColumnCount) / 8.0))
 }
 
-// Returns the offset from the start of a row to the byte which contains the nil bit for this column.
-func (table *FactTable) nilByteOffset(column int) uintptr {
-	return uintptr(column / 8)
-}
-
 // Return a set of row maps. Useful for debugging the contents of the table.
 func (table *FactTable) GetRowMaps(start, end int) []map[string]Untyped {
 	results := make([]map[string]Untyped, 0, end-start)
@@ -292,8 +287,7 @@ func (table *FactTable) normalizeRow(rowMap map[string]Untyped) (*[]byte, error)
 }
 
 func (table *FactTable) columnIsNil(rowPtr uintptr, columnIndex int) bool {
-	nilByteOffset := table.nilByteOffset(columnIndex)
-	nilBytePtr := unsafe.Pointer(rowPtr + nilByteOffset)
+	nilBytePtr := unsafe.Pointer(rowPtr + uintptr(columnIndex/8))
 	nilBitIndex := uint(columnIndex) % 8
 	isNil := *(*uint)(nilBytePtr) & (1 << (7 - nilBitIndex))
 	return isNil > 0
@@ -329,8 +323,7 @@ func (table *FactTable) getColumnValue(row []byte, column int) Untyped {
 func (table *FactTable) setColumnValue(row []byte, column int, value Untyped) {
 	rowPtr := uintptr(unsafe.Pointer(&row[0]))
 	if value == nil {
-		nilByteOffset := table.nilByteOffset(column)
-		nilBytePtr := unsafe.Pointer(rowPtr + nilByteOffset)
+		nilBytePtr := unsafe.Pointer(rowPtr + uintptr(column/8))
 		nilBitIndex := uint(column) % 8
 		*(*uint8)(nilBytePtr) = *(*uint8)(nilBytePtr) | (1 << (7 - nilBitIndex))
 	} else {
@@ -450,12 +443,7 @@ outerLoop:
 			columnOffset := columnIndexToOffset[columnIndex]
 			columnPtr := unsafe.Pointer(rowPtr + columnOffset)
 
-			// This is an inlined call to table.columnIsNil(rowPtr, columnIndex)
-			nilByteOffset := uintptr(columnIndex / 8)
-			nilBytePtr := unsafe.Pointer(rowPtr + nilByteOffset)
-			nilBitIndex := uint(columnIndex) % 8
-			isNil := *(*uint)(nilBytePtr) & (1 << (7 - nilBitIndex))
-			if isNil > 0 {
+			if table.columnIsNil(rowPtr, columnIndex) {
 				continue
 			}
 
