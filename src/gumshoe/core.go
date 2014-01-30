@@ -450,7 +450,7 @@ outerLoop:
 			columnOffset := columnIndexToOffset[columnIndex]
 			columnPtr := unsafe.Pointer(rowPtr + columnOffset)
 
-			// This is an inlined call to table.isColumnNil(rowPtr, columnIndex)
+			// This is an inlined call to table.columnIsNil(rowPtr, columnIndex)
 			nilByteOffset := uintptr(columnIndex / 8)
 			nilBytePtr := unsafe.Pointer(rowPtr + nilByteOffset)
 			nilBitIndex := uint(columnIndex) % 8
