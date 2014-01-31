@@ -8,53 +8,7 @@ import (
 	"unsafe"
 )
 
-// This assumes a filter on column002 > 0.
-func (table *FactTable) scanInlineFilter(filters []FactTableFilterFunc, columnIndices []int,
-	groupByColumnName string, groupByColumnTransformFn func(float64) float64) []RowAggregate {
-	rowAggregate := *(new(RowAggregate))
-	rowAggregate.Sums = make([]float64, table.ColumnCount)
-	rowCount := table.Count
-	rowPtr := (*reflect.SliceHeader)(unsafe.Pointer(&table.rows)).Data
-	rowSize := uintptr(table.RowSize)
-	column1 := table.ColumnNameToIndex["column001"]
-	column1Offset := table.ColumnIndexToOffset[column1]
-	column2 := table.ColumnNameToIndex["column002"]
-	column2Offset := table.ColumnIndexToOffset[column2]
-	var int64Sum int64
-
-outerLoop:
-	for i := 0; i < rowCount; i++ {
-		// Nil check on column1
-		nilBytePtr := unsafe.Pointer(rowPtr + uintptr(0))
-		nilBitIndex := uint(1)
-		isNil := *(*uint)(nilBytePtr) & (1 << (7 - nilBitIndex))
-		if isNil > 0 {
-			continue
-		}
-
-		// Apply filters
-		column2Ptr := unsafe.Pointer(rowPtr + column2Offset)
-		column2Value := *(*int32)(column2Ptr)
-		if column2Value <= 0 {
-			rowPtr += rowSize
-			continue outerLoop
-		}
-
-		column1Ptr := unsafe.Pointer(rowPtr + column1Offset)
-		column1Value := *(*int32)(column1Ptr)
-		int64Sum += int64(column1Value)
-
-		rowAggregate.Count++
-		rowPtr += rowSize
-	}
-	rowAggregate.Sums[column1] = float64(int64Sum)
-
-	results := []RowAggregate{}
-	results = append(results, rowAggregate)
-	return results
-}
-
-// This assumes a sum aggregate on column001.
+// This performs a sum on column001.
 func (table *FactTable) scanInlineAggregate(filters []FactTableFilterFunc, columnIndices []int,
 	groupByColumnName string, groupByColumnTransformFn func(float64) float64) []RowAggregate {
 	rowAggregate := *(new(RowAggregate))
@@ -70,9 +24,10 @@ func (table *FactTable) scanInlineAggregate(filters []FactTableFilterFunc, colum
 	for i := 0; i < rowCount; i++ {
 		// Nil check on column1
 		nilBytePtr := unsafe.Pointer(rowPtr + uintptr(0))
-		nilBitIndex := uint(1)
+		nilBitIndex := uint(column1)
 		isNil := *(*uint)(nilBytePtr) & (1 << (7 - nilBitIndex))
 		if isNil > 0 {
+			rowPtr += rowSize
 			continue
 		}
 		column1Ptr := unsafe.Pointer(rowPtr + column1Offset)
@@ -89,7 +44,60 @@ func (table *FactTable) scanInlineAggregate(filters []FactTableFilterFunc, colum
 	return results
 }
 
-// This implements a sum over column001, and a group by over column003.
+// This performs a sum on column001, and a filter on column002 > 0.
+func (table *FactTable) scanInlineFilter(filters []FactTableFilterFunc, columnIndices []int,
+	groupByColumnName string, groupByColumnTransformFn func(float64) float64) []RowAggregate {
+	rowAggregate := *(new(RowAggregate))
+	rowAggregate.Sums = make([]float64, table.ColumnCount)
+	rowCount := table.Count
+	rowPtr := (*reflect.SliceHeader)(unsafe.Pointer(&table.rows)).Data
+	rowSize := uintptr(table.RowSize)
+	column1 := table.ColumnNameToIndex["column001"]
+	column1Offset := table.ColumnIndexToOffset[column1]
+	column2 := table.ColumnNameToIndex["column002"]
+	column2Offset := table.ColumnIndexToOffset[column2]
+	var int64Sum int64
+
+outerLoop:
+	for i := 0; i < rowCount; i++ {
+		// Apply filters
+		nilBytePtr := unsafe.Pointer(rowPtr + uintptr(0))
+		nilBitIndex := uint(column2)
+		isNil := *(*uint)(nilBytePtr) & (1 << (7 - nilBitIndex))
+		if isNil > 0 {
+			rowPtr += rowSize
+			continue
+		}
+		column2Ptr := unsafe.Pointer(rowPtr + column2Offset)
+		column2Value := *(*int32)(column2Ptr)
+		if column2Value <= 0 {
+			rowPtr += rowSize
+			continue outerLoop
+		}
+
+		// Nil check on column1
+		nilBytePtr = unsafe.Pointer(rowPtr + uintptr(0))
+		nilBitIndex = uint(column1)
+		isNil = *(*uint)(nilBytePtr) & (1 << (7 - nilBitIndex))
+		if isNil > 0 {
+			rowPtr += rowSize
+			continue
+		}
+		column1Ptr := unsafe.Pointer(rowPtr + column1Offset)
+		column1Value := *(*int32)(column1Ptr)
+		int64Sum += int64(column1Value)
+
+		rowAggregate.Count++
+		rowPtr += rowSize
+	}
+	rowAggregate.Sums[column1] = float64(int64Sum)
+
+	results := []RowAggregate{}
+	results = append(results, rowAggregate)
+	return results
+}
+
+// This performs a sum of column001, and a group by column003.
 func (table *FactTable) scanInlineGroupBy(filters []FactTableFilterFunc, columnIndices []int,
 	groupByColumnName string, groupByColumnTransformFn func(float64) float64) []RowAggregate {
 	rowAggregatesMap := make(map[float64]*RowAggregate)
