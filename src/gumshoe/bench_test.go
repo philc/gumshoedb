@@ -94,10 +94,17 @@ func BenchmarkGroupByQuery(b *testing.B) {
 		panic(err)
 	}
 	b.ResetTimer()
-	// TODO(philc): Check this result.
+	var result map[string]gumshoe.Untyped
 	for i := 0; i < b.N; i++ {
-		factTable.InvokeQuery(query)
+		result = factTable.InvokeQuery(query)
 	}
+	groupCount := 10
+	expectedResult := make([]map[string]gumshoe.Untyped, groupCount)
+	for i, _ := range expectedResult {
+		expectedResult[i] = map[string]gumshoe.Untyped{
+			"column001": BenchmarkRows / groupCount, "column003": i, "rowCount": BenchmarkRows / groupCount}
+	}
+	checkResult(b, result["results"], expectedResult)
 }
 
 // A query which groups by a column that is transformed using a time transform function.
