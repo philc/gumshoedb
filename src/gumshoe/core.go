@@ -13,6 +13,8 @@ import (
 	mmap "github.com/edsrzf/mmap-go"
 )
 
+const useInlineScanFunctions = true
+
 // Note that the 64 bit types are not supported in schemas at the moment. This is because we serialize column
 // values to JSON as float64 and we accumulate values in the scan loop as float64s; if columns themselves are
 // > 32 bit, we could corrupt the value when casting it to a float64.
@@ -687,7 +689,19 @@ func (table *FactTable) InvokeQuery(query *Query) map[string]Untyped {
 		filterFuncs = append(filterFuncs, convertQueryFilterToFilterFunc(queryFilter, table))
 	}
 
-	results := table.scan(filterFuncs, columnIndices, groupByColumn, groupByTransformFunc)
+	var results []RowAggregate
+	if useInlineScanFunctions {
+		if len(filterFuncs) > 0 {
+			results = table.scanInlineFilter(filterFuncs, columnIndices, groupByColumn, groupByTransformFunc)
+		} else if len(query.Groupings) > 0 {
+			results = table.scanInlineGroupBy(filterFuncs, columnIndices, groupByColumn, groupByTransformFunc)
+		} else {
+			results = table.scanInlineAggregate(filterFuncs, columnIndices, groupByColumn, groupByTransformFunc)
+		}
+
+	} else {
+		results = table.scan(filterFuncs, columnIndices, groupByColumn, groupByTransformFunc)
+	}
 	jsonResultRows := table.mapRowAggregatesToJSONResultsFormat(query, results)
 	return map[string]Untyped{
 		"results": jsonResultRows,
