@@ -106,7 +106,7 @@ type Metricz struct {
 	FactTableRows          int                        `json:"factTableRows"`
 	FactTableBytes         int                        `json:"factTableBytes"`
 	FactTableCapacityBytes int                        `json:"factTableCapacityBytes"`
-	DimensionTables        map[string]map[string]int  `json:"dimensionTablesj"`
+	DimensionTables        map[string]map[string]int  `json:"dimensionTables"`
 	OldestRow              map[string]gumshoe.Untyped `json:"oldestRow"`
 	NewestRow              map[string]gumshoe.Untyped `json:"newestRow"`
 }
