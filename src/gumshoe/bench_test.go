@@ -89,7 +89,7 @@ func BenchmarkFilterQuery(b *testing.B) {
 func BenchmarkGroupByQuery(b *testing.B) {
 	setBytes(b)
 	// This creates 10 groupings.
-	query := createQuery([]gumshoe.QueryGrouping{{"", "column003", "column003"}}, nil)
+	query := createQuery([]gumshoe.QueryGrouping{{"", "column002", "column002"}}, nil)
 	if err := gumshoe.ValidateQuery(factTable, query); err != nil {
 		panic(err)
 	}
@@ -98,11 +98,11 @@ func BenchmarkGroupByQuery(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		result = factTable.InvokeQuery(query)
 	}
-	groupCount := 10
+	groupCount := 2
 	expectedResult := make([]map[string]gumshoe.Untyped, groupCount)
 	for i, _ := range expectedResult {
 		expectedResult[i] = map[string]gumshoe.Untyped{
-			"column001": BenchmarkRows / groupCount, "column003": i, "rowCount": BenchmarkRows / groupCount}
+			"column001": BenchmarkRows / groupCount, "column002": i, "rowCount": BenchmarkRows / groupCount}
 	}
 	checkResult(b, result["results"], expectedResult)
 }
@@ -138,7 +138,8 @@ func createQueryAggregates(columns []string) []gumshoe.QueryAggregate {
 	return queryAggregates
 }
 
-func setupFactTable() (table *gumshoe.FactTable) { //, dbTempDir string) {
+// The test fact table is constructed to represent a realistic schema.
+func setupFactTable() (table *gumshoe.FactTable) {
 	columnNames := make([]string, BenchmarkColumns)
 	for i := range columnNames {
 		// The columns are named columni where i has up to 2 leading zeros.
@@ -150,6 +151,8 @@ func setupFactTable() (table *gumshoe.FactTable) { //, dbTempDir string) {
 	for _, column := range columnNames {
 		schema.NumericColumns[column] = gumshoe.TypeInt32
 	}
+	// We use the 3rd column for grouping operations.
+	schema.NumericColumns[columnNames[2]] = gumshoe.TypeUint16
 	table = gumshoe.NewFactTable(tempDir+"/db", BenchmarkRows, schema)
 	populateTableWithTestingData(table)
 	return table
