@@ -245,21 +245,55 @@ func BenchmarkSumUsingInlineFilterFn(b *testing.B) {
 	checkExpectedSum(b, sum)
 }
 
-// TODO(philc): Re-enable this.
-// func SumGroupBy() int {
-// 	sum := 0
-// 	l := len(input)
-// 	// countGroup := make(map[int]int)
-// 	countGroup := make([]int, Cols)
-// 	for i := 0; i < l; i += 8 {
-// 		row := input[i]
-// 		countGroup[i % 5] += int(row[0])
-// 	}
-// 	for _, v := range countGroup {
-// 		sum += v
-// 	}
-// 	return sum
-// }
+func BenchmarkSumGroupByUsingHashMap(b *testing.B) {
+	matrix := createSliceMatrix()
+	groupByColumn := 1
+	var groups map[Cell]SumType
+	b.ResetTimer()
+	for n := 0; n < b.N; n++ {
+		groups = map[Cell]SumType{}
+		for _, row := range matrix {
+			groupByValue := row[groupByColumn]
+			// This if statement isn't necessary in this benchmark, but it represents what we'll need to do in a
+			// real implementation where the value from the map can be null.
+			if _, exists := groups[groupByValue]; exists {
+				groups[groupByValue] += SumType(row[0])
+			} else {
+				groups[groupByValue] = SumType(row[0])
+			}
+		}
+	}
+	b.StopTimer()
+	setBytes(b, RowSize)
+	sum := SumType(0)
+	for _, v := range groups {
+		sum += v
+	}
+	checkExpectedSum(b, sum)
+}
+
+// This implementation requires knowing the cardinality of the group-by value ahead of time.
+func BenchmarkSumGroupByUsingVector(b *testing.B) {
+	matrix := createSliceMatrix()
+	groupByColumn := 1
+	groupByCardinality := 10
+	var groups []SumType
+	b.ResetTimer()
+	for n := 0; n < b.N; n++ {
+		groups = make([]SumType, groupByCardinality)
+		for _, row := range matrix {
+			groupByValue := row[groupByColumn]
+			groups[groupByValue] += SumType(row[0])
+		}
+	}
+	b.StopTimer()
+	setBytes(b, RowSize)
+	sum := SumType(0)
+	for _, v := range groups {
+		sum += v
+	}
+	checkExpectedSum(b, sum)
+}
 
 func createByteMatrix() unsafe.Pointer {
 	matrix := createArrayMatrix()
@@ -325,6 +359,8 @@ func createSliceMatrix() []*[Cols]Cell {
 		for j := range matrix[i] {
 			matrix[i][j] = Cell(i)
 		}
+		// Use column 1 as the "group by" column in our "group by" benchmarks.
+		matrix[i][1] = Cell(i % 10)
 	}
 	return matrix
 }
