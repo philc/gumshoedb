@@ -53,7 +53,7 @@ func NewSchema() *Schema {
 type FactTable struct {
 	// We serialize this struct using JSON. The unexported fields are fields we don't want to serialize.
 	rows     []byte
-	FilePath string // Path to this table on disk, where we will periodically snapshot it to.
+	FilePath string `json:"-"` // Path to this table on disk, where we will periodically snapshot it to.
 	// TODO(caleb): This is not enough. Reads still race with writes. We need to fix this, possibly by removing
 	// the circular writes and instead persisting historic chunks to disk (or deleting them) and allocating
 	// fresh tables.
