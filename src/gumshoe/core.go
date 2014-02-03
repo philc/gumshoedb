@@ -387,15 +387,43 @@ func (table *DimensionTable) addRow(rowValue string) int32 {
 	return nextId
 }
 
-// Scans all rows in the table, aggregating columns, filtering and grouping rows.
-// This logic is performance critical.
-// TODO(philc): make the groupByColumnName parameter be an integer, for consistency
+type GroupingParams struct {
+	UseGrouping      bool
+	ColumnIndex      int
+	TransformFn      func(float64) float64
+	KnownCardinality bool
+	MaxValue         int
+	// We assume the minValue is zero.
+}
+
+// Scans all rows in the table, aggregates columns, filters and groups rows. This code is performance
+// critical.
 func (table *FactTable) scan(filters []FactTableFilterFunc, columnIndices []int,
-	groupByColumnName string, groupByColumnTransformFn func(float64) float64) []RowAggregate {
-	columnIndexToGroupBy, useGrouping := table.ColumnNameToIndex[groupByColumnName]
+	groupingParams GroupingParams) []RowAggregate {
+	var useGrouping bool
+	var groupedAggregatesMap map[float64]*RowAggregate
+	var groupedAggregatesSlice []RowAggregate
+	var groupByColumnOffset uintptr
+	var groupByColumnType int
+	var groupByColumnIndex int
+	var groupByColumnTransformFn func(float64) float64
+	var useSliceForGrouping bool
+
+	if useGrouping = groupingParams.UseGrouping; useGrouping {
+		if groupingParams.KnownCardinality {
+			useSliceForGrouping = true
+			groupedAggregatesSlice = make([]RowAggregate, groupingParams.MaxValue)
+		} else {
+			groupedAggregatesMap = make(map[float64]*RowAggregate)
+		}
+		groupByColumnIndex = groupingParams.ColumnIndex
+		groupByColumnOffset = table.ColumnIndexToOffset[groupingParams.ColumnIndex]
+		groupByColumnType = table.ColumnIndexToType[groupingParams.ColumnIndex]
+		groupByColumnTransformFn = groupingParams.TransformFn
+	}
+
 	// This maps the values of the group-by column => RowAggregate.
 	// Due to laziness, only one level of grouping is currently supported.
-	rowAggregatesMap := make(map[float64]*RowAggregate)
 	// When the query has no group-by clause, we accumulate results into a single RowAggregate.
 	rowAggregate := new(RowAggregate)
 	rowAggregate.Sums = make([]float64, table.ColumnCount)
@@ -404,8 +432,6 @@ func (table *FactTable) scan(filters []FactTableFilterFunc, columnIndices []int,
 	filterCount := len(filters)
 	rowPtr := (*reflect.SliceHeader)(unsafe.Pointer(&table.rows)).Data
 	rowSize := uintptr(table.RowSize)
-	groupByColumnOffset := table.ColumnIndexToOffset[columnIndexToGroupBy]
-	groupByColumnType := table.ColumnIndexToType[columnIndexToGroupBy]
 	columnIndexToOffset := table.ColumnIndexToOffset
 	columnIndexToType := table.ColumnIndexToType
 
@@ -420,21 +446,31 @@ outerLoop:
 
 		if useGrouping {
 			// NOTE(dmac): For now, nil values aren't included when grouping on a column.
-			if table.columnIsNil(rowPtr, columnIndexToGroupBy) {
+			if table.columnIsNil(rowPtr, groupByColumnIndex) {
 				rowPtr += rowSize
 				continue
 			}
+			// TODO(philc): Use a type switch here.
 			groupByValue := getColumnValueAsFloat64(rowPtr, groupByColumnOffset, groupByColumnType)
 			if groupByColumnTransformFn != nil {
 				groupByValue = groupByColumnTransformFn(groupByValue)
 			}
-			var found bool
-			rowAggregate, found = rowAggregatesMap[groupByValue]
-			if !found {
-				rowAggregate = new(RowAggregate)
-				rowAggregate.Sums = make([]float64, table.ColumnCount)
-				(*rowAggregate).GroupByValue = groupByValue
-				rowAggregatesMap[groupByValue] = rowAggregate
+			if useSliceForGrouping {
+				rowAggregate = &groupedAggregatesSlice[int(groupByValue)]
+				// If the RowAggregate has never been initialized, initialize it.
+				if len(rowAggregate.Sums) == 0 {
+					*(&rowAggregate.Sums) = make([]float64, table.ColumnCount)
+					rowAggregate.GroupByValue = groupByValue
+				}
+			} else {
+				var found bool
+				rowAggregate, found = groupedAggregatesMap[groupByValue]
+				if !found {
+					rowAggregate = new(RowAggregate)
+					rowAggregate.Sums = make([]float64, table.ColumnCount)
+					(*rowAggregate).GroupByValue = groupByValue
+					groupedAggregatesMap[groupByValue] = rowAggregate
+				}
 			}
 		}
 
@@ -473,8 +509,17 @@ outerLoop:
 
 	results := []RowAggregate{}
 	if useGrouping {
-		for _, value := range rowAggregatesMap {
-			results = append(results, *value)
+		if useSliceForGrouping {
+			// Remove empty, unused rows from the grouping vector.
+			for _, value := range groupedAggregatesSlice {
+				if value.Count > 0 {
+					results = append(results, value)
+				}
+			}
+		} else {
+			for _, value := range groupedAggregatesMap {
+				results = append(results, *value)
+			}
 		}
 	} else {
 		results = append(results, *rowAggregate)
@@ -671,23 +716,35 @@ func convertTimeTransformToFunc(transformFunctionName string) func(float64) floa
 
 func (table *FactTable) InvokeQuery(query *Query) map[string]Untyped {
 	columnIndices := table.getColumnIndicesFromQuery(query)
-	var groupByColumn string
-	var groupByTransformFunc func(float64) float64
+	var groupingParams GroupingParams
 	// NOTE(philc): For now, only support one level of grouping. We intend to support multiple levels.
 	if len(query.Groupings) > 0 {
 		grouping := query.Groupings[0]
-		groupByColumn = grouping.Column
+		groupingParams = GroupingParams{
+			UseGrouping: true,
+			ColumnIndex: table.ColumnNameToIndex[grouping.Column],
+		}
+
+		// Only support computing the max value of 8 and 16 bit unsigned types, since that set of values
+		// can efficiently be mapped to array indices for the purposes of grouping.
+		switch table.ColumnIndexToType[groupingParams.ColumnIndex] {
+		case TypeUint8:
+			groupingParams.KnownCardinality = true
+			groupingParams.MaxValue = int(math.Pow(2, 8))
+		case TypeUint16:
+			groupingParams.KnownCardinality = true
+			groupingParams.MaxValue = int(math.Pow(2, 16))
+		}
 		if grouping.TimeTransform != "" {
-			groupByTransformFunc = convertTimeTransformToFunc(grouping.TimeTransform)
+			groupingParams.TransformFn = convertTimeTransformToFunc(grouping.TimeTransform)
 		}
 	}
-
 	filterFuncs := make([]FactTableFilterFunc, 0, len(query.Filters))
 	for _, queryFilter := range query.Filters {
 		filterFuncs = append(filterFuncs, convertQueryFilterToFilterFunc(queryFilter, table))
 	}
 
-	results := table.scan(filterFuncs, columnIndices, groupByColumn, groupByTransformFunc)
+	results := table.scan(filterFuncs, columnIndices, groupingParams)
 	jsonResultRows := table.mapRowAggregatesToJSONResultsFormat(query, results)
 	return map[string]Untyped{
 		"results": jsonResultRows,
