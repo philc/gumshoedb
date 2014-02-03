@@ -11,7 +11,9 @@ import (
 	"math"
 	"net/http"
 	"os"
+	"os/signal"
 	"runtime"
+	"runtime/pprof"
 	"time"
 	"unsafe"
 
@@ -211,6 +213,8 @@ func (s *Server) ListenAndServe() error {
 }
 
 func main() {
+	cpuProfileFile := flag.String("cpuprofile", "", "File to output profiling information to")
+
 	flag.Parse()
 	// Set configuration defaults
 	config := &Config{
@@ -227,6 +231,20 @@ func main() {
 	// Use all available cores for servicing requests in parallel.
 	if os.Getenv("GOMAXPROCS") == "" {
 		runtime.GOMAXPROCS(runtime.NumCPU())
+	}
+
+	if cpuProfileFile != nil {
+		file, _ := os.Create(*cpuProfileFile)
+		log.Println("Profiling enabled, with results written to", *cpuProfileFile)
+		pprof.StartCPUProfile(file)
+		// Capture Ctrl+C and cease profiling.
+		c := make(chan os.Signal, 1)
+		signal.Notify(c, os.Interrupt)
+		go func() {
+			<-c
+			pprof.StopCPUProfile()
+			os.Exit(1)
+		}()
 	}
 
 	server := NewServer(config)
