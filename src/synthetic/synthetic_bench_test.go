@@ -256,7 +256,7 @@ func BenchmarkSumGroupByUsingHashMap(b *testing.B) {
 			groupByValue := row[groupByColumn]
 			// This if statement isn't necessary in this benchmark, but it represents what we'll need to do in a
 			// real implementation where the value from the map can be null.
-			if _, exists := groups[groupByValue]; exists {
+			if _, ok := groups[groupByValue]; ok {
 				groups[groupByValue] += SumType(row[0])
 			} else {
 				groups[groupByValue] = SumType(row[0])

@@ -218,8 +218,8 @@ func (table *FactTable) DenormalizeRow(row []byte) map[string]Untyped {
 func (table *FactTable) convertRowMapToRowArray(rowMap map[string]Untyped) ([]Untyped, error) {
 	result := make([]Untyped, table.ColumnCount)
 	for columnName, value := range rowMap {
-		columnIndex, found := table.ColumnNameToIndex[columnName]
-		if !found {
+		columnIndex, ok := table.ColumnNameToIndex[columnName]
+		if !ok {
 			return nil, fmt.Errorf("Unrecognized column name: %s", columnName)
 		}
 		result[columnIndex] = value
@@ -463,9 +463,9 @@ outerLoop:
 					rowAggregate.GroupByValue = groupByValue
 				}
 			} else {
-				var found bool
-				rowAggregate, found = groupedAggregatesMap[groupByValue]
-				if !found {
+				var ok bool
+				rowAggregate, ok = groupedAggregatesMap[groupByValue]
+				if !ok {
 					rowAggregate = new(RowAggregate)
 					rowAggregate.Sums = make([]float64, table.ColumnCount)
 					(*rowAggregate).GroupByValue = groupByValue
