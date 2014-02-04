@@ -277,7 +277,7 @@ func (table *FactTable) normalizeRow(rowMap map[string]Untyped) (*[]byte, error)
 			case float64:
 				valueAsFloat64 = value.(float64)
 			default:
-				return nil, fmt.Errorf("Expected float32 as the type for column %s, but received %s",
+				return nil, fmt.Errorf("Expected float64 as the type for column %s, but received %s",
 					table.ColumnIndexToName[columnIndex], reflect.TypeOf(value))
 			}
 		}
