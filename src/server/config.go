@@ -7,7 +7,7 @@ import (
 )
 
 type Config struct {
-	Rows           int        `toml:rows"`
+	Rows           int        `toml:"rows"`
 	ListenAddr     string     `toml:"listen_addr"`
 	TableFilePath  string     `toml:"table_file_path"`
 	SaveDuration   duration   `toml:"save_duration"`
