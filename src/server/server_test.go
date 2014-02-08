@@ -4,10 +4,12 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"config"
 )
 
 func TestSanity(t *testing.T) {
-	config := &Config{TableFilePath: "", NumericColumns: [][]string{{"col1", "uint8"}}}
+	config := &config.Config{TableFilePath: "", NumericColumns: [][]string{{"col1", "uint8"}}}
 	server := httptest.NewServer(NewServer(config))
 	defer server.Close()
 	resp, err := http.Get(server.URL + "/")

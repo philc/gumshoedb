@@ -1,16 +1,17 @@
-package main
+package config
 
 import (
 	"errors"
-	"gumshoe"
 	"time"
+
+	"gumshoe"
 )
 
 type Config struct {
 	Rows           int        `toml:"rows"`
 	ListenAddr     string     `toml:"listen_addr"`
 	TableFilePath  string     `toml:"table_file_path"`
-	SaveDuration   duration   `toml:"save_duration"`
+	SaveDuration   Duration   `toml:"save_duration"`
 	NumericColumns [][]string `toml:"numeric_columns"`
 	StringColumns  [][]string `toml:"string_columns"`
 }
@@ -25,7 +26,7 @@ func (c *Config) Validate() error {
 	return nil
 }
 
-type duration struct {
+type Duration struct {
 	time.Duration
 }
 
@@ -51,7 +52,7 @@ func (c *Config) ToSchema() *gumshoe.Schema {
 	return schema
 }
 
-func (d *duration) UnmarshalText(text []byte) error {
+func (d *Duration) UnmarshalText(text []byte) error {
 	var err error
 	d.Duration, err = time.ParseDuration(string(text))
 	return err

@@ -17,6 +17,7 @@ import (
 	"time"
 	"unsafe"
 
+	"config"
 	"gumshoe"
 
 	"github.com/BurntSushi/toml"
@@ -27,7 +28,7 @@ var configFile = flag.String("config", "config.toml", "Configuration file to use
 
 type Server struct {
 	http.Handler
-	Config *Config
+	Config *config.Config
 	Table  *gumshoe.FactTable
 }
 
@@ -185,7 +186,7 @@ func (s *Server) RunBackgroundSaves() {
 }
 
 // NewServer initializes a Server with a fact table from disk and sets up its routes.
-func NewServer(config *Config) *Server {
+func NewServer(config *config.Config) *Server {
 	s := &Server{Config: config}
 
 	m := martini.Classic()
@@ -217,9 +218,9 @@ func main() {
 
 	flag.Parse()
 	// Set configuration defaults
-	config := &Config{
+	config := &config.Config{
 		TableFilePath: "db/table",
-		SaveDuration:  duration{10 * time.Second},
+		SaveDuration:  config.Duration{10 * time.Second},
 	}
 	if _, err := toml.DecodeFile(*configFile, config); err != nil {
 		log.Fatal(err)
