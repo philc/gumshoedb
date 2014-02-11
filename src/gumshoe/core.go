@@ -91,6 +91,8 @@ func NewDimensionTable(name string) *DimensionTable {
 	}
 }
 
+type RowMap map[string]Untyped
+
 type RowAggregate struct {
 	GroupByValue float64
 	Sums         []float64
@@ -173,8 +175,8 @@ func (table *FactTable) numNilBytes() int {
 }
 
 // Return a set of row maps. Useful for debugging the contents of the table.
-func (table *FactTable) GetRowMaps(start, end int) []map[string]Untyped {
-	results := make([]map[string]Untyped, 0, end-start)
+func (table *FactTable) GetRowMaps(start, end int) []RowMap {
+	results := make([]RowMap, 0, end-start)
 	if start > end {
 		panic("Invalid row indices passed to GetRowMaps")
 	}
@@ -201,8 +203,8 @@ func (table *FactTable) denormalizeColumnValue(value Untyped, columnIndex int) U
 // Takes a normalized row vector and returns a map consisting of column names and values pulled from the
 // dimension tables.
 // e.g. [0, 1, 17] => {"country": "Japan", "browser": "Chrome", "age": 17}
-func (table *FactTable) DenormalizeRow(row []byte) map[string]Untyped {
-	result := make(map[string]Untyped)
+func (table *FactTable) DenormalizeRow(row []byte) RowMap {
+	result := make(RowMap)
 	for i := 0; i < table.ColumnCount; i++ {
 		name := table.ColumnIndexToName[i]
 		value := table.getColumnValue(row, i)
@@ -215,7 +217,7 @@ func (table *FactTable) DenormalizeRow(row []byte) map[string]Untyped {
 // position according to the table's schema, e.g.:
 // e.g. {"country": "Japan", "browser": "Chrome", "age": 17} => ["Chrome", 17, "Japan"]
 // Returns an error if there are unrecognized columns, or if a column is missing.
-func (table *FactTable) convertRowMapToRowArray(rowMap map[string]Untyped) ([]Untyped, error) {
+func (table *FactTable) convertRowMapToRowArray(rowMap RowMap) ([]Untyped, error) {
 	result := make([]Untyped, table.ColumnCount)
 	for columnName, value := range rowMap {
 		columnIndex, ok := table.ColumnNameToIndex[columnName]
@@ -248,7 +250,7 @@ func (table *FactTable) columnUsesDimensionTable(columnIndex int) bool {
 // Note that all numeric values are assumed to be float64 (this is what Go's JSON unmarshaller produces).
 // e.g. {"country": "Japan", "browser": "Chrome", "age": 17} => [0, 1, 17]
 // TODO(philc): Make this return []byte
-func (table *FactTable) normalizeRow(rowMap map[string]Untyped) (*[]byte, error) {
+func (table *FactTable) normalizeRow(rowMap RowMap) (*[]byte, error) {
 	rowAsArray, err := table.convertRowMapToRowArray(rowMap)
 	if err != nil {
 		return nil, err
@@ -366,7 +368,7 @@ func (table *FactTable) insertNormalizedRow(row *[]byte) {
 }
 
 // Inserts the given rows into the table. Returns an error if one of the rows contains an unrecognized column.
-func (table *FactTable) InsertRowMaps(rows []map[string]Untyped) error {
+func (table *FactTable) InsertRowMaps(rows []RowMap) error {
 	table.InsertLock.Lock()
 	defer table.InsertLock.Unlock()
 

@@ -159,10 +159,10 @@ func setupFactTable() (table *gumshoe.FactTable) {
 }
 
 func populateTableWithTestingData(table *gumshoe.FactTable) {
-	rows := make([]map[string]gumshoe.Untyped, BenchmarkRows)
+	rows := make([]gumshoe.RowMap, BenchmarkRows)
 
 	for i := range rows {
-		row := make(map[string]gumshoe.Untyped, table.ColumnCount)
+		row := make(gumshoe.RowMap, table.ColumnCount)
 		for j := 3; j < table.ColumnCount; j++ {
 			row[table.ColumnIndexToName[j]] = float64(i % 10)
 		}

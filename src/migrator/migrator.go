@@ -51,7 +51,7 @@ func copyOldDataToNewTable(oldTable *gumshoe.FactTable, newTable *gumshoe.FactTa
 	log.Println("Deleting columns:", deletedColumnNames)
 	for _, row := range oldTable.GetRowMaps(0, oldTable.Count) {
 		prepareRow(row, newColumnNames, deletedColumnNames)
-		err := newTable.InsertRowMaps([]map[string]gumshoe.Untyped{row})
+		err := newTable.InsertRowMaps([]gumshoe.RowMap{row})
 		if err != nil {
 			panic(err)
 		}
@@ -81,7 +81,7 @@ func getDeletedColumnNames(oldTable *gumshoe.FactTable, newTable *gumshoe.FactTa
 	return deletedColumnNames
 }
 
-func prepareRow(row map[string]gumshoe.Untyped, newColumnNames []string, deletedColumnNames []string) {
+func prepareRow(row gumshoe.RowMap, newColumnNames []string, deletedColumnNames []string) {
 	for _, newColumnName := range newColumnNames {
 		row[newColumnName] = nil
 	}

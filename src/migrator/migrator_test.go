@@ -45,8 +45,8 @@ func TestMigrationAddColumn(t *testing.T) {
 
 	oldTableFilePath := filepath.Join(tempDir, "old")
 	oldTable := createTableWithNumericColumns(oldTableFilePath, map[string]int{"col1": gumshoe.TypeUint8})
-	oldRowMap := map[string]gumshoe.Untyped{"col1": 1.0}
-	oldTable.InsertRowMaps([]map[string]gumshoe.Untyped{oldRowMap})
+	oldRowMap := gumshoe.RowMap{"col1": 1.0}
+	oldTable.InsertRowMaps([]gumshoe.RowMap{oldRowMap})
 
 	newTableFilePath := filepath.Join(tempDir, "new")
 	newTable := createTableWithNumericColumns(newTableFilePath,
@@ -55,7 +55,7 @@ func TestMigrationAddColumn(t *testing.T) {
 	copyOldDataToNewTable(oldTable, newTable)
 
 	newTable, err = gumshoe.LoadFactTableFromDisk(newTableFilePath)
-	newRowMap := map[string]gumshoe.Untyped{"col1": 1.0, "col2": nil}
+	newRowMap := gumshoe.RowMap{"col1": 1.0, "col2": nil}
 	Assert(t, err, IsNil)
 	Assert(t, newRowMap, HasEqualJSON, newTable.GetRowMaps(0, 1)[0])
 }
@@ -70,8 +70,8 @@ func TestMigrationDeleteColumn(t *testing.T) {
 	oldTableFilePath := filepath.Join(tempDir, "old")
 	oldTable := createTableWithNumericColumns(oldTableFilePath,
 		map[string]int{"col1": gumshoe.TypeUint8, "col2": gumshoe.TypeUint8})
-	oldRowMap := map[string]gumshoe.Untyped{"col1": 1.0, "col2": 2.0}
-	oldTable.InsertRowMaps([]map[string]gumshoe.Untyped{oldRowMap})
+	oldRowMap := gumshoe.RowMap{"col1": 1.0, "col2": 2.0}
+	oldTable.InsertRowMaps([]gumshoe.RowMap{oldRowMap})
 
 	newTableFilePath := filepath.Join(tempDir, "new")
 	newTable := createTableWithNumericColumns(newTableFilePath, map[string]int{"col2": gumshoe.TypeUint8})
@@ -79,7 +79,7 @@ func TestMigrationDeleteColumn(t *testing.T) {
 	copyOldDataToNewTable(oldTable, newTable)
 
 	newTable, err = gumshoe.LoadFactTableFromDisk(newTableFilePath)
-	newRowMap := map[string]gumshoe.Untyped{"col2": 2.0}
+	newRowMap := gumshoe.RowMap{"col2": 2.0}
 	Assert(t, err, IsNil)
 	Assert(t, newRowMap, HasEqualJSON, newTable.GetRowMaps(0, 1)[0])
 }

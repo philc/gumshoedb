@@ -32,7 +32,7 @@ func tableFixture() *FactTable {
 }
 
 func insertRow(table *FactTable, column1Value Untyped, column2Value Untyped) {
-	table.InsertRowMaps([]map[string]Untyped{{"col1": column1Value, "col2": column2Value}})
+	table.InsertRowMaps([]RowMap{{"col1": column1Value, "col2": column2Value}})
 }
 
 func createQuery() Query {
@@ -41,7 +41,7 @@ func createQuery() Query {
 }
 
 func TestConvertRowMapToRowArrayThrowsErrorForUnrecognizedColumn(t *testing.T) {
-	_, err := tableFixture().convertRowMapToRowArray(map[string]Untyped{"col1": 5, "unknownColumn": 10})
+	_, err := tableFixture().convertRowMapToRowArray(RowMap{"col1": 5, "unknownColumn": 10})
 	Assert(t, err, NotNil)
 }
 
