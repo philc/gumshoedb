@@ -45,6 +45,9 @@ func ValidateQuery(table *FactTable, query *Query) error {
 		if !isValidColumn(table, queryAggregate.Column) {
 			return fmt.Errorf("Unrecognized column name in aggregates clause: %s", queryAggregate.Column)
 		}
+		if queryAggregate.Type != "sum" && queryAggregate.Type != "average" {
+			return fmt.Errorf("Unrecognized aggregate type: %s", queryAggregate.Type)
+		}
 	}
 	for _, grouping := range query.Groupings {
 		if !isValidColumn(table, grouping.Column) {
