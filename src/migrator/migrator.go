@@ -49,9 +49,19 @@ func copyOldDataToNewTable(oldTable *gumshoe.FactTable, newTable *gumshoe.FactTa
 	deletedColumnNames := getDeletedColumnNames(oldTable, newTable)
 	log.Println("Adding columns:", newColumnNames)
 	log.Println("Deleting columns:", deletedColumnNames)
-	for _, row := range oldTable.GetRowMaps(0, oldTable.Count) {
-		prepareRow(row, newColumnNames, deletedColumnNames)
-		err := newTable.InsertRowMaps([]gumshoe.RowMap{row})
+	chunkSize := 1000000
+	if chunkSize > oldTable.Count {
+		chunkSize = oldTable.Count
+	}
+	for start := 0; start <= oldTable.Count; start += chunkSize {
+		end := start + chunkSize
+		if end > oldTable.Count {
+			end = oldTable.Count
+		}
+		log.Printf("Migrating data from rows %d to %d", start, end)
+		rows := oldTable.GetRowMaps(start, end)
+		prepareRows(rows, newColumnNames, deletedColumnNames)
+		err := newTable.InsertRowMaps(rows)
 		if err != nil {
 			panic(err)
 		}
@@ -81,32 +91,34 @@ func getDeletedColumnNames(oldTable *gumshoe.FactTable, newTable *gumshoe.FactTa
 	return deletedColumnNames
 }
 
-func prepareRow(row gumshoe.RowMap, newColumnNames []string, deletedColumnNames []string) {
-	for _, newColumnName := range newColumnNames {
-		row[newColumnName] = nil
-	}
-	for _, deletedColumnName := range deletedColumnNames {
-		delete(row, deletedColumnName)
-	}
-	// TODO: This switch is necessary because table.InsertRowMaps(table.GetRowMaps(0, 1)) panics on non-string,
-	// non-float64 types. Ideally, table.InsertRowMaps would not panic if an unexpected numeric type can be
-	// safely coerced.
-	for columnName, value := range row {
-		switch value.(type) {
-		case uint8:
-			row[columnName] = float64(value.(uint8))
-		case int8:
-			row[columnName] = float64(value.(int8))
-		case uint16:
-			row[columnName] = float64(value.(uint16))
-		case int16:
-			row[columnName] = float64(value.(int16))
-		case uint32:
-			row[columnName] = float64(value.(uint32))
-		case int32:
-			row[columnName] = float64(value.(int32))
-		case float32:
-			row[columnName] = float64(value.(float32))
+func prepareRows(rows []gumshoe.RowMap, newColumnNames []string, deletedColumnNames []string) {
+	for _, row := range rows {
+		for _, newColumnName := range newColumnNames {
+			row[newColumnName] = nil
+		}
+		for _, deletedColumnName := range deletedColumnNames {
+			delete(row, deletedColumnName)
+		}
+		// TODO: This switch is necessary because table.InsertRowMaps(table.GetRowMaps(0, 1)) panics on non-string,
+		// non-float64 types. Ideally, table.InsertRowMaps would not panic if an unexpected numeric type can be
+		// safely coerced.
+		for columnName, value := range row {
+			switch value.(type) {
+			case uint8:
+				row[columnName] = float64(value.(uint8))
+			case int8:
+				row[columnName] = float64(value.(int8))
+			case uint16:
+				row[columnName] = float64(value.(uint16))
+			case int16:
+				row[columnName] = float64(value.(int16))
+			case uint32:
+				row[columnName] = float64(value.(uint32))
+			case int32:
+				row[columnName] = float64(value.(int32))
+			case float32:
+				row[columnName] = float64(value.(float32))
+			}
 		}
 	}
 }
