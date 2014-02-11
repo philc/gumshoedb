@@ -50,9 +50,6 @@ func copyOldDataToNewTable(oldTable *gumshoe.FactTable, newTable *gumshoe.FactTa
 	log.Println("Adding columns:", newColumnNames)
 	log.Println("Deleting columns:", deletedColumnNames)
 	chunkSize := 1000000
-	if chunkSize > oldTable.Count {
-		chunkSize = oldTable.Count
-	}
 	for start := 0; start <= oldTable.Count; start += chunkSize {
 		end := start + chunkSize
 		if end > oldTable.Count {
