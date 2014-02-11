@@ -26,13 +26,13 @@ func main() {
 	}
 
 	if _, err := toml.DecodeFile(*configFile, conf); err != nil {
-		log.Fatal(err)
+		log.Fatal("Unable to parse config: ", err)
 	}
 
 	log.Println("Loading table from", *oldTablePath)
 	oldTable, err := gumshoe.LoadFactTableFromDisk(*oldTablePath)
 	if err != nil {
-		panic(err)
+		log.Fatal("Unable to load table from disk: ", err)
 	}
 	log.Println("Loaded", oldTable.Count, "rows")
 
@@ -60,7 +60,7 @@ func copyOldDataToNewTable(oldTable *gumshoe.FactTable, newTable *gumshoe.FactTa
 		prepareRows(rows, newColumnNames, deletedColumnNames)
 		err := newTable.InsertRowMaps(rows)
 		if err != nil {
-			panic(err)
+			log.Fatal("Error encountered when inserting rows: ", err)
 		}
 	}
 	newTable.SaveToDisk()
