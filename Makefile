@@ -3,7 +3,7 @@ PLATFORM=$(shell uname)
 
 export GOPATH=$(PWD):$(PWD)/vendor
 
-default: web
+default: web migrator
 
 build: deps
 	go install gumshoe
@@ -19,6 +19,9 @@ web: build
 
 run-web: web
 	bin/gumshoe_server
+
+migrator: build
+	go build -o bin/migrator migrator
 
 benchmark:
 	go test -run=NONE -bench=. gumshoe

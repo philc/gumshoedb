@@ -59,6 +59,17 @@ which columns, if any, should be interpreted as nil. This is to differentiate ni
     |--------| nil bits: c1 and c4 are nil
     |-------------------------- table.RowSize ---------------------------------|
 
+Schema Changes
+==============
+
+The migrator tool can be used to modify the schema of gumshoedb without losing data. Sample usage:
+
+    make migrator
+    ./bin/migrator -old-table db/table -new-table db/new-table -config new_config.toml
+
+Migrator will add columns, delete columns, or increase column sizes. The behavior for decreasing column sizes
+(int32 -> int16) is currently undefined.
+
 Notes
 =====
 
