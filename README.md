@@ -25,7 +25,6 @@ Here's a representative query, assuming the columns "country", "age", and "click
 
     curl -iX POST localhost:9000/tables/facts/query -d '
     {
-      "table": "events",
       "aggregates":[
           {"type": "sum", "name": "clicks", "column": "clicks"},
           {"type": "average", "name": "avgAge", "column": "age"}],
