@@ -100,7 +100,7 @@ func BenchmarkGroupByQuery(b *testing.B) {
 	}
 	groupCount := 2
 	expectedResult := make([]map[string]gumshoe.Untyped, groupCount)
-	for i, _ := range expectedResult {
+	for i := range expectedResult {
 		expectedResult[i] = map[string]gumshoe.Untyped{
 			"column001": BenchmarkRows / groupCount, "column002": i, "rowCount": BenchmarkRows / groupCount}
 	}

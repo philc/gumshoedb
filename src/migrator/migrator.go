@@ -29,7 +29,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	log.Println("Loading table from " + *oldTablePath)
+	log.Println("Loading table from", *oldTablePath)
 	oldTable, err := gumshoe.LoadFactTableFromDisk(*oldTablePath)
 	if err != nil {
 		panic(err)
@@ -71,9 +71,8 @@ func copyOldDataToNewTable(oldTable *gumshoe.FactTable, newTable *gumshoe.FactTa
 
 func getNewColumnNames(oldTable *gumshoe.FactTable, newTable *gumshoe.FactTable) []string {
 	newColumnNames := make([]string, 0)
-	for columnName, _ := range newTable.ColumnNameToIndex {
-		_, ok := oldTable.ColumnNameToIndex[columnName]
-		if !ok {
+	for columnName := range newTable.ColumnNameToIndex {
+		if _, ok := oldTable.ColumnNameToIndex[columnName]; !ok {
 			newColumnNames = append(newColumnNames, columnName)
 		}
 	}
@@ -82,9 +81,8 @@ func getNewColumnNames(oldTable *gumshoe.FactTable, newTable *gumshoe.FactTable)
 
 func getDeletedColumnNames(oldTable *gumshoe.FactTable, newTable *gumshoe.FactTable) []string {
 	deletedColumnNames := make([]string, 0)
-	for columnName, _ := range oldTable.ColumnNameToIndex {
-		_, ok := newTable.ColumnNameToIndex[columnName]
-		if !ok {
+	for columnName := range oldTable.ColumnNameToIndex {
+		if _, ok := newTable.ColumnNameToIndex[columnName]; !ok {
 			deletedColumnNames = append(deletedColumnNames, columnName)
 		}
 	}
