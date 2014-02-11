@@ -40,5 +40,5 @@ ifeq ($(PLATFORM), Darwin)
 	vagrant up
 	vagrant ssh -c 'cd gumshoedb && make release'
 else
-	make web
+	make
 endif
