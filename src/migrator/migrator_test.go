@@ -1,32 +1,16 @@
 package main
 
 import (
-	"encoding/json"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"gumshoe"
+	"utils"
 
 	. "github.com/cespare/a"
 )
-
-func convertToJSONAndBack(o interface{}) interface{} {
-	b, err := json.Marshal(o)
-	if err != nil {
-		panic(err)
-	}
-	result := new(interface{})
-	json.Unmarshal(b, result)
-	return *result
-}
-
-func HasEqualJSON(args ...interface{}) (ok bool, message string) {
-	o1 := convertToJSONAndBack(args[0])
-	o2 := convertToJSONAndBack(args[1])
-	return DeepEquals(o1, o2)
-}
 
 func createTableWithNumericColumns(tableFilePath string, numericColumns map[string]int) *gumshoe.FactTable {
 	schema := gumshoe.NewSchema()
@@ -57,7 +41,7 @@ func TestMigrationAddColumn(t *testing.T) {
 	newTable, err = gumshoe.LoadFactTableFromDisk(newTableFilePath)
 	newRowMap := gumshoe.RowMap{"col1": 1.0, "col2": nil}
 	Assert(t, err, IsNil)
-	Assert(t, newRowMap, HasEqualJSON, newTable.GetRowMaps(0, 1)[0])
+	Assert(t, newRowMap, utils.HasEqualJSON, newTable.GetRowMaps(0, 1)[0])
 }
 
 func TestMigrationDeleteColumn(t *testing.T) {
@@ -81,5 +65,5 @@ func TestMigrationDeleteColumn(t *testing.T) {
 	newTable, err = gumshoe.LoadFactTableFromDisk(newTableFilePath)
 	newRowMap := gumshoe.RowMap{"col2": 2.0}
 	Assert(t, err, IsNil)
-	Assert(t, newRowMap, HasEqualJSON, newTable.GetRowMaps(0, 1)[0])
+	Assert(t, newRowMap, utils.HasEqualJSON, newTable.GetRowMaps(0, 1)[0])
 }

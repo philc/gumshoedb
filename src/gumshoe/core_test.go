@@ -1,28 +1,12 @@
 package gumshoe
 
 import (
-	"encoding/json"
 	"testing"
+
+	"utils"
 
 	. "github.com/cespare/a"
 )
-
-func convertToJSONAndBack(o interface{}) interface{} {
-	b, err := json.Marshal(o)
-	if err != nil {
-		panic(err)
-	}
-	result := new(interface{})
-	json.Unmarshal(b, result)
-	return *result
-}
-
-// A variant of DeepEquals which is less finicky about which numeric type you're using in maps.
-func HasEqualJSON(args ...interface{}) (ok bool, message string) {
-	o1 := convertToJSONAndBack(args[0])
-	o2 := convertToJSONAndBack(args[1])
-	return DeepEquals(o1, o2)
-}
 
 func tableFixture() *FactTable {
 	schema := NewSchema()
@@ -123,9 +107,9 @@ func TestInvokeQueryWorksWhenGroupingByAStringColumn(t *testing.T) {
 	insertRow(table, 2.0, "stringvalue1")
 	insertRow(table, 5.0, "stringvalue2")
 	result := runWithGroupBy(table, QueryGrouping{"", "col2", "groupbykey"})
-	Assert(t, result[0], HasEqualJSON,
+	Assert(t, result[0], utils.HasEqualJSON,
 		map[string]Untyped{"groupbykey": "stringvalue1", "rowCount": 2, "col1": 3})
-	Assert(t, result[1], HasEqualJSON,
+	Assert(t, result[1], utils.HasEqualJSON,
 		map[string]Untyped{"groupbykey": "stringvalue2", "rowCount": 1, "col1": 5})
 }
 
@@ -137,8 +121,8 @@ func TestGroupingWithATimeTransformFunctionWorks(t *testing.T) {
 	insertRow(table, 120.0, "")
 	insertRow(table, 150.0, "")
 	result := runWithGroupBy(table, QueryGrouping{"minute", "col1", "groupbykey"})
-	Assert(t, result[0], HasEqualJSON, map[string]Untyped{"groupbykey": 0, "rowCount": 1, "col1": 0})
-	Assert(t, result[1], HasEqualJSON, map[string]Untyped{"groupbykey": 120, "rowCount": 2, "col1": 270})
+	Assert(t, result[0], utils.HasEqualJSON, map[string]Untyped{"groupbykey": 0, "rowCount": 1, "col1": 0})
+	Assert(t, result[1], utils.HasEqualJSON, map[string]Untyped{"groupbykey": 120, "rowCount": 2, "col1": 270})
 }
 
 func TestInsertAndReadNullValues(t *testing.T) {
@@ -158,19 +142,19 @@ func TestInsertAndReadNullValues(t *testing.T) {
 func TestAggregateQueryWithNullValues(t *testing.T) {
 	table := createTableFixtureForNullQueryTests()
 	results := runQuery(table, createQuery())
-	Assert(t, results[0], HasEqualJSON, map[string]Untyped{"col1": 9, "rowCount": 6})
+	Assert(t, results[0], utils.HasEqualJSON, map[string]Untyped{"col1": 9, "rowCount": 6})
 }
 
 func TestFilterQueryWithNullValues(t *testing.T) {
 	table := createTableFixtureForNullQueryTests()
 	results := runWithFilter(table, QueryFilter{"lessThan", "col1", 2})
-	Assert(t, results[0], HasEqualJSON, map[string]Untyped{"col1": 2, "rowCount": 2})
+	Assert(t, results[0], utils.HasEqualJSON, map[string]Untyped{"col1": 2, "rowCount": 2})
 }
 
 func TestGroupByQueryWithNullValues(t *testing.T) {
 	table := createTableFixtureForNullQueryTests()
 	results := runWithGroupBy(table, QueryGrouping{"", "col2", "groupbykey"})
-	Assert(t, results, HasEqualJSON, []interface{}{
+	Assert(t, results, utils.HasEqualJSON, []interface{}{
 		map[string]Untyped{"col1": 3, "groupbykey": "a", "rowCount": 3},
 		map[string]Untyped{"col1": 5, "groupbykey": "b", "rowCount": 2},
 	})

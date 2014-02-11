@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"utils"
+
 	. "github.com/cespare/a"
 )
 
@@ -27,5 +29,5 @@ func TestPersistenceEndToEnd(t *testing.T) {
 	table, err = LoadFactTableFromDisk(tableFilePath)
 	Assert(t, err, IsNil)
 	Assert(t, table.FilePath, Equals, tableFilePath)
-	Assert(t, rowMap, HasEqualJSON, table.GetRowMaps(0, 1)[0])
+	Assert(t, rowMap, utils.HasEqualJSON, table.GetRowMaps(0, 1)[0])
 }
