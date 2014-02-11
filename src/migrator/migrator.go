@@ -45,8 +45,8 @@ func main() {
 }
 
 func copyOldDataToNewTable(oldTable *gumshoe.FactTable, newTable *gumshoe.FactTable) {
-	newColumnNames := getNewColumnNames(oldTable, newTable)
-	deletedColumnNames := getDeletedColumnNames(oldTable, newTable)
+	newColumnNames := subtractColumnNames(newTable, oldTable)
+	deletedColumnNames := subtractColumnNames(oldTable, newTable)
 	log.Println("Adding columns:", newColumnNames)
 	log.Println("Deleting columns:", deletedColumnNames)
 	chunkSize := 1000000
@@ -66,24 +66,15 @@ func copyOldDataToNewTable(oldTable *gumshoe.FactTable, newTable *gumshoe.FactTa
 	newTable.SaveToDisk()
 }
 
-func getNewColumnNames(oldTable *gumshoe.FactTable, newTable *gumshoe.FactTable) []string {
-	newColumnNames := make([]string, 0)
-	for columnName := range newTable.ColumnNameToIndex {
-		if _, ok := oldTable.ColumnNameToIndex[columnName]; !ok {
-			newColumnNames = append(newColumnNames, columnName)
+// Returns columns in table1 that are not in table2.
+func subtractColumnNames(table1 *gumshoe.FactTable, table2 *gumshoe.FactTable) []string {
+	columns := make([]string, 0)
+	for column := range table1.ColumnNameToIndex {
+		if _, ok := table2.ColumnNameToIndex[column]; !ok {
+			columns = append(columns, column)
 		}
 	}
-	return newColumnNames
-}
-
-func getDeletedColumnNames(oldTable *gumshoe.FactTable, newTable *gumshoe.FactTable) []string {
-	deletedColumnNames := make([]string, 0)
-	for columnName := range oldTable.ColumnNameToIndex {
-		if _, ok := newTable.ColumnNameToIndex[columnName]; !ok {
-			deletedColumnNames = append(deletedColumnNames, columnName)
-		}
-	}
-	return deletedColumnNames
+	return columns
 }
 
 func prepareRows(rows []gumshoe.RowMap, newColumnNames []string, deletedColumnNames []string) {
