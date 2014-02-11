@@ -5,23 +5,23 @@ export GOPATH=$(PWD):$(PWD)/vendor
 
 default: web migrator
 
+web: build
+	go build -o bin/gumshoe_server server
+
 build: deps
 	go install gumshoe
 
 deps:
 	git submodule update --init
 
-test:
-	go test $(SUBPACKAGES)
-
-web: build
-	go build -o bin/gumshoe_server server
-
 run-web: web
 	bin/gumshoe_server
 
 migrator: build
 	go build -o bin/migrator migrator
+
+test:
+	go test $(SUBPACKAGES)
 
 benchmark:
 	go test -run=NONE -bench=. gumshoe
