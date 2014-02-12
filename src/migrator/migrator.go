@@ -14,6 +14,18 @@ import (
 // Migrator currently handles adding new columns and deleting old columns. It will also happily modify
 // column sizes (e.g., int16 -> int32), but has no special handling or safety for lossy type changes.
 
+/*
+NOTE(dmac): These are rough guidelines for the future implementor of allowing migrations to shrink columns:
+
+1. For string values, determine the list of values that will fit into the new column. This can be the first N
+   from the dimension table, or a hand-picked list if, for example, we want to keep the N highest-traffic apps.
+
+2. If a value can be safely downcast, do so. If it can't, throw an error and abort unless an override flag is
+   present.
+
+3. When a downcast is necessary, if the value is out of range, insert null instead of the value.
+*/
+
 func main() {
 	oldTablePath := flag.String("old-table", "db/table", "Old table file to migrate")
 	newTablePath := flag.String("new-table", "db/new-table", "New table file to be generated")
