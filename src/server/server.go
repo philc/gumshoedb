@@ -214,7 +214,7 @@ func (s *Server) ListenAndServe() error {
 }
 
 func main() {
-	cpuProfileFile := flag.String("cpuprofile", "", "File to output profiling information to")
+	cpuProfileFile := *flag.String("cpuprofile", "", "File to output profiling information to")
 
 	flag.Parse()
 	// Set configuration defaults
@@ -234,9 +234,12 @@ func main() {
 		runtime.GOMAXPROCS(runtime.NumCPU())
 	}
 
-	if cpuProfileFile != nil {
-		file, _ := os.Create(*cpuProfileFile)
-		log.Println("Profiling enabled, with results written to", *cpuProfileFile)
+	if cpuProfileFile != "" {
+		file, err := os.Create(cpuProfileFile)
+		if err != nil {
+			log.Fatal(err)
+		}
+		log.Println("Profiling enabled, with results written to", cpuProfileFile)
 		pprof.StartCPUProfile(file)
 		// Capture Ctrl+C and cease profiling.
 		c := make(chan os.Signal, 1)
