@@ -1,0 +1,24 @@
+{
+	"deps": [
+		{
+			"name": "github.com/BurntSushi/toml",
+			"rev": "c2e6da3db91e5bf414c5e970e534bf0c7ea9fed2"
+		},
+		{
+			"name": "github.com/cespare/a",
+			"rev": "b81c2b47931b4061b650a5528c8d2b74254a9aa1"
+		},
+		{
+			"name": "github.com/codegangsta/inject",
+			"rev": "1817ef28a0e76985d513785871920d9f0c3df187"
+		},
+		{
+			"name": "github.com/codegangsta/martini",
+			"rev": "5f91d5c133b0f771b2939361d82cd35b184de664"
+		},
+		{
+			"name": "github.com/edsrzf/mmap-go",
+			"rev": "bd26bc5e78d34f2b0804f1e27400ac33d243d69b"
+		}
+	]
+}

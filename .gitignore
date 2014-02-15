@@ -2,3 +2,4 @@
 pkg
 bin
 db/*
+/glp/_cache
