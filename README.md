@@ -76,3 +76,9 @@ There is a subtle bug where we are unable to run gumshoedb in vagrant using a db
 directory on the host machine. See [this][1] stackoverflow question for details.
 
 [1]: http://stackoverflow.com/questions/18420473/invalid-argument-for-read-write-mmap
+
+Contributors
+============
+* Phil Crosby ([philc](https://github.com/philc))
+* Daniel MacDougall ([dmacdougall](https://github.com/dmacdougall))
+* Caleb Spare ([cespare](https://github.com/cespare))
