@@ -54,9 +54,9 @@ The data in GumshoeDB is represented as a flat byte array. Rows are laid out in 
 according to their type. The final block of memory in each row is reserved for "nil-bits" which indicate
 which columns, if any, should be interpreted as nil. This is to differentiate nil from 0.
 
-    [01001000][...c0...][.......c1.......][...c2...][...c3...][.......c4.......]
+    [01010000][...c0...][.......c1.......][...c2...][...c3...]
     |--------| nil bits: c1 and c4 are nil
-    |-------------------------- table.RowSize ---------------------------------|
+    |----------------- table.RowSize ------------------------|
 
 Schema Changes
 ==============
