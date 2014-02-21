@@ -55,7 +55,7 @@ according to their type. The final block of memory in each row is reserved for "
 which columns, if any, should be interpreted as nil. This is to differentiate nil from 0.
 
     [01010000][...c0...][.......c1.......][...c2...][...c3...]
-    |--------| nil bits: c1 and c4 are nil
+    |--------| nil bits: c1 and c3 are nil
     |----------------- table.RowSize ------------------------|
 
 Schema Changes
