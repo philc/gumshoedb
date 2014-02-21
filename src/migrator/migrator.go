@@ -75,6 +75,7 @@ func copyOldDataToNewTable(oldTable *gumshoe.FactTable, newTable *gumshoe.FactTa
 			log.Fatal("Error encountered when inserting rows: ", err)
 		}
 	}
+	newTable.NextInsertPosition = oldTable.NextInsertPosition
 	newTable.SaveToDisk()
 }
 

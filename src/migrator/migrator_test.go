@@ -15,7 +15,7 @@ import (
 func createTableWithNumericColumns(tableFilePath string, numericColumns map[string]int) *gumshoe.FactTable {
 	schema := gumshoe.NewSchema()
 	schema.NumericColumns = numericColumns
-	table := gumshoe.NewFactTable(tableFilePath, 1, schema)
+	table := gumshoe.NewFactTable(tableFilePath, 2, schema)
 	table.SaveToDisk()
 	return table
 }
@@ -66,4 +66,27 @@ func TestMigrationDeleteColumn(t *testing.T) {
 	newRowMap := gumshoe.RowMap{"col2": 2.0}
 	Assert(t, err, IsNil)
 	Assert(t, newRowMap, utils.HasEqualJSON, newTable.GetRowMaps(0, 1)[0])
+}
+
+func TestInsertAfterMigrateWorks(t *testing.T) {
+	tempDir, err := ioutil.TempDir("", "gumshoe-migration-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	oldTableFilePath := filepath.Join(tempDir, "old")
+	oldTable := createTableWithNumericColumns(oldTableFilePath, map[string]int{"col1": gumshoe.TypeUint8})
+	oldTable.InsertRowMaps([]gumshoe.RowMap{{"col1": 1.0}, {"col1": 2.0}, {"col1": 3.0}})
+
+	newTableFilePath := filepath.Join(tempDir, "new")
+	newTable := createTableWithNumericColumns(newTableFilePath, map[string]int{"col1": gumshoe.TypeUint8})
+
+	copyOldDataToNewTable(oldTable, newTable)
+
+	newTable, err = gumshoe.LoadFactTableFromDisk(newTableFilePath)
+	newTable.InsertRowMaps([]gumshoe.RowMap{{"col1": 4.0}})
+	newRowMaps := []gumshoe.RowMap{{"col1": 3.0}, {"col1": 4.0}}
+
+	Assert(t, newTable.GetRowMaps(0, 2), utils.HasEqualJSON, newRowMaps)
 }
