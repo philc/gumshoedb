@@ -10,10 +10,9 @@ import (
 	"log"
 	"math"
 	"net/http"
+	_ "net/http/pprof"
 	"os"
-	"os/signal"
 	"runtime"
-	"runtime/pprof"
 	"time"
 	"unsafe"
 
@@ -24,7 +23,10 @@ import (
 	"github.com/codegangsta/martini"
 )
 
-var configFile = flag.String("config", "config.toml", "Configuration file to use")
+var (
+	configFile  = flag.String("config", "config.toml", "Configuration file to use")
+	profileAddr = flag.String("profile-addr", "", "If non-empty, address for net/http/pprof")
+)
 
 type Server struct {
 	http.Handler
@@ -214,8 +216,6 @@ func (s *Server) ListenAndServe() error {
 }
 
 func main() {
-	cpuProfileFile := *flag.String("cpuprofile", "", "File to output profiling information to")
-
 	flag.Parse()
 	// Set configuration defaults
 	config := &config.Config{
@@ -234,20 +234,12 @@ func main() {
 		runtime.GOMAXPROCS(runtime.NumCPU())
 	}
 
-	if cpuProfileFile != "" {
-		file, err := os.Create(cpuProfileFile)
-		if err != nil {
-			log.Fatal(err)
-		}
-		log.Println("Profiling enabled, with results written to", cpuProfileFile)
-		pprof.StartCPUProfile(file)
-		// Capture Ctrl+C and cease profiling.
-		c := make(chan os.Signal, 1)
-		signal.Notify(c, os.Interrupt)
+	// Set up the pprof server, if enabled.
+	if *profileAddr != "" {
 		go func() {
-			<-c
-			pprof.StopCPUProfile()
-			os.Exit(1)
+			log.Println("Pprof listening on", *profileAddr)
+			log.Printf("Go to http://%s/debug/pprof to see more", *profileAddr)
+			log.Fatal(http.ListenAndServe(*profileAddr, nil))
 		}()
 	}
 
