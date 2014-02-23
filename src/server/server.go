@@ -45,7 +45,7 @@ func WriteJSONResponse(w http.ResponseWriter, objectToSerialize interface{}) {
 }
 
 // Given an array of JSON rows, insert them.
-func (s *Server) HandleInsertRoute(w http.ResponseWriter, r *http.Request) {
+func (s *Server) HandleInsert(w http.ResponseWriter, r *http.Request) {
 	decoder := json.NewDecoder(r.Body)
 	jsonBody := []gumshoe.RowMap{}
 	if err := decoder.Decode(&jsonBody); err != nil {
@@ -63,7 +63,7 @@ func (s *Server) HandleInsertRoute(w http.ResponseWriter, r *http.Request) {
 }
 
 // A debugging route to list the contents of a table. Returns up to 1000 rows.
-func (s *Server) HandleFactTableRoute(w http.ResponseWriter, r *http.Request) {
+func (s *Server) HandleFactTable(w http.ResponseWriter, r *http.Request) {
 	// For now, only return up to 1000 rows. We can't serialize the entire table unless we stream the response,
 	// and for debugging, we only need a few rows to inspect that importing is working correctly.
 	maxRowsToReturn := 1000
@@ -72,7 +72,7 @@ func (s *Server) HandleFactTableRoute(w http.ResponseWriter, r *http.Request) {
 }
 
 // Returns the contents of the all of the dimensions tables, for use when debugging.
-func (s *Server) HandleDimensionsTableRoute(w http.ResponseWriter, r *http.Request) {
+func (s *Server) HandleDimensionsTable(w http.ResponseWriter, r *http.Request) {
 	// Assembles the map: {dimensionTableName => [ [0 value0] [1 value1] ... ]}
 	results := make(map[string][][2]gumshoe.Untyped)
 	for _, dimensionTable := range s.Table.DimensionTables {
@@ -88,7 +88,7 @@ func (s *Server) HandleDimensionsTableRoute(w http.ResponseWriter, r *http.Reque
 
 // Evaluate a query and returns an aggregated result set.
 // See the README for the query JSON structure and the structure of the reuslts.
-func (s *Server) HandleQueryRoute(w http.ResponseWriter, r *http.Request) {
+func (s *Server) HandleQuery(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 	requestBody, _ := ioutil.ReadAll(r.Body)
 	query, err := gumshoe.ParseJSONQuery(string(requestBody))
@@ -197,10 +197,10 @@ func NewServer(config *config.Config) *Server {
 
 	// TODO(philc): Make these REST routes more consistent.
 	m.Get("/metricz", s.HandleMetricz)
-	m.Put("/insert", s.HandleInsertRoute)
-	m.Get("/tables/facts", s.HandleFactTableRoute)
-	m.Get("/tables/dimensions", s.HandleDimensionsTableRoute)
-	m.Post("/tables/facts/query", s.HandleQueryRoute)
+	m.Put("/insert", s.HandleInsert)
+	m.Get("/tables/facts", s.HandleFactTable)
+	m.Get("/tables/dimensions", s.HandleDimensionsTable)
+	m.Post("/tables/facts/query", s.HandleQuery)
 
 	s.Handler = m
 	return s
