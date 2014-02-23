@@ -81,6 +81,21 @@ func (s *Server) HandleDimensionsTable(w http.ResponseWriter, r *http.Request) {
 	WriteJSONResponse(w, results)
 }
 
+func (s *Server) HandleSingleDimension(w http.ResponseWriter, params martini.Params) {
+	name := params["name"]
+	if name == "" {
+		http.Error(w, "Must provide dimension name", http.StatusBadRequest)
+		return
+	}
+	for _, table := range s.Table.DimensionTables {
+		if table.Name == name {
+			WriteJSONResponse(w, table.Rows)
+			return
+		}
+	}
+	http.Error(w, "No such dimension: "+name, http.StatusBadRequest)
+}
+
 // Evaluate a query and returns an aggregated result set.
 // See the README for the query JSON structure and the structure of the reuslts.
 func (s *Server) HandleQuery(w http.ResponseWriter, r *http.Request) {
@@ -195,6 +210,7 @@ func NewServer(config *config.Config) *Server {
 	m.Put("/insert", s.HandleInsert)
 	m.Get("/tables/facts", s.HandleFactTable)
 	m.Get("/tables/dimensions", s.HandleDimensionsTable)
+	m.Get("/tables/dimensions/:name", s.HandleSingleDimension)
 	m.Post("/tables/facts/query", s.HandleQuery)
 
 	s.Handler = m
