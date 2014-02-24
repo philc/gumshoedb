@@ -34,11 +34,20 @@ var typeSizes = map[int]int{
 	TypeFloat32: int(unsafe.Sizeof(float32(0))),
 }
 
+// How large to make each segment. Segments may not be precisely this size, because they will be aligned
+// to the table's row size.
+const defaultSegmentSize = (1024 * 1024 * 100) // 100MB
+
 type Schema struct {
-	NumericColumns  map[string]int // name => size
-	StringColumns   map[string]int // name => size
-	TimestampColumn string
+	NumericColumns     map[string]int // name => size
+	StringColumns      map[string]int // name => size
+	SegmentSizeInBytes int            // How large to make segments. This setting is used mainly by our tests.
+	TimestampColumn    string
 }
+
+// TODO(philc): In the future this interval duration will be configurable, and variable (e.g. older data has
+// larger granularities, graphite-style).
+const intervalDurationInSeconds = 60 * 60 // 1 hour
 
 type Interval struct {
 	Start            int // Seconds since epoch
@@ -50,17 +59,11 @@ type Interval struct {
 	SegmentCount int
 }
 
-// TODO(philc): In the future this interval duration will be configurable, and variable (e.g. older data has
-// larger granularities, graphite-style).
-const intervalDurationInSeconds = 60 * 60 // 1 hour
-// How large to make each segment. Segments may not be precisely this size, because they will be aligned
-// to the table's row size.
-const desiredSegmentSizeInBytes = (1024 * 1024 * 100) // 100MB
-
 func NewSchema() *Schema {
 	s := new(Schema)
 	s.NumericColumns = make(map[string]int)
 	s.StringColumns = make(map[string]int)
+	s.SegmentSizeInBytes = defaultSegmentSize
 	return s
 }
 
@@ -85,6 +88,7 @@ type FactTable struct {
 	ColumnIndexToOffset []uintptr // The byte offset of each column from the beggining byte of the row
 	ColumnIndexToType   []int     // Index => one of the type constants (e.g. TypeUint8).
 	TimestampColumnName string    // Name of the column used for grouping rows into time buckets.
+	SegmentSizeInBytes  int
 }
 
 func (table *FactTable) Rows() []byte {
@@ -140,6 +144,7 @@ func NewFactTable(filePath string, schema *Schema) *FactTable {
 		InsertLock:  new(sync.Mutex),
 	}
 	table.TimestampColumnName = schema.TimestampColumn
+	table.SegmentSizeInBytes = schema.SegmentSizeInBytes
 
 	columnToType := make(map[string]int)
 	for k, v := range schema.StringColumns {
@@ -436,7 +441,7 @@ func (interval *Interval) AddSegment(table *FactTable) {
 	if !interval.SegmentsAreFull() {
 		panic("Adding a new segment when the existing segments aren't full. That's invalid.")
 	}
-	segmentSize := int(desiredSegmentSizeInBytes/table.RowSize) * table.RowSize
+	segmentSize := int(table.SegmentSizeInBytes/table.RowSize) * table.RowSize
 	var segment []byte
 	if table.FilePath == "" {
 		// Use in-memory storage; don't persist anything to disk.
