@@ -9,8 +9,6 @@ import (
 	"strings"
 	"sync"
 	"unsafe"
-
-	mmap "github.com/edsrzf/mmap-go"
 )
 
 // Note that the 64 bit types are not supported in schemas at the moment. This is because we serialize column
@@ -37,9 +35,27 @@ var typeSizes = map[int]int{
 }
 
 type Schema struct {
-	NumericColumns map[string]int // name => size
-	StringColumns  map[string]int // name => size
+	NumericColumns  map[string]int // name => size
+	StringColumns   map[string]int // name => size
+	TimestampColumn string
 }
+
+type Interval struct {
+	Start            int // Seconds since epoch
+	Duration         int // In seconds
+	NextInsertOffset int
+	Segments         [][]byte `json:"-"` // Segments of rows. Each segment can be backed by a memory-mapped file.
+	// We maintain this count separately from len(Segments) so that we can serialize it to JSON and use it to
+	// rebuild the Segments slice.
+	SegmentCount int
+}
+
+// TODO(philc): In the future this interval duration will be configurable, and variable (e.g. older data has
+// larger granularities, graphite-style).
+const intervalDurationInSeconds = 60 * 60 // 1 hour
+// How large to make each segment. Segments may not be precisely this size, because they will be aligned
+// to the table's row size.
+const desiredSegmentSizeInBytes = (1024 * 1024 * 100) // 100MB
 
 func NewSchema() *Schema {
 	s := new(Schema)
@@ -51,16 +67,15 @@ func NewSchema() *Schema {
 // A fixed sized table of rows.
 // When we insert more rows than the table's capacity, we wrap around and begin inserting rows at index 0.
 type FactTable struct {
-	// We serialize this struct using JSON. The unexported fields are fields we don't want to serialize.
-	rows     []byte
-	FilePath string `json:"-"` // Path to this table on disk, where we will periodically snapshot it to.
+	// NOTE(philc): map[int]Interval would be more convenient, but it's not JSON serializable.
+	Intervals []*Interval
+	FilePath  string `json:"-"` // Path to this table on disk, where we will periodically save it.
 	// TODO(caleb): This is not enough. Reads still race with writes. We need to fix this, possibly by removing
 	// the circular writes and instead persisting historic chunks to disk (or deleting them) and allocating
 	// fresh tables.
 	InsertLock *sync.Mutex `json:"-"`
-	// The mmap bookkeeping object which contains the file descriptor we are mapping the table rows to.
-	memoryMap           mmap.MMap
-	NextInsertPosition  int
+	// TODO(philc): Eliminate rows, as the storage is now contained within Intervals.s
+	rows                []byte
 	Count               int               // The number of used rows currently in the table. This is <= ROWS.
 	ColumnCount         int               // The number of columns in use in the table. This is <= COLS.
 	Capacity            int               // For now, this is an alias for the ROWS constant.
@@ -70,6 +85,7 @@ type FactTable struct {
 	ColumnIndexToName   []string
 	ColumnIndexToOffset []uintptr // The byte offset of each column from the beggining byte of the row
 	ColumnIndexToType   []int     // Index => one of the type constants (e.g. TypeUint8).
+	TimestampColumnName string    // Name of the column used for grouping rows into time buckets.
 }
 
 func (table *FactTable) Rows() []byte {
@@ -125,6 +141,7 @@ func NewFactTable(filePath string, rowCount int, schema *Schema) *FactTable {
 		InsertLock:  new(sync.Mutex),
 		Capacity:    rowCount,
 	}
+	table.TimestampColumnName = schema.TimestampColumn
 
 	columnToType := make(map[string]int)
 	for k, v := range schema.StringColumns {
@@ -150,14 +167,6 @@ func NewFactTable(filePath string, rowCount int, schema *Schema) *FactTable {
 	}
 
 	table.RowSize = columnOffset
-	tableSize := table.Capacity * table.RowSize
-	if filePath == "" {
-		// Create an in-memory database only, without a file backing.
-		slice := make([]byte, tableSize)
-		table.rows = slice
-	} else {
-		table.memoryMap, table.rows = CreateMemoryMappedFactTableStorage(table.FilePath, tableSize)
-	}
 
 	table.ColumnIndexToName = make([]string, len(allColumnNames))
 	table.ColumnNameToIndex = make(map[string]int, len(allColumnNames))
@@ -181,7 +190,12 @@ func (table *FactTable) GetRowMaps(start, end int) []RowMap {
 		panic("Invalid row indices passed to GetRowMaps")
 	}
 	for i := start; i < end; i++ {
-		results = append(results, table.DenormalizeRow(table.getRowSlice(i)))
+		rowSlice, interval := table.getRowSlice(i)
+		row := table.DenormalizeRow(rowSlice)
+		// We don't store the timestamp column in the row itself, so add it in, since it's helpful to have it in
+		// the row map.
+		row[table.TimestampColumnName] = interval.Start
+		results = append(results, row)
 	}
 	return results
 }
@@ -219,7 +233,14 @@ func (table *FactTable) DenormalizeRow(row []byte) RowMap {
 // Returns an error if there are unrecognized columns, or if a column is missing.
 func (table *FactTable) convertRowMapToRowArray(rowMap RowMap) ([]Untyped, error) {
 	result := make([]Untyped, table.ColumnCount)
+	expectedColumns := len(table.ColumnNameToIndex) + 1 // +1 to account for the timestamp column.
+	if len(rowMap) != expectedColumns {
+		return nil, fmt.Errorf("This row has %d columns; expected %d: %s", len(rowMap), expectedColumns, rowMap)
+	}
 	for columnName, value := range rowMap {
+		if columnName == table.TimestampColumnName {
+			continue
+		}
 		columnIndex, ok := table.ColumnNameToIndex[columnName]
 		if !ok {
 			return nil, fmt.Errorf("Unrecognized column name: %s", columnName)
@@ -233,10 +254,28 @@ func (table *FactTable) getRowOffset(row int) int {
 	return row * table.RowSize
 }
 
-func (table *FactTable) getRowSlice(row int) []byte {
-	rowOffset := table.getRowOffset(row)
-	newSlice := table.Rows()[rowOffset : rowOffset+table.RowSize]
-	return newSlice
+func (table *FactTable) getRowSlice(rowIndex int) ([]byte, Interval) {
+	if rowIndex >= table.Count {
+		panic(fmt.Sprintf("Row index %d is out of bounds (table size is %d).", rowIndex, table.Count))
+	}
+	// We search for the Interval and time segment which stores the given rowIndex.
+	rows := 0
+	var interval *Interval
+	var segment []byte
+outer:
+	for _, interval = range table.Intervals {
+		for _, segment = range interval.Segments {
+			segmentRowCount := len(segment) / table.RowSize
+			if rows+segmentRowCount > rowIndex {
+				break outer
+			}
+			rows += segmentRowCount
+		}
+	}
+
+	rowOffset := rows + (rowIndex - rows)
+	slice := segment[rowOffset*table.RowSize : (rowOffset+1)*table.RowSize]
+	return slice, *interval
 }
 
 func (table *FactTable) columnUsesDimensionTable(columnIndex int) bool {
@@ -353,18 +392,76 @@ func (table *FactTable) setColumnValue(row []byte, column int, value Untyped) {
 // Useful for inspecting the nil bits of a row when debugging.
 func (table *FactTable) nilBitsToString(row int) string {
 	var parts []string
-	for _, b := range table.getRowSlice(row)[0:table.numNilBytes()] {
+	rowSlice, _ := table.getRowSlice(row)
+	for _, b := range rowSlice[0:table.numNilBytes()] {
 		parts = append(parts, fmt.Sprintf("%08b", b))
 	}
 	return strings.Join(parts, " ")
 }
 
-func (table *FactTable) insertNormalizedRow(row *[]byte) {
-	copy(table.getRowSlice(table.NextInsertPosition), *row)
-	table.NextInsertPosition = (table.NextInsertPosition + 1) % table.Capacity
-	if table.Count < table.Capacity {
-		table.Count++
+func (table *FactTable) insertNormalizedRow(timestamp int, row *[]byte) {
+	intervalPtr := getIntervalForTimestamp(table, timestamp)
+	var interval Interval
+	if intervalPtr == nil {
+		interval = table.createInterval(timestamp)
+		table.Intervals = append(table.Intervals, &interval)
+	} else {
+		interval = *intervalPtr
 	}
+	if interval.SegmentsAreFull() {
+		interval.AddSegment(table)
+	}
+	segment := interval.Segments[len(interval.Segments)-1]
+	copy(segment[interval.NextInsertOffset:interval.NextInsertOffset+table.RowSize], *row)
+	interval.NextInsertOffset += table.RowSize
+	table.Count++
+}
+
+func getIntervalForTimestamp(table *FactTable, timestamp int) *Interval {
+	for _, interval := range table.Intervals {
+		if interval.Start == timestamp {
+			return interval
+		}
+	}
+	return nil
+}
+
+func (table *FactTable) createInterval(timestamp int) Interval {
+	return Interval{
+		Start:            timestamp,
+		Duration:         intervalDurationInSeconds,
+		NextInsertOffset: 0, // A byte offset of the last segment.
+		Segments:         [][]byte{},
+	}
+}
+
+// Appends a new segment to the end of interval.Segments. Note that this should only be called when there is
+// no more remaining space in the existing segments.
+func (interval *Interval) AddSegment(table *FactTable) {
+	if !interval.SegmentsAreFull() {
+		panic("Adding a new segment when the existing segments aren't full. That's invalid.")
+	}
+	segmentSize := int(desiredSegmentSizeInBytes/table.RowSize) * table.RowSize
+	var segment []byte
+	if table.FilePath == "" {
+		// Use in-memory storage; don't persist anything to disk.
+		segment = make([]byte, segmentSize)
+	} else {
+		segmentIndex := 0
+		if len(interval.Segments) > 0 {
+			segmentIndex = len(interval.Segments) + 1
+		}
+		segment = createMemoryMappedSegment(table.FilePath, interval.Start, segmentIndex, segmentSize)
+	}
+	interval.Segments = append(interval.Segments, segment)
+	interval.SegmentCount++
+	interval.NextInsertOffset = 0
+}
+
+// True if there is no room remaining in the Interval's segments, and a new one needs to be allocated.
+func (interval *Interval) SegmentsAreFull() bool {
+	return len(interval.Segments) == 0 ||
+		interval.NextInsertOffset >= len(interval.Segments[len(interval.Segments)-1])
 }
 
 // Inserts the given rows into the table. Returns an error if one of the rows contains an unrecognized column.
@@ -377,7 +474,10 @@ func (table *FactTable) InsertRowMaps(rows []RowMap) error {
 		if err != nil {
 			return err
 		}
-		table.insertNormalizedRow(normalizedRow)
+		timestamp := rowMap[table.TimestampColumnName].(int)
+		// Truncate the timestamp to the interval's duration.
+		timestamp = timestamp - (timestamp % intervalDurationInSeconds)
+		table.insertNormalizedRow(timestamp, normalizedRow)
 	}
 	return nil
 }
