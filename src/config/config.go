@@ -8,21 +8,17 @@ import (
 )
 
 type Config struct {
-	Rows            int        `toml:"rows"`
-	TimestampColumn string     `toml:"timestamp_column"`
-	ListenAddr      string     `toml:"listen_addr"`
-	TableFilePath   string     `toml:"table_file_path"`
-	SaveDuration    Duration   `toml:"save_duration"`
-	NumericColumns  [][]string `toml:"numeric_columns"`
-	StringColumns   [][]string `toml:"string_columns"`
+	Rows           int        `toml:"rows"`
+	ListenAddr     string     `toml:"listen_addr"`
+	TableFilePath  string     `toml:"table_file_path"`
+	SaveDuration   Duration   `toml:"save_duration"`
+	NumericColumns [][]string `toml:"numeric_columns"`
+	StringColumns  [][]string `toml:"string_columns"`
 }
 
 func (c *Config) Validate() error {
 	if c.Rows <= 0 {
 		return errors.New("Must set the row count to be > 0.")
-	}
-	if c.TimestampColumn == "" {
-		return errors.New("Must provide the name of a timestamp column.")
 	}
 	if len(c.NumericColumns) == 0 && len(c.StringColumns) == 0 {
 		return errors.New("Must provide at least one column in your configuration.")
