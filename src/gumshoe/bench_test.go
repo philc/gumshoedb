@@ -133,6 +133,7 @@ func setupFactTable() (table *gumshoe.FactTable) {
 	}
 	// We use the 3rd column for grouping operations.
 	schema.NumericColumns[columnNames[2]] = gumshoe.TypeUint16
+	schema.TimestampColumn = "at"
 	table = gumshoe.NewFactTable(tempDir+"/db", schema)
 	populateTableWithTestingData(table)
 	return table
@@ -150,6 +151,7 @@ func populateTableWithTestingData(table *gumshoe.FactTable) {
 		row[table.ColumnIndexToName[0]] = float64(0)
 		row[table.ColumnIndexToName[1]] = float64(1)
 		row[table.ColumnIndexToName[2]] = float64(i % 2)
+		row["at"] = 0
 		rows[i] = row
 	}
 
