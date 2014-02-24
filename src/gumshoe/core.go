@@ -78,7 +78,6 @@ type FactTable struct {
 	rows                []byte
 	Count               int               // The number of used rows currently in the table. This is <= ROWS.
 	ColumnCount         int               // The number of columns in use in the table. This is <= COLS.
-	Capacity            int               // For now, this is an alias for the ROWS constant.
 	RowSize             int               // In bytes
 	DimensionTables     []*DimensionTable // A mapping from column index => column's DimensionTable.
 	ColumnNameToIndex   map[string]int
@@ -131,7 +130,7 @@ func getSortedKeys(m map[string]int) []string {
 // persisted to disk in the form of a memory-mapped file.
 // String columns appear first, and then numeric columns, for no particular reason other than
 // implementation convenience in a few places.
-func NewFactTable(filePath string, rowCount int, schema *Schema) *FactTable {
+func NewFactTable(filePath string, schema *Schema) *FactTable {
 	stringColumnNames := getSortedKeys(schema.StringColumns)
 	numericColumnNames := getSortedKeys(schema.NumericColumns)
 	allColumnNames := append(stringColumnNames, numericColumnNames...)
@@ -139,7 +138,6 @@ func NewFactTable(filePath string, rowCount int, schema *Schema) *FactTable {
 		ColumnCount: len(allColumnNames),
 		FilePath:    filePath,
 		InsertLock:  new(sync.Mutex),
-		Capacity:    rowCount,
 	}
 	table.TimestampColumnName = schema.TimestampColumn
 

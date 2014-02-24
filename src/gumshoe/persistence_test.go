@@ -22,7 +22,7 @@ func TestPersistenceEndToEnd(t *testing.T) {
 	schema := NewSchema()
 	schema.TimestampColumn = "at"
 	schema.NumericColumns = map[string]int{"col1": TypeUint8}
-	table := NewFactTable(tableFilePath, 1, schema)
+	table := NewFactTable(tableFilePath, schema)
 
 	rowMap := RowMap{"at": 0, "col1": 12.0}
 	if err = table.InsertRowMaps([]RowMap{rowMap}); err != nil {
