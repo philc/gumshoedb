@@ -128,19 +128,16 @@ func (s *Server) HandleMetricz(w http.ResponseWriter) {
 	}
 
 	metricz := &Metricz{
-		FactTableRows:          s.Table.Count,
-		FactTableBytes:         s.Table.Count * s.Table.RowSize,
-		FactTableCapacityBytes: s.Table.Capacity * s.Table.RowSize,
-		DimensionTables:        dimensionTables,
+		FactTableRows:   s.Table.Count,
+		FactTableBytes:  s.Table.Count * s.Table.RowSize,
+		DimensionTables: dimensionTables,
 	}
 
 	if s.Table.Count > 0 {
 		s.Table.InsertLock.Lock()
 		defer s.Table.InsertLock.Unlock()
-		oldestRowIndex := (s.Table.NextInsertPosition - s.Table.Count + s.Table.Capacity) % s.Table.Capacity
-		metricz.OldestRow = s.Table.GetRowMaps(oldestRowIndex, oldestRowIndex+1)[0]
-		newestRowIndex := (s.Table.NextInsertPosition - 1 + s.Table.Capacity) % s.Table.Capacity
-		metricz.NewestRow = s.Table.GetRowMaps(newestRowIndex, newestRowIndex+1)[0]
+		metricz.OldestRow = s.Table.GetRowMaps(0, 1)[0]
+		metricz.NewestRow = s.Table.GetRowMaps(s.Table.Count-1, s.Table.Count)[0]
 	}
 
 	metriczJSON, err := json.Marshal(metricz)
@@ -170,7 +167,7 @@ func (s *Server) loadFactTable() {
 			panic(err)
 		}
 		log.Printf(`Table "%s" does not exist, creating... `, s.Config.TableFilePath)
-		table = gumshoe.NewFactTable(s.Config.TableFilePath, s.Config.Rows, s.Config.ToSchema())
+		table = gumshoe.NewFactTable(s.Config.TableFilePath, s.Config.ToSchema())
 		table.SaveToDisk()
 		log.Print("done.")
 	} else {
