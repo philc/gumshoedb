@@ -398,13 +398,10 @@ func (table *FactTable) nilBitsToString(row int) string {
 }
 
 func (table *FactTable) insertNormalizedRow(timestamp int, row *[]byte) {
-	intervalPtr := getIntervalForTimestamp(table, timestamp)
-	var interval Interval
-	if intervalPtr == nil {
+	interval := getIntervalForTimestamp(table, timestamp)
+	if interval == nil {
 		interval = table.createInterval(timestamp)
-		table.Intervals = append(table.Intervals, &interval)
-	} else {
-		interval = *intervalPtr
+		table.Intervals = append(table.Intervals, interval)
 	}
 	if interval.SegmentsAreFull() {
 		interval.AddSegment(table)
@@ -424,8 +421,8 @@ func getIntervalForTimestamp(table *FactTable, timestamp int) *Interval {
 	return nil
 }
 
-func (table *FactTable) createInterval(timestamp int) Interval {
-	return Interval{
+func (table *FactTable) createInterval(timestamp int) *Interval {
+	return &Interval{
 		Start:            timestamp,
 		Duration:         intervalDurationInSeconds,
 		NextInsertOffset: 0, // A byte offset of the last segment.
