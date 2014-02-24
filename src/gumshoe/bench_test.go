@@ -3,15 +3,13 @@
 package gumshoe_test
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"testing"
 	"unsafe"
 
 	"gumshoe"
-
-	. "github.com/cespare/a"
+	"utils"
 )
 
 const (
@@ -26,26 +24,8 @@ func init() {
 	factTable = setupFactTable()
 }
 
-// TODO(philc): This is duplicated from core_test.go. What's the best way to share it?
-func convertToJSONAndBack(o interface{}) interface{} {
-	b, err := json.Marshal(o)
-	if err != nil {
-		panic(err)
-	}
-	result := new(interface{})
-	json.Unmarshal(b, result)
-	return *result
-}
-
-// A variant of DeepEquals which is less finicky about which numeric type you're using in maps.
-func HasEqualJSON(args ...interface{}) (ok bool, message string) {
-	o1 := convertToJSONAndBack(args[0])
-	o2 := convertToJSONAndBack(args[1])
-	return DeepEquals(o1, o2)
-}
-
 func checkResult(b *testing.B, actual interface{}, expected interface{}) {
-	ok, message := HasEqualJSON(actual, expected)
+	ok, message := utils.HasEqualJSON(actual, expected)
 	if !ok {
 		b.Fatalf(message)
 	}
