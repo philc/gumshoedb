@@ -49,7 +49,7 @@ func main() {
 	log.Println("Loaded", oldTable.Count, "rows")
 
 	log.Print("Generating new fact table")
-	newTable := gumshoe.NewFactTable(*newTablePath, conf.Rows, conf.ToSchema())
+	newTable := gumshoe.NewFactTable(*newTablePath, conf.ToSchema())
 	newTable.SaveToDisk()
 
 	copyOldDataToNewTable(oldTable, newTable)
@@ -75,7 +75,6 @@ func copyOldDataToNewTable(oldTable *gumshoe.FactTable, newTable *gumshoe.FactTa
 			log.Fatal("Error encountered when inserting rows: ", err)
 		}
 	}
-	newTable.NextInsertPosition = oldTable.NextInsertPosition
 	newTable.SaveToDisk()
 }
 
