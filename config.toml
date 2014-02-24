@@ -8,6 +8,9 @@ save_duration = "10s"
 # The maximum size of the DB
 rows = 100000
 
+# Every row must have a timestamp column. This is the name of that column.
+timestamp_column = "at"
+
 numeric_columns = [
   ["clicks", "uint16"],
   ["age", "uint8"]
