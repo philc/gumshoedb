@@ -3,7 +3,6 @@ package gumshoe
 
 import (
 	"math"
-	"reflect"
 	"unsafe"
 )
 
@@ -85,84 +84,94 @@ func (table *FactTable) scan(filters []FactTableFilterFunc, columnIndices []int,
 	// When the query has no group-by clause, we accumulate results into a single RowAggregate.
 	rowAggregate := new(RowAggregate)
 	rowAggregate.Sums = make([]float64, table.ColumnCount)
-	rowCount := table.Count
 	columnCountInQuery := len(columnIndices)
 	filterCount := len(filters)
-	rowPtr := (*reflect.SliceHeader)(unsafe.Pointer(&table.rows)).Data
 	rowSize := uintptr(table.RowSize)
 	columnIndexToOffset := table.ColumnIndexToOffset
 	columnIndexToType := table.ColumnIndexToType
 
-outerLoop:
-	for i := 0; i < rowCount; i++ {
-		for filterIndex := 0; filterIndex < filterCount; filterIndex++ {
-			if !filters[filterIndex](rowPtr) {
-				rowPtr += rowSize
-				continue outerLoop
-			}
-		}
-
-		if useGrouping {
-			// NOTE(dmac): For now, nil values aren't included when grouping on a column.
-			if table.columnIsNil(rowPtr, groupByColumnIndex) {
-				rowPtr += rowSize
-				continue
-			}
-			// TODO(philc): Use a type switch here.
-			groupByValue := getColumnValueAsFloat64(rowPtr, groupByColumnOffset, groupByColumnType)
-			if groupByColumnTransformFn != nil {
-				groupByValue = groupByColumnTransformFn(groupByValue)
-			}
-			if useSliceForGrouping {
-				rowAggregate = &groupedAggregatesSlice[int(groupByValue)]
-				// If the RowAggregate has never been initialized, initialize it.
-				if len(rowAggregate.Sums) == 0 {
-					*(&rowAggregate.Sums) = make([]float64, table.ColumnCount)
-					rowAggregate.GroupByValue = groupByValue
-				}
+	for _, interval := range table.Intervals {
+		for si, segment := range interval.Segments {
+			rowPtr := uintptr(unsafe.Pointer(&segment[0]))
+			var rowCount int
+			if si == len(interval.Segments)-1 {
+				rowCount = interval.NextInsertOffset / table.RowSize
 			} else {
-				var ok bool
-				rowAggregate, ok = groupedAggregatesMap[groupByValue]
-				if !ok {
-					rowAggregate = new(RowAggregate)
-					rowAggregate.Sums = make([]float64, table.ColumnCount)
-					(*rowAggregate).GroupByValue = groupByValue
-					groupedAggregatesMap[groupByValue] = rowAggregate
+				rowCount = len(segment) / table.RowSize
+			}
+
+		outerLoop:
+			for i := 0; i < rowCount; i++ {
+				for filterIndex := 0; filterIndex < filterCount; filterIndex++ {
+					if !filters[filterIndex](rowPtr) {
+						rowPtr += rowSize
+						continue outerLoop
+					}
 				}
+
+				if useGrouping {
+					// NOTE(dmac): For now, nil values aren't included when grouping on a column.
+					if table.columnIsNil(rowPtr, groupByColumnIndex) {
+						rowPtr += rowSize
+						continue
+					}
+					// TODO(philc): Use a type switch here.
+					groupByValue := getColumnValueAsFloat64(rowPtr, groupByColumnOffset, groupByColumnType)
+					if groupByColumnTransformFn != nil {
+						groupByValue = groupByColumnTransformFn(groupByValue)
+					}
+					if useSliceForGrouping {
+						rowAggregate = &groupedAggregatesSlice[int(groupByValue)]
+						// If the RowAggregate has never been initialized, initialize it.
+						if len(rowAggregate.Sums) == 0 {
+							*(&rowAggregate.Sums) = make([]float64, table.ColumnCount)
+							rowAggregate.GroupByValue = groupByValue
+						}
+					} else {
+						var ok bool
+						rowAggregate, ok = groupedAggregatesMap[groupByValue]
+						if !ok {
+							rowAggregate = new(RowAggregate)
+							rowAggregate.Sums = make([]float64, table.ColumnCount)
+							(*rowAggregate).GroupByValue = groupByValue
+							groupedAggregatesMap[groupByValue] = rowAggregate
+						}
+					}
+				}
+
+				for j := 0; j < columnCountInQuery; j++ {
+					columnIndex := columnIndices[j]
+					columnOffset := columnIndexToOffset[columnIndex]
+					columnPtr := unsafe.Pointer(rowPtr + columnOffset)
+
+					if table.columnIsNil(rowPtr, columnIndex) {
+						continue
+					}
+
+					var columnValue float64
+					columnType := columnIndexToType[columnIndex]
+					switch columnType {
+					case TypeUint8:
+						columnValue = float64(*(*uint8)(columnPtr))
+					case TypeInt8:
+						columnValue = float64(*(*int8)(columnPtr))
+					case TypeUint16:
+						columnValue = float64(*(*uint16)(columnPtr))
+					case TypeInt16:
+						columnValue = float64(*(*int16)(columnPtr))
+					case TypeUint32:
+						columnValue = float64(*(*uint32)(columnPtr))
+					case TypeInt32:
+						columnValue = float64(*(*int32)(columnPtr))
+					case TypeFloat32:
+						columnValue = float64(*(*float32)(columnPtr))
+					}
+					(*rowAggregate).Sums[columnIndex] += columnValue
+				}
+				(*rowAggregate).Count++
+				rowPtr += rowSize
 			}
 		}
-
-		for j := 0; j < columnCountInQuery; j++ {
-			columnIndex := columnIndices[j]
-			columnOffset := columnIndexToOffset[columnIndex]
-			columnPtr := unsafe.Pointer(rowPtr + columnOffset)
-
-			if table.columnIsNil(rowPtr, columnIndex) {
-				continue
-			}
-
-			var columnValue float64
-			columnType := columnIndexToType[columnIndex]
-			switch columnType {
-			case TypeUint8:
-				columnValue = float64(*(*uint8)(columnPtr))
-			case TypeInt8:
-				columnValue = float64(*(*int8)(columnPtr))
-			case TypeUint16:
-				columnValue = float64(*(*uint16)(columnPtr))
-			case TypeInt16:
-				columnValue = float64(*(*int16)(columnPtr))
-			case TypeUint32:
-				columnValue = float64(*(*uint32)(columnPtr))
-			case TypeInt32:
-				columnValue = float64(*(*int32)(columnPtr))
-			case TypeFloat32:
-				columnValue = float64(*(*float32)(columnPtr))
-			}
-			(*rowAggregate).Sums[columnIndex] += columnValue
-		}
-		(*rowAggregate).Count++
-		rowPtr += rowSize
 	}
 
 	results := []RowAggregate{}
