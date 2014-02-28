@@ -73,15 +73,10 @@ func (s *Server) HandleFactTable(w http.ResponseWriter, r *http.Request) {
 
 // Returns the contents of the all of the dimensions tables, for use when debugging.
 func (s *Server) HandleDimensionsTable(w http.ResponseWriter, r *http.Request) {
-	// Assembles the map: {dimensionTableName => [ [0 value0] [1 value1] ... ]}
-	results := make(map[string][][2]gumshoe.Untyped)
+	// Assembles the map of dimensionTableName => list of values
+	results := make(map[string][]string)
 	for _, dimensionTable := range s.Table.DimensionTables {
-		rows := make([][2]gumshoe.Untyped, 0, s.Table.ColumnCount)
-		for i, value := range dimensionTable.Rows {
-			row := [2]gumshoe.Untyped{i, value}
-			rows = append(rows, row)
-		}
-		results[dimensionTable.Name] = rows
+		results[dimensionTable.Name] = dimensionTable.Rows
 	}
 	WriteJSONResponse(w, results)
 }
