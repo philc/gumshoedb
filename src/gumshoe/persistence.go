@@ -54,17 +54,17 @@ func LoadFactTableFromDisk(tableFilePath string) (*FactTable, error) {
 // maps have finished being synced.
 func (table *FactTable) SaveToDisk() {
 	os.MkdirAll(table.FilePath, 0770)
+
 	file, err := os.Create(tmpFilePath(tableMetadataFilePath(table.FilePath)))
 	if err != nil {
 		panic(err)
 	}
+	defer file.Close()
 
-	bytesBuffer, err := json.Marshal(table)
-	if err != nil {
+	encoder := json.NewEncoder(file)
+	if err := encoder.Encode(table); err != nil {
 		panic(err)
 	}
-	file.Write(bytesBuffer)
-	file.Close()
 
 	for _, interval := range table.Intervals {
 		for _, segment := range interval.Segments {
