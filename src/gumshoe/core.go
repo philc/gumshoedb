@@ -293,7 +293,7 @@ func (table *FactTable) columnUsesDimensionTable(columnIndex int) bool {
 // Note that all numeric values are assumed to be float64 (this is what Go's JSON unmarshaller produces).
 // e.g. {"country": "Japan", "browser": "Chrome", "age": 17} => [0, 1, 17]
 // TODO(philc): Make this return []byte
-func (table *FactTable) normalizeRow(rowMap RowMap) (*[]byte, error) {
+func (table *FactTable) normalizeRow(rowMap RowMap) ([]byte, error) {
 	rowAsArray, err := table.convertRowMapToRowArray(rowMap)
 	if err != nil {
 		return nil, err
@@ -328,7 +328,7 @@ func (table *FactTable) normalizeRow(rowMap RowMap) (*[]byte, error) {
 		}
 		table.setColumnValue(rowSlice, columnIndex, valueAsFloat64)
 	}
-	return &rowSlice, nil
+	return rowSlice, nil
 }
 
 func (table *FactTable) columnIsNil(rowPtr uintptr, columnIndex int) bool {
@@ -403,7 +403,7 @@ func (table *FactTable) nilBitsToString(row int) string {
 	return strings.Join(parts, " ")
 }
 
-func (table *FactTable) insertNormalizedRow(timestamp time.Time, row *[]byte) {
+func (table *FactTable) insertNormalizedRow(timestamp time.Time, row []byte) {
 	interval := getIntervalForTimestamp(table, timestamp)
 	if interval == nil {
 		interval = table.createInterval(timestamp)
@@ -413,7 +413,7 @@ func (table *FactTable) insertNormalizedRow(timestamp time.Time, row *[]byte) {
 		interval.AddSegment(table)
 	}
 	segment := interval.Segments[len(interval.Segments)-1]
-	copy(segment[interval.NextInsertOffset:interval.NextInsertOffset+table.RowSize], *row)
+	copy(segment[interval.NextInsertOffset:interval.NextInsertOffset+table.RowSize], row)
 	interval.NextInsertOffset += table.RowSize
 	table.Count++
 }
