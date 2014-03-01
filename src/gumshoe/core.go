@@ -48,7 +48,7 @@ type Schema struct {
 
 // TODO(philc): In the future this interval duration will be configurable, and variable (e.g. older data has
 // larger granularities, graphite-style).
-const intervalDurationInSeconds = 60 * 60 // 1 hour
+const intervalDuration = time.Duration(1) * time.Hour
 
 type Interval struct {
 	Start            time.Time
@@ -430,7 +430,7 @@ func getIntervalForTimestamp(table *FactTable, timestamp time.Time) *Interval {
 func (table *FactTable) createInterval(timestamp time.Time) *Interval {
 	return &Interval{
 		Start:            timestamp,
-		Duration:         intervalDurationInSeconds,
+		Duration:         intervalDuration,
 		NextInsertOffset: 0, // A byte offset of the last segment.
 		Segments:         [][]byte{},
 	}
@@ -477,7 +477,7 @@ func (table *FactTable) InsertRowMaps(rows []RowMap) error {
 		}
 		timestamp := rowMap[table.TimestampColumnName].(int)
 		// Truncate the timestamp to the interval's duration.
-		timestamp = timestamp - (timestamp % intervalDurationInSeconds)
+		timestamp = timestamp - (timestamp % int(intervalDuration/time.Second))
 		table.insertNormalizedRow(time.Unix(int64(timestamp), 0), normalizedRow)
 	}
 	return nil
