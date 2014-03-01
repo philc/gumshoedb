@@ -17,6 +17,7 @@ func createTableWithNumericColumns(tableFilePath string, numericColumns map[stri
 	schema.NumericColumns = numericColumns
 	schema.TimestampColumn = "at"
 	table := gumshoe.NewFactTable(tableFilePath, schema)
+	table.SegmentSizeInBytes = 1000 * 10
 	table.SaveToDisk()
 	return table
 }
