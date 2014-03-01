@@ -28,10 +28,7 @@ func TestNewIntervalsAreAllocatedAsNeeded(t *testing.T) {
 	err := table.InsertRowMaps([]RowMap{
 		{"at": 0, "col1": 1.0, "col2": "a"},
 		{"at": 0, "col1": 2.0, "col2": "b"}})
-	if err != nil {
-		t.Fatal(err)
-	}
-
+	Assert(t, err, Equals, nil)
 	Assert(t, len(table.Intervals), Equals, 1)
 	Assert(t, len(table.Intervals[0].Segments), Equals, 2)
 }

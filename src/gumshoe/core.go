@@ -36,7 +36,7 @@ var typeSizes = map[int]int{
 
 // How large to make each segment. Segments may not be precisely this size, because they will be aligned
 // to the table's row size.
-const defaultSegmentSize = (1024 * 1024 * 100) // 100MB
+const defaultSegmentSize = 1000e6 // 100MB
 
 type Schema struct {
 	NumericColumns     map[string]int // name => size
@@ -77,7 +77,7 @@ type FactTable struct {
 	// the circular writes and instead persisting historic chunks to disk (or deleting them) and allocating
 	// fresh tables.
 	InsertLock *sync.Mutex `json:"-"`
-	// TODO(philc): Eliminate rows, as the storage is now contained within Intervals.s
+	// TODO(philc): Eliminate rows, as the storage is now contained within Intervals.
 	rows                []byte
 	Count               int               // The number of used rows currently in the table. This is <= ROWS.
 	ColumnCount         int               // The number of columns in use in the table. This is <= COLS.
@@ -257,7 +257,7 @@ func (table *FactTable) getRowOffset(row int) int {
 	return row * table.RowSize
 }
 
-func (table *FactTable) getRowSlice(rowIndex int) ([]byte, Interval) {
+func (table *FactTable) getRowSlice(rowIndex int) ([]byte, *Interval) {
 	if rowIndex >= table.Count {
 		panic(fmt.Sprintf("Row index %d is out of bounds (table size is %d).", rowIndex, table.Count))
 	}
@@ -278,7 +278,7 @@ outer:
 
 	rowOffset := rows + (rowIndex - rows)
 	slice := segment[rowOffset*table.RowSize : (rowOffset+1)*table.RowSize]
-	return slice, *interval
+	return slice, interval
 }
 
 func (table *FactTable) columnUsesDimensionTable(columnIndex int) bool {

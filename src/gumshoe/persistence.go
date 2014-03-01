@@ -85,8 +85,7 @@ func (table *FactTable) SaveToDisk() {
 func createMemoryMappedSegment(tableFilePath string, timestamp int, segmentIndex int, size int) []byte {
 	os.MkdirAll(tableFilePath, 0770)
 	segmentPath := segmentFilePath(tableFilePath, timestamp, segmentIndex)
-	err := createFileOfSize(segmentPath, size)
-	if err != nil {
+	if err := createFileOfSize(segmentPath, size); err != nil {
 		panic(err)
 	}
 	return memoryMapSegment(tableFilePath, timestamp, segmentIndex)
