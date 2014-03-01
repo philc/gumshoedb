@@ -125,8 +125,12 @@ func setupFactTable() (table *gumshoe.FactTable) {
 		// The columns are named columni where i has up to 2 leading zeros.
 		columnNames[i] = fmt.Sprintf("column%03d", i)
 	}
-	os.RemoveAll(tempDir)
-	os.MkdirAll(tempDir, 0755)
+	// Note that we're using an in-memory table so that these benchmarks start up faster.
+	tableFileName := ""
+	if tableFileName != "" {
+		os.RemoveAll(tempDir)
+		os.MkdirAll(tempDir, 0755)
+	}
 	schema := gumshoe.NewSchema()
 	for _, column := range columnNames {
 		schema.NumericColumns[column] = gumshoe.TypeInt32
@@ -134,7 +138,7 @@ func setupFactTable() (table *gumshoe.FactTable) {
 	// We use the 3rd column for grouping operations.
 	schema.NumericColumns[columnNames[2]] = gumshoe.TypeUint16
 	schema.TimestampColumn = "at"
-	table = gumshoe.NewFactTable(tempDir+"/db", schema)
+	table = gumshoe.NewFactTable(tableFileName, schema)
 	populateTableWithTestingData(table)
 	return table
 }
