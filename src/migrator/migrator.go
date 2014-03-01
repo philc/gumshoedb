@@ -49,8 +49,13 @@ func main() {
 	log.Println("Loaded", oldTable.Count, "rows")
 
 	log.Print("Generating new fact table")
-	newTable := gumshoe.NewFactTable(*newTablePath, conf.Rows, conf.ToSchema())
-	newTable.SaveToDisk()
+	newTable, err := gumshoe.NewFactTable(*newTablePath, conf.Rows, conf.ToSchema())
+	if err != nil {
+		log.Fatal(err)
+	}
+	if err := newTable.SaveToDisk(); err != nil {
+		log.Fatal(err)
+	}
 
 	copyOldDataToNewTable(oldTable, newTable)
 	log.Println("Migration complete")

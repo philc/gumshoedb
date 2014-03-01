@@ -28,7 +28,10 @@ func createTableFixtureForNullQueryTests() *FactTable {
 	schema := NewSchema()
 	schema.NumericColumns = map[string]int{"col1": TypeFloat32}
 	schema.StringColumns = map[string]int{"col2": TypeFloat32}
-	table := NewFactTable("", 10, schema)
+	table, err := NewFactTable("", 10, schema)
+	if err != nil {
+		panic(err)
+	}
 	insertRow(table, 1.0, "a")
 	insertRow(table, 2.0, "b")
 	insertRow(table, nil, "a")

@@ -10,7 +10,11 @@ func tableFixture() *FactTable {
 	schema := NewSchema()
 	schema.NumericColumns = map[string]int{"col1": TypeFloat32}
 	schema.StringColumns = map[string]int{"col2": TypeFloat32}
-	return NewFactTable("", 3, schema)
+	table, err := NewFactTable("", 3, schema)
+	if err != nil {
+		panic(err)
+	}
+	return table
 }
 
 func TestConvertRowMapToRowArrayThrowsErrorForUnrecognizedColumn(t *testing.T) {

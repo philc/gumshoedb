@@ -111,11 +111,11 @@ func getSortedKeys(m map[string]int) []string {
 	return keys
 }
 
-// Allocates a new FactTable. If a non-empty filePath is specified, this table's rows are immediately
-// persisted to disk in the form of a memory-mapped file.
-// String columns appear first, and then numeric columns, for no particular reason other than
-// implementation convenience in a few places.
-func NewFactTable(filePath string, rowCount int, schema *Schema) *FactTable {
+// NewFactTable allocates a FactTable. If a non-empty filePath is specified, this table's rows are immediately
+// persisted to disk in the form of a memory-mapped file. The parent directory of filePath is recursively
+// created, if necessary. String columns appear first, and then numeric columns, for no particular reason
+// other than implementation convenience in a few places.
+func NewFactTable(filePath string, rowCount int, schema *Schema) (*FactTable, error) {
 	stringColumnNames := getSortedKeys(schema.StringColumns)
 	numericColumnNames := getSortedKeys(schema.NumericColumns)
 	allColumnNames := append(stringColumnNames, numericColumnNames...)
@@ -156,7 +156,12 @@ func NewFactTable(filePath string, rowCount int, schema *Schema) *FactTable {
 		slice := make([]byte, tableSize)
 		table.rows = slice
 	} else {
-		table.memoryMap, table.rows = CreateMemoryMappedFactTableStorage(table.FilePath, tableSize)
+		memoryMap, err := CreateMemoryMappedFactTableStorage(table.FilePath, tableSize)
+		if err != nil {
+			return nil, err
+		}
+		table.memoryMap = memoryMap
+		table.rows = []byte(memoryMap)
 	}
 
 	table.ColumnIndexToName = make([]string, len(allColumnNames))
@@ -166,7 +171,7 @@ func NewFactTable(filePath string, rowCount int, schema *Schema) *FactTable {
 		table.ColumnNameToIndex[name] = i
 	}
 
-	return table
+	return table, nil
 }
 
 // Returns the number of bytes a row requires in order to have one nil bit per column.

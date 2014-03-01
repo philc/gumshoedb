@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"io/ioutil"
 	"os"
+	"path/filepath"
 	"sync"
 
 	mmap "github.com/edsrzf/mmap-go"
@@ -22,15 +23,17 @@ func tmpFilePath(filePath string) string                { return filePath + ".tm
 
 // Creates a new file on disk which is large enough to hold the entire facts table, and maps that file
 // into memory to be accessed and modified.
-func CreateMemoryMappedFactTableStorage(tableFilePath string, sizeInBytes int) (mmap.MMap, []byte) {
+func CreateMemoryMappedFactTableStorage(tableFilePath string, sizeInBytes int) (mmap.MMap, error) {
+	if err := os.MkdirAll(filepath.Dir(tableFilePath), 0755); err != nil {
+		return nil, err
+	}
 	file, err := os.Create(factsDataFilePath(tableFilePath))
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 	// Write a single byte at the end of the file to establish its size.
-	_, err = file.WriteAt([]byte{0}, int64(sizeInBytes-1))
-	if err != nil {
-		panic(err)
+	if _, err = file.WriteAt([]byte{0}, int64(sizeInBytes-1)); err != nil {
+		return nil, err
 	}
 	file.Close()
 	return memoryMapFactRows(factsDataFilePath(tableFilePath))
@@ -48,54 +51,51 @@ func LoadFactTableFromDisk(tableFilePath string) (*FactTable, error) {
 		return nil, err
 	}
 	table.InsertLock = new(sync.Mutex)
-	table.memoryMap, table.rows = memoryMapFactRows(factsDataFilePath(tableFilePath))
+	table.memoryMap, err = memoryMapFactRows(factsDataFilePath(tableFilePath))
+	if err != nil {
+		return nil, err
+	}
+	table.rows = []byte(table.memoryMap)
 	table.FilePath = tableFilePath
 	return &table, nil
 }
 
-func memoryMapFactRows(filename string) (mmap.MMap, []byte) {
+func memoryMapFactRows(filename string) (mmap.MMap, error) {
 	file, err := os.OpenFile(filename, os.O_RDWR, 0600)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 	mmap, err := mmap.Map(file, mmap.RDWR, 0)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 	if err := file.Close(); err != nil {
-		panic(err)
+		return nil, err
 	}
 	if err := mmap.Flush(); err != nil {
-		panic(err)
+		return nil, err
 	}
-	mmapAsByteSlice := []byte(mmap)
-	return mmap, mmapAsByteSlice
+	return mmap, nil
 }
 
 // Persist this database to disk. This blocks until all table metadata has been written, and until the memory
 // map has finished being synced.
-func (table *FactTable) SaveToDisk() {
+func (table *FactTable) SaveToDisk() error {
 	file, err := os.Create(tmpFilePath(tableMetadataFilePath(table.FilePath)))
 	if err != nil {
-		panic(err)
+		return err
+	}
+	if err := json.NewEncoder(file).Encode(table); err != nil {
+		return err
+	}
+	if err := file.Close(); err != nil {
+		return err
 	}
 
-	bytesBuffer, err := json.Marshal(table)
-	if err != nil {
-		panic(err)
-	}
-
-	file.Write(bytesBuffer)
-	file.Close()
-
-	// TODO(caleb): Add real error handling
 	// Sync the memory map to disk synchronously.
 	if err := table.memoryMap.Flush(); err != nil {
-		panic(err)
+		return err
 	}
 
-	err = os.Rename(tmpFilePath(tableMetadataFilePath(table.FilePath)), tableMetadataFilePath(table.FilePath))
-	if err != nil {
-		panic(err)
-	}
+	return os.Rename(tmpFilePath(tableMetadataFilePath(table.FilePath)), tableMetadataFilePath(table.FilePath))
 }

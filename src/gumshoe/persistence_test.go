@@ -21,8 +21,13 @@ func TestPersistenceEndToEnd(t *testing.T) {
 
 	schema := NewSchema()
 	schema.NumericColumns = map[string]int{"col1": TypeUint8, "col2": TypeUint8}
-	table := NewFactTable(tableFilePath, 1, schema)
-	table.SaveToDisk()
+	table, err := NewFactTable(tableFilePath, 1, schema)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := table.SaveToDisk(); err != nil {
+		t.Fatal(err)
+	}
 	rowMap := RowMap{"col1": 12.0, "col2": 34.0}
 	table.InsertRowMaps([]RowMap{rowMap})
 

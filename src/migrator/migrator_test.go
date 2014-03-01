@@ -15,8 +15,13 @@ import (
 func createTableWithNumericColumns(tableFilePath string, numericColumns map[string]int) *gumshoe.FactTable {
 	schema := gumshoe.NewSchema()
 	schema.NumericColumns = numericColumns
-	table := gumshoe.NewFactTable(tableFilePath, 2, schema)
-	table.SaveToDisk()
+	table, err := gumshoe.NewFactTable(tableFilePath, 2, schema)
+	if err != nil {
+		panic(err)
+	}
+	if err := table.SaveToDisk(); err != nil {
+		panic(err)
+	}
 	return table
 }
 
