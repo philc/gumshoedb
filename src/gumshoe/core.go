@@ -37,7 +37,7 @@ var typeSizes = map[int]int{
 
 // How large to make each segment. Segments may not be precisely this size, because they will be aligned
 // to the table's row size.
-const defaultSegmentSize = 1000e6 // 100MB
+const defaultSegmentSize = 100e6 // 100MB
 
 type Schema struct {
 	NumericColumns     map[string]int // name => size
