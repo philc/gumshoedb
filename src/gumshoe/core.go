@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 	"unsafe"
 )
 
@@ -50,8 +51,8 @@ type Schema struct {
 const intervalDurationInSeconds = 60 * 60 // 1 hour
 
 type Interval struct {
-	Start            int // Seconds since epoch
-	Duration         int // In seconds
+	Start            time.Time
+	Duration         time.Duration
 	NextInsertOffset int
 	Segments         [][]byte `json:"-"` // Segments of rows. Each segment can be backed by a memory-mapped file.
 	// We maintain this count separately from len(Segments) so that we can serialize it to JSON and use it to
@@ -197,7 +198,7 @@ func (table *FactTable) GetRowMaps(start, end int) []RowMap {
 		row := table.DenormalizeRow(rowSlice)
 		// We don't store the timestamp column in the row itself, so add it in, since it's helpful to have it in
 		// the row map.
-		row[table.TimestampColumnName] = interval.Start
+		row[table.TimestampColumnName] = int(interval.Start.Unix()) // Convert to seconds since epoch
 		results = append(results, row)
 	}
 	return results
@@ -402,7 +403,7 @@ func (table *FactTable) nilBitsToString(row int) string {
 	return strings.Join(parts, " ")
 }
 
-func (table *FactTable) insertNormalizedRow(timestamp int, row *[]byte) {
+func (table *FactTable) insertNormalizedRow(timestamp time.Time, row *[]byte) {
 	interval := getIntervalForTimestamp(table, timestamp)
 	if interval == nil {
 		interval = table.createInterval(timestamp)
@@ -417,7 +418,7 @@ func (table *FactTable) insertNormalizedRow(timestamp int, row *[]byte) {
 	table.Count++
 }
 
-func getIntervalForTimestamp(table *FactTable, timestamp int) *Interval {
+func getIntervalForTimestamp(table *FactTable, timestamp time.Time) *Interval {
 	for _, interval := range table.Intervals {
 		if interval.Start == timestamp {
 			return interval
@@ -426,7 +427,7 @@ func getIntervalForTimestamp(table *FactTable, timestamp int) *Interval {
 	return nil
 }
 
-func (table *FactTable) createInterval(timestamp int) *Interval {
+func (table *FactTable) createInterval(timestamp time.Time) *Interval {
 	return &Interval{
 		Start:            timestamp,
 		Duration:         intervalDurationInSeconds,
@@ -477,7 +478,7 @@ func (table *FactTable) InsertRowMaps(rows []RowMap) error {
 		timestamp := rowMap[table.TimestampColumnName].(int)
 		// Truncate the timestamp to the interval's duration.
 		timestamp = timestamp - (timestamp % intervalDurationInSeconds)
-		table.insertNormalizedRow(timestamp, normalizedRow)
+		table.insertNormalizedRow(time.Unix(int64(timestamp), 0), normalizedRow)
 	}
 	return nil
 }

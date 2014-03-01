@@ -16,13 +16,15 @@ import (
 	"unsafe"
 
 	mmap "github.com/edsrzf/mmap-go"
+	"time"
 )
 
 func factsDataFilePath(tableFilePath string) string     { return tableFilePath + "/facts.dat" }
 func tableMetadataFilePath(tableFilePath string) string { return tableFilePath + "/metadata.json" }
 func tmpFilePath(filePath string) string                { return filePath + ".tmp" }
-func segmentFilePath(tableFilePath string, time int, segmentIndex int) string {
-	return fmt.Sprintf("%s/facts.%d.%d.dat", tableFilePath, time, segmentIndex)
+func segmentFilePath(tableFilePath string, timestamp time.Time, segmentIndex int) string {
+	return fmt.Sprintf("%s/facts.%s.%d.dat", tableFilePath, timestamp.Format("2006-01-02T15:04:05"),
+		segmentIndex)
 }
 
 // Load a FactTable from disk. The returned FactTable has its storage memory-mapped to the corresponding
@@ -82,7 +84,7 @@ func (table *FactTable) SaveToDisk() {
 }
 
 // Creates a file on disk and returns the mapped memory.
-func createMemoryMappedSegment(tableFilePath string, timestamp int, segmentIndex int, size int) []byte {
+func createMemoryMappedSegment(tableFilePath string, timestamp time.Time, segmentIndex int, size int) []byte {
 	os.MkdirAll(tableFilePath, 0770)
 	segmentPath := segmentFilePath(tableFilePath, timestamp, segmentIndex)
 	if err := createFileOfSize(segmentPath, size); err != nil {
@@ -92,7 +94,7 @@ func createMemoryMappedSegment(tableFilePath string, timestamp int, segmentIndex
 }
 
 // Loads the memory mapped file for the given segment.
-func memoryMapSegment(tableFilePath string, timestamp int, segmentIndex int) []byte {
+func memoryMapSegment(tableFilePath string, timestamp time.Time, segmentIndex int) []byte {
 	filename := segmentFilePath(tableFilePath, timestamp, segmentIndex)
 	file, err := os.OpenFile(filename, os.O_RDWR, 0600)
 	if err != nil {
