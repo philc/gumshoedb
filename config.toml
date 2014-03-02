@@ -11,12 +11,13 @@ rows = 100000
 # Every row must have a timestamp column. This is the name of that column.
 timestamp_column = "at"
 
-numeric_columns = [
-  ["clicks", "uint16"],
+dimension_columns = [
+  ["name", "string:uint16"],
+  ["country", "string:uint8"],
   ["age", "uint8"]
 ]
 
-string_columns = [
-  ["name", "uint16"],
-  ["country", "uint8"]
+metric_columns = [
+  ["visits", "uint8"]
+  ["clicks", "uint8"],
 ]
