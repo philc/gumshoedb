@@ -4,7 +4,6 @@ package gumshoe_test
 
 import (
 	"fmt"
-	"os"
 	"testing"
 	"unsafe"
 
@@ -125,20 +124,15 @@ func setupFactTable() (table *gumshoe.FactTable) {
 		// The columns are named columni where i has up to 2 leading zeros.
 		columnNames[i] = fmt.Sprintf("column%03d", i)
 	}
-	// Note that we're using an in-memory table so that these benchmarks start up faster.
-	tableFileName := ""
-	if tableFileName != "" {
-		os.RemoveAll(tempDir)
-		os.MkdirAll(tempDir, 0755)
-	}
 	schema := gumshoe.NewSchema()
 	for _, column := range columnNames {
 		schema.MetricColumns[column] = gumshoe.TypeInt32
 	}
 	// We use the 3rd column for grouping operations.
-	schema.DimensionColumns[columnNames[2]] = gumshoe.TypeUint16
+	schema.MetricColumns[columnNames[2]] = gumshoe.TypeUint16
 	schema.TimestampColumn = "at"
-	table = gumshoe.NewFactTable(tableFileName, schema)
+	// Note that we're using an in-memory table so that these benchmarks start up faster.
+	table = gumshoe.NewFactTable("", schema)
 	populateTableWithTestingData(table)
 	return table
 }
