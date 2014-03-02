@@ -211,8 +211,7 @@ func (table *FactTable) mapRowAggregatesToJSONResultsFormat(query *Query,
 		}
 		// TODO(philc): This code does not handle multi-level groupings.
 		for _, grouping := range query.Groupings {
-			columnIndex := table.ColumnNameToIndex[grouping.Column]
-			jsonRow[grouping.Name] = table.denormalizeColumnValue(rowAggregate.GroupByValue, columnIndex)
+			jsonRow[grouping.Name] = table.denormalizeColumnValue(rowAggregate.GroupByValue, grouping.Column)
 		}
 		jsonRow["rowCount"] = rowAggregate.Count
 		jsonRows = append(jsonRows, jsonRow)
@@ -272,6 +271,7 @@ func convertQueryFilterToFilterFunc(queryFilter QueryFilter, table *FactTable) F
 
 	queryValueIsList := queryFilter.Type == "in"
 
+	// TODO(philc): Enforce that the argument is a string when the column itself is a string type.
 	if queryValueIsList {
 		untypedQueryValues := queryFilter.Value.([]interface{})
 		shouldTranslateToDimensionColumnIds := len(untypedQueryValues) > 0 && isString(untypedQueryValues[0])
@@ -282,7 +282,7 @@ func convertQueryFilterToFilterFunc(queryFilter QueryFilter, table *FactTable) F
 			for _, value := range untypedQueryValues {
 				valuesAsStrings = append(valuesAsStrings, value.(string))
 			}
-			dimensionTable := table.DimensionTables[columnIndex]
+			dimensionTable := table.DimensionTables[queryFilter.Column]
 			values = dimensionTable.getDimensionRowIdsForValues(valuesAsStrings)
 		} else {
 			values = make([]float64, 0, len(untypedQueryValues))
@@ -292,7 +292,7 @@ func convertQueryFilterToFilterFunc(queryFilter QueryFilter, table *FactTable) F
 		}
 	} else {
 		if isString(queryFilter.Value) {
-			dimensionTable := table.DimensionTables[columnIndex]
+			dimensionTable := table.DimensionTables[queryFilter.Column]
 			matchingRowIds := dimensionTable.getDimensionRowIdsForValues([]string{queryFilter.Value.(string)})
 			if len(matchingRowIds) == 0 {
 				return func(row uintptr) bool { return false }

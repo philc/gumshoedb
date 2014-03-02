@@ -133,10 +133,10 @@ func setupFactTable() (table *gumshoe.FactTable) {
 	}
 	schema := gumshoe.NewSchema()
 	for _, column := range columnNames {
-		schema.NumericColumns[column] = gumshoe.TypeInt32
+		schema.MetricColumns[column] = gumshoe.TypeInt32
 	}
 	// We use the 3rd column for grouping operations.
-	schema.NumericColumns[columnNames[2]] = gumshoe.TypeUint16
+	schema.DimensionColumns[columnNames[2]] = gumshoe.TypeUint16
 	schema.TimestampColumn = "at"
 	table = gumshoe.NewFactTable(tableFileName, schema)
 	populateTableWithTestingData(table)

@@ -2,19 +2,20 @@ package config
 
 import (
 	"errors"
+	"strings"
 	"time"
 
 	"gumshoe"
 )
 
 type Config struct {
-	Rows            int        `toml:"rows"`
-	TimestampColumn string     `toml:"timestamp_column"`
-	ListenAddr      string     `toml:"listen_addr"`
-	TableFilePath   string     `toml:"table_file_path"`
-	SaveDuration    Duration   `toml:"save_duration"`
-	NumericColumns  [][]string `toml:"numeric_columns"`
-	StringColumns   [][]string `toml:"string_columns"`
+	Rows             int        `toml:"rows"`
+	TimestampColumn  string     `toml:"timestamp_column"`
+	ListenAddr       string     `toml:"listen_addr"`
+	TableFilePath    string     `toml:"table_file_path"`
+	SaveDuration     Duration   `toml:"save_duration"`
+	DimensionColumns [][]string `toml:"dimension_columns"`
+	MetricColumns    [][]string `toml:"metric_columns"`
 }
 
 func (c *Config) Validate() error {
@@ -24,8 +25,8 @@ func (c *Config) Validate() error {
 	if c.TimestampColumn == "" {
 		return errors.New("Must provide the name of a timestamp column.")
 	}
-	if len(c.NumericColumns) == 0 && len(c.StringColumns) == 0 {
-		return errors.New("Must provide at least one column in your configuration.")
+	if len(c.MetricColumns) == 0 {
+		return errors.New("Must provide at least one metric column in your configuration.")
 	}
 	return nil
 }
@@ -47,11 +48,16 @@ var stringToSchemaType = map[string]int{
 // Produces a Schema based on the config file's values.
 func (c *Config) ToSchema() *gumshoe.Schema {
 	schema := gumshoe.NewSchema()
-	for _, columnPair := range c.NumericColumns {
-		schema.NumericColumns[columnPair[0]] = stringToSchemaType[columnPair[1]]
+	for _, columnPair := range c.DimensionColumns {
+		columnType := columnPair[1]
+		if strings.HasPrefix(columnType, "string:") {
+			columnType = strings.Replace(columnType, "string:", "", 1)
+			schema.StringColumns = append(schema.StringColumns, columnPair[1])
+		}
+		schema.DimensionColumns[columnPair[0]] = stringToSchemaType[columnType]
 	}
-	for _, columnPair := range c.StringColumns {
-		schema.StringColumns[columnPair[0]] = stringToSchemaType[columnPair[1]]
+	for _, columnPair := range c.MetricColumns {
+		schema.MetricColumns[columnPair[0]] = stringToSchemaType[columnPair[1]]
 	}
 	return schema
 }

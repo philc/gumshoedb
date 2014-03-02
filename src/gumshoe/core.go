@@ -40,10 +40,11 @@ var typeSizes = map[int]int{
 const defaultSegmentSize = 100e6 // 100MB
 
 type Schema struct {
-	NumericColumns     map[string]int // name => size
-	StringColumns      map[string]int // name => size
+	DimensionColumns   map[string]int // name => size
+	MetricColumns      map[string]int // name => size
 	SegmentSizeInBytes int            // How large to make segments. This setting is used mainly by our tests.
 	TimestampColumn    string
+	StringColumns      []string
 }
 
 // TODO(philc): In the future this interval duration will be configurable, and variable (e.g. older data has
@@ -62,8 +63,9 @@ type Interval struct {
 
 func NewSchema() *Schema {
 	s := new(Schema)
-	s.NumericColumns = make(map[string]int)
-	s.StringColumns = make(map[string]int)
+	s.DimensionColumns = make(map[string]int)
+	s.MetricColumns = make(map[string]int)
+	s.StringColumns = make([]string, 0)
 	s.SegmentSizeInBytes = defaultSegmentSize
 	return s
 }
@@ -79,16 +81,18 @@ type FactTable struct {
 	// fresh tables.
 	InsertLock *sync.Mutex `json:"-"`
 	// TODO(philc): Eliminate rows, as the storage is now contained within Intervals.
-	rows                []byte
-	Count               int               // The number of used rows currently in the table. This is <= ROWS.
-	ColumnCount         int               // The number of columns in use in the table. This is <= COLS.
-	RowSize             int               // In bytes
-	DimensionTables     []*DimensionTable // A mapping from column index => column's DimensionTable.
+	rows        []byte
+	Count       int // The number of used rows currently in the table. This is <= ROWS.
+	ColumnCount int // The number of columns in use in the table. This is <= COLS.
+	RowSize     int // In bytes
+	// A mapping from column index => column's DimensionTable. Dimension tables exist for string columns only.
+	DimensionTables     map[string]*DimensionTable
 	ColumnNameToIndex   map[string]int
 	ColumnIndexToName   []string
 	ColumnIndexToOffset []uintptr // The byte offset of each column from the beggining byte of the row
 	ColumnIndexToType   []int     // Index => one of the type constants (e.g. TypeUint8).
-	TimestampColumnName string    // Name of the column used for grouping rows into time buckets.
+	stringColumnsMap    map[string]bool
+	TimestampColumnName string // Name of the column used for grouping rows into time buckets.
 	SegmentSizeInBytes  int
 }
 
@@ -136,9 +140,9 @@ func getSortedKeys(m map[string]int) []string {
 // String columns appear first, and then numeric columns, for no particular reason other than
 // implementation convenience in a few places.
 func NewFactTable(filePath string, schema *Schema) *FactTable {
-	stringColumnNames := getSortedKeys(schema.StringColumns)
-	numericColumnNames := getSortedKeys(schema.NumericColumns)
-	allColumnNames := append(stringColumnNames, numericColumnNames...)
+	dimensionColumnNames := getSortedKeys(schema.DimensionColumns)
+	metricColumnNames := getSortedKeys(schema.MetricColumns)
+	allColumnNames := append(dimensionColumnNames, metricColumnNames...)
 	table := &FactTable{
 		ColumnCount: len(allColumnNames),
 		FilePath:    filePath,
@@ -148,10 +152,10 @@ func NewFactTable(filePath string, schema *Schema) *FactTable {
 	table.SegmentSizeInBytes = schema.SegmentSizeInBytes
 
 	columnToType := make(map[string]int)
-	for k, v := range schema.StringColumns {
+	for k, v := range schema.DimensionColumns {
 		columnToType[k] = v
 	}
-	for k, v := range schema.NumericColumns {
+	for k, v := range schema.MetricColumns {
 		columnToType[k] = v
 	}
 
@@ -165,11 +169,6 @@ func NewFactTable(filePath string, schema *Schema) *FactTable {
 		columnOffset += typeSizes[columnToType[name]]
 	}
 
-	table.DimensionTables = make([]*DimensionTable, len(stringColumnNames))
-	for i, column := range stringColumnNames {
-		table.DimensionTables[i] = NewDimensionTable(column)
-	}
-
 	table.RowSize = columnOffset
 
 	table.ColumnIndexToName = make([]string, len(allColumnNames))
@@ -177,6 +176,13 @@ func NewFactTable(filePath string, schema *Schema) *FactTable {
 	for i, name := range allColumnNames {
 		table.ColumnIndexToName[i] = name
 		table.ColumnNameToIndex[name] = i
+	}
+
+	table.stringColumnsMap = make(map[string]bool, len(schema.StringColumns))
+	table.DimensionTables = make(map[string]*DimensionTable, len(schema.StringColumns))
+	for _, column := range schema.StringColumns {
+		table.stringColumnsMap[column] = true
+		table.DimensionTables[column] = NewDimensionTable(column)
 	}
 
 	return table
@@ -207,11 +213,11 @@ func (table *FactTable) GetRowMaps(start, end int) []RowMap {
 // Given a column value from a row vector, return either the column value if it's a numeric column, or the
 // corresponding string if it's a normalized string column.
 // E.g. denormalizeColumnValue(213, 1) => "Japan"
-func (table *FactTable) denormalizeColumnValue(value Untyped, columnIndex int) Untyped {
+func (table *FactTable) denormalizeColumnValue(value Untyped, columnName string) Untyped {
 	if value == nil {
 		return value
-	} else if table.columnUsesDimensionTable(columnIndex) {
-		dimensionTable := table.DimensionTables[columnIndex]
+	} else if table.stringColumnsMap[columnName] {
+		dimensionTable := table.DimensionTables[columnName]
 		return dimensionTable.Rows[int(convertUntypedToFloat64(value))]
 	} else {
 		return value
@@ -226,7 +232,7 @@ func (table *FactTable) DenormalizeRow(row []byte) RowMap {
 	for i := 0; i < table.ColumnCount; i++ {
 		name := table.ColumnIndexToName[i]
 		value := table.getColumnValue(row, i)
-		result[name] = table.denormalizeColumnValue(value, i)
+		result[name] = table.denormalizeColumnValue(value, name)
 	}
 	return result
 }
@@ -282,17 +288,11 @@ outer:
 	return slice, interval
 }
 
-func (table *FactTable) columnUsesDimensionTable(columnIndex int) bool {
-	// This expression is valid because we put the string columns at the beginning of the row.
-	return columnIndex < len(table.DimensionTables)
-}
-
 // Takes a row of mixed types and replaces all string columns with the ID of the matching string in the
 // corresponding dimension table (creating a new row in the dimension table if the dimension table doesn't
 // already contain the string).
 // Note that all numeric values are assumed to be float64 (this is what Go's JSON unmarshaller produces).
 // e.g. {"country": "Japan", "browser": "Chrome", "age": 17} => [0, 1, 17]
-// TODO(philc): Make this return []byte
 func (table *FactTable) normalizeRow(rowMap RowMap) ([]byte, error) {
 	rowAsArray, err := table.convertRowMapToRowArray(rowMap)
 	if err != nil {
@@ -305,13 +305,14 @@ func (table *FactTable) normalizeRow(rowMap RowMap) ([]byte, error) {
 			continue
 		}
 		var valueAsFloat64 float64
-		if table.columnUsesDimensionTable(columnIndex) {
+		columnName := table.ColumnIndexToName[columnIndex]
+		if table.stringColumnsMap[columnName] {
 			if !isString(value) {
 				return nil, fmt.Errorf("Cannot insert a non-string value into column %s.",
 					table.ColumnIndexToName[columnIndex])
 			}
 			stringValue := value.(string)
-			dimensionTable := table.DimensionTables[columnIndex]
+			dimensionTable := table.DimensionTables[columnName]
 			dimensionRowId, ok := dimensionTable.ValueToId[stringValue]
 			if !ok {
 				dimensionRowId = dimensionTable.addRow(stringValue)
