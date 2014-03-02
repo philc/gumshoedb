@@ -153,7 +153,7 @@ func setupFactTable() (table *gumshoe.FactTable) {
 	}
 	// We use the 3rd column for grouping operations.
 	schema.NumericColumns[columnNames[2]] = gumshoe.TypeUint16
-	table, err = gumshoe.NewFactTable(tempDir+"/db", BenchmarkRows, schema)
+	table, err := gumshoe.NewFactTable(tempDir+"/db", BenchmarkRows, schema)
 	if err != nil {
 		panic(err)
 	}
