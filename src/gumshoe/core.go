@@ -35,6 +35,8 @@ var typeSizes = map[int]int{
 	TypeFloat32: int(unsafe.Sizeof(float32(0))),
 }
 
+const countColumnSize = 1 // This is a uint8.
+
 // How large to make each segment. Segments may not be precisely this size, because they will be aligned
 // to the table's row size.
 const defaultSegmentSize = 100e6 // 100MB
@@ -162,7 +164,8 @@ func NewFactTable(filePath string, schema *Schema) *FactTable {
 	// Compute the byte offset from the beginning of the row for each column
 	table.ColumnIndexToOffset = make([]uintptr, table.ColumnCount)
 	table.ColumnIndexToType = make([]int, table.ColumnCount)
-	columnOffset := table.numNilBytes() // Skip space for the nil bytes header
+	// Skip space for the nil bytes header and the count header.
+	columnOffset := countColumnSize + table.numNilBytes()
 	for i, name := range allColumnNames {
 		table.ColumnIndexToOffset[i] = uintptr(columnOffset)
 		table.ColumnIndexToType[i] = columnToType[name]
@@ -333,7 +336,7 @@ func (table *FactTable) normalizeRow(rowMap RowMap) ([]byte, error) {
 }
 
 func (table *FactTable) columnIsNil(rowPtr uintptr, columnIndex int) bool {
-	nilBytePtr := unsafe.Pointer(rowPtr + uintptr(columnIndex/8))
+	nilBytePtr := unsafe.Pointer(rowPtr + uintptr(countColumnSize+columnIndex/8))
 	nilBitIndex := uint(columnIndex) % 8
 	isNil := *(*uint)(nilBytePtr) & (1 << (7 - nilBitIndex))
 	return isNil > 0
@@ -369,7 +372,7 @@ func (table *FactTable) getColumnValue(row []byte, column int) Untyped {
 func (table *FactTable) setColumnValue(row []byte, column int, value Untyped) {
 	rowPtr := uintptr(unsafe.Pointer(&row[0]))
 	if value == nil {
-		nilBytePtr := unsafe.Pointer(rowPtr + uintptr(column/8))
+		nilBytePtr := unsafe.Pointer(rowPtr + uintptr(countColumnSize+column/8))
 		nilBitIndex := uint(column) % 8
 		*(*uint8)(nilBytePtr) = *(*uint8)(nilBytePtr) | (1 << (7 - nilBitIndex))
 	} else {
@@ -398,7 +401,7 @@ func (table *FactTable) setColumnValue(row []byte, column int, value Untyped) {
 func (table *FactTable) nilBitsToString(row int) string {
 	var parts []string
 	rowSlice, _ := table.getRowSlice(row)
-	for _, b := range rowSlice[0:table.numNilBytes()] {
+	for _, b := range rowSlice[countColumnSize : countColumnSize+table.numNilBytes()] {
 		parts = append(parts, fmt.Sprintf("%08b", b))
 	}
 	return strings.Join(parts, " ")
