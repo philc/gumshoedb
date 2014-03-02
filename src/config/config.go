@@ -51,7 +51,7 @@ func (c *Config) ToSchema() *gumshoe.Schema {
 	for _, columnPair := range c.DimensionColumns {
 		columnType := columnPair[1]
 		if strings.HasPrefix(columnType, "string:") {
-			columnType = strings.Replace(columnType, "string:", "", 1)
+			columnType = strings.TrimPrefix(columnType, "string:")
 			schema.StringColumns = append(schema.StringColumns, columnPair[1])
 		}
 		schema.DimensionColumns[columnPair[0]] = stringToSchemaType[columnType]

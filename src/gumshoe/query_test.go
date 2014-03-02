@@ -1,7 +1,6 @@
 package gumshoe
 
 import (
-	"fmt"
 	"testing"
 
 	"utils"
@@ -60,8 +59,6 @@ func runWithGroupBy(table *FactTable, filter QueryGrouping) []map[string]Untyped
 func TestInvokeQueryFiltersRowsUsingEqualsFilter(t *testing.T) {
 	table := createTableFixtureForFilterTests()
 	results := runWithFilter(table, QueryFilter{"equal", "metric1", 2})
-	fmt.Println(">>>> results", results)
-
 	Assert(t, results[0]["metric1"], Equals, 2.0)
 
 	results = runWithFilter(table, QueryFilter{"equal", "dim1", "string2"})
