@@ -21,7 +21,7 @@ func TestPersistenceEndToEnd(t *testing.T) {
 
 	schema := NewSchema()
 	schema.TimestampColumn = "at"
-	schema.NumericColumns = map[string]int{"col1": TypeUint8}
+	schema.MetricColumns = map[string]int{"col1": TypeUint8}
 	table := NewFactTable(tableFilePath, schema)
 	table.SegmentSizeInBytes = 2000 // Use small a small segment size so this test runs quickly.
 
