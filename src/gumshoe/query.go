@@ -168,7 +168,10 @@ func (table *FactTable) scan(filters []FactTableFilterFunc, columnIndices []int,
 					}
 					(*rowAggregate).Sums[columnIndex] += columnValue
 				}
-				(*rowAggregate).Count++
+
+				// The first byte is the count of how many rows have been collapsible into this one row.
+				rowCount := *((*uint8)(unsafe.Pointer(rowPtr)))
+				(*rowAggregate).Count += int(rowCount)
 				rowPtr += rowSize
 			}
 		}

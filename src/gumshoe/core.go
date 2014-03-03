@@ -2,6 +2,7 @@
 package gumshoe
 
 import (
+	"bytes"
 	"fmt"
 	"math"
 	"reflect"
@@ -89,14 +90,15 @@ type FactTable struct {
 	RowSize     int // In bytes
 	Schema      *Schema
 	// A mapping from column index => column's DimensionTable. Dimension tables exist for string columns only.
-	DimensionTables     map[string]*DimensionTable
-	ColumnNameToIndex   map[string]int
-	ColumnIndexToName   []string
-	ColumnIndexToOffset []uintptr // The byte offset of each column from the beggining byte of the row
-	ColumnIndexToType   []int     // Index => one of the type constants (e.g. TypeUint8).
-	stringColumnsMap    map[string]bool
-	TimestampColumnName string // Name of the column used for grouping rows into time buckets.
-	SegmentSizeInBytes  int
+	DimensionTables       map[string]*DimensionTable
+	ColumnNameToIndex     map[string]int
+	ColumnIndexToName     []string
+	ColumnIndexToOffset   []uintptr // The byte offset of each column from the beggining byte of the row
+	DimensionColumnsWidth int       // The combined width of all dimension columns
+	ColumnIndexToType     []int     // Index => one of the type constants (e.g. TypeUint8).
+	stringColumnsMap      map[string]bool
+	TimestampColumnName   string // Name of the column used for grouping rows into time buckets.
+	SegmentSizeInBytes    int
 }
 
 func (table *FactTable) Rows() []byte {
@@ -173,8 +175,13 @@ func NewFactTable(filePath string, schema *Schema) *FactTable {
 		table.ColumnIndexToType[i] = columnToType[name]
 		columnOffset += typeSizes[columnToType[name]]
 	}
-
 	table.RowSize = columnOffset
+
+	dimensionColumnsWidth := 0
+	for _, v := range schema.DimensionColumns {
+		dimensionColumnsWidth += typeSizes[v]
+	}
+	table.DimensionColumnsWidth = dimensionColumnsWidth
 
 	table.ColumnIndexToName = make([]string, len(allColumnNames))
 	table.ColumnNameToIndex = make(map[string]int, len(allColumnNames))
@@ -273,23 +280,26 @@ func (table *FactTable) getRowSlice(rowIndex int) ([]byte, *Interval) {
 	if rowIndex >= table.Count {
 		panic(fmt.Sprintf("Row index %d is out of bounds (table size is %d).", rowIndex, table.Count))
 	}
-	// We search for the Interval and time segment which stores the given rowIndex.
-	rows := 0
+	// We search for the Interval and segment which contains the given rowIndex.
 	var interval *Interval
 	var segment []byte
-outer:
+	offset := 0
+	rowLocation := rowIndex * table.RowSize
 	for _, interval = range table.Intervals {
-		for _, segment = range interval.Segments {
-			segmentRowCount := len(segment) / table.RowSize
-			if rows+segmentRowCount > rowIndex {
-				break outer
-			}
-			rows += segmentRowCount
+		if offset+interval.NextInsertOffset > rowLocation {
+			break
 		}
+		offset += interval.NextInsertOffset
 	}
 
-	rowOffset := rows + (rowIndex - rows)
-	slice := segment[rowOffset*table.RowSize : (rowOffset+1)*table.RowSize]
+	for _, segment = range interval.Segments {
+		if offset+len(segment) > rowLocation {
+			break
+		}
+		offset += len(segment)
+	}
+	segmentOffset := rowLocation - offset
+	slice := segment[segmentOffset : segmentOffset+table.RowSize]
 	return slice, interval
 }
 
@@ -412,19 +422,80 @@ func (table *FactTable) nilBitsToString(row int) string {
 	return strings.Join(parts, " ")
 }
 
+// Finds a row in the interval with the same dimensions and which doesn't have its count at the max value.
+func (table *FactTable) findCollapsibleRowInInterval(row []byte, interval *Interval) ([]byte, bool) {
+	rowSize := table.RowSize
+	// To determine whether rows are collapsible, we need to compare the bytes representing nils values, and the
+	// value of all dimension columns.
+	start := countColumnSize
+	end := start + table.numNilBytes() + table.DimensionColumnsWidth
+	rowDimensions := row[start:end]
+	for _, segment := range interval.Segments {
+		for i := 0; i < len(segment); i += rowSize {
+			segmentRowDimensions := segment[i+start : i+end]
+			if bytes.Equal(rowDimensions, segmentRowDimensions) {
+				if segment[0] < 255 {
+					return segment[i : i+rowSize], true
+				}
+			}
+		}
+	}
+	return []byte{}, false
+}
+
+// Adds all of b's metrics columns to a's metrics columns, and increments a's row count by one.
+func (table *FactTable) collapseRow(a []byte, b []byte) {
+	aPtr := uintptr(unsafe.Pointer(&a[0]))
+	bPtr := uintptr(unsafe.Pointer(&b[0]))
+	*(*uint8)(unsafe.Pointer(aPtr)) += 1 // Increment the count of rows.
+	// Iterate over all metric columns and add from b to a.
+	firstMetricColumn := len(table.Schema.DimensionColumns)
+	for i := firstMetricColumn; i < len(table.ColumnIndexToOffset); i++ {
+		columnOffset := table.ColumnIndexToOffset[i]
+		aColumnPtr := unsafe.Pointer(aPtr + columnOffset)
+		bColumnPtr := unsafe.Pointer(bPtr + columnOffset)
+		columnType := table.ColumnIndexToType[i]
+		// TODO(philc): We should check for overflow here, or perhaps require that metric columns be something
+		// large like float64.
+		switch columnType {
+		case TypeUint8:
+			*(*uint8)(aColumnPtr) = *(*uint8)(aColumnPtr) + (*(*uint8)(bColumnPtr))
+		case TypeInt8:
+			*(*int8)(aColumnPtr) = *(*int8)(aColumnPtr) + (*(*int8)(bColumnPtr))
+		case TypeUint16:
+			*(*uint16)(aColumnPtr) = *(*uint16)(aColumnPtr) + (*(*uint16)(bColumnPtr))
+		case TypeInt16:
+			*(*int16)(aColumnPtr) = *(*int16)(aColumnPtr) + (*(*int16)(bColumnPtr))
+		case TypeUint32:
+			*(*uint32)(aColumnPtr) = *(*uint32)(aColumnPtr) + (*(*uint32)(bColumnPtr))
+		case TypeInt32:
+			*(*int32)(aColumnPtr) = *(*int32)(aColumnPtr) + (*(*int32)(bColumnPtr))
+		case TypeFloat32:
+			*(*float32)(aColumnPtr) = *(*float32)(aColumnPtr) + (*(*float32)(bColumnPtr))
+		}
+	}
+}
+
 func (table *FactTable) insertNormalizedRow(timestamp time.Time, row []byte) {
 	interval := getIntervalForTimestamp(table, timestamp)
 	if interval == nil {
 		interval = table.createInterval(timestamp)
 		table.Intervals = append(table.Intervals, interval)
 	}
-	if interval.SegmentsAreFull() {
-		interval.AddSegment(table)
+	existingRow, ok := table.findCollapsibleRowInInterval(row, interval)
+	if ok {
+		table.collapseRow(existingRow, row)
+	} else {
+		if interval.SegmentsAreFull() {
+			interval.AddSegment(table)
+		}
+		segment := interval.Segments[len(interval.Segments)-1]
+		rowSlice := segment[interval.NextInsertOffset : interval.NextInsertOffset+table.RowSize]
+		copy(rowSlice, row)
+		rowSlice[0] = 1 // Set the count to 1.
+		interval.NextInsertOffset += table.RowSize
+		table.Count++
 	}
-	segment := interval.Segments[len(interval.Segments)-1]
-	copy(segment[interval.NextInsertOffset:interval.NextInsertOffset+table.RowSize], row)
-	interval.NextInsertOffset += table.RowSize
-	table.Count++
 }
 
 func getIntervalForTimestamp(table *FactTable, timestamp time.Time) *Interval {
@@ -474,7 +545,7 @@ func (interval *Interval) SegmentsAreFull() bool {
 		interval.NextInsertOffset >= len(interval.Segments[len(interval.Segments)-1])
 }
 
-// Inserts the given rows into the table. Returns an error if one of the rows contains an unrecognized column.
+// Inserts the given rows into the table. Returns an error if any row contains an unrecognized column.
 func (table *FactTable) InsertRowMaps(rows []RowMap) error {
 	table.InsertLock.Lock()
 	defer table.InsertLock.Unlock()

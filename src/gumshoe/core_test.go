@@ -1,6 +1,7 @@
 package gumshoe
 
 import (
+	"strings"
 	"testing"
 
 	. "github.com/cespare/a"
@@ -15,6 +16,12 @@ func tableFixture() *FactTable {
 	return NewFactTable("", schema)
 }
 
+// The offset in seconds for the given number of hours. This is used to succinctly express rows which should
+// fall within different time intervals.
+func hour(n int) int {
+	return n * 60 * 60
+}
+
 func TestConvertRowMapToRowArrayThrowsErrorForUnrecognizedColumn(t *testing.T) {
 	_, err := tableFixture().convertRowMapToRowArray(
 		RowMap{"at": 0, "dim1": "string1", "unknownColumn": 10})
@@ -23,7 +30,7 @@ func TestConvertRowMapToRowArrayThrowsErrorForUnrecognizedColumn(t *testing.T) {
 
 func TestNewIntervalsAreAllocatedAsNeeded(t *testing.T) {
 	table := tableFixture()
-	table.SegmentSizeInBytes = 12
+	table.SegmentSizeInBytes = 16
 	Assert(t, len(table.Intervals), Equals, 0)
 	// This require cause a new Interval and two new segments to be allocated.
 	err := table.InsertRowMaps([]RowMap{
@@ -41,3 +48,29 @@ func TestNilMetricColumnsAreRejected(t *testing.T) {
 	Assert(t, strings.Contains(err.Error(), "Metric columns cannot be nil"), IsTrue)
 }
 
+func TestRowsGetCollapsedUponInsertion(t *testing.T) {
+	table := tableFixture()
+	// These two rows should be collapsed.
+	table.InsertRowMaps([]RowMap{{"at": 0, "dim1": "string1", "metric1": 1.0}})
+	table.InsertRowMaps([]RowMap{{"at": 0, "dim1": "string1", "metric1": 3.0}})
+	Assert(t, table.GetRowMaps(0, 1)[0]["metric1"], Equals, int32(4))
+
+	// This row should not, because it has a nil column.
+	table.InsertRowMaps([]RowMap{{"at": 0, "dim1": nil, "metric1": 5.0}})
+	Assert(t, table.GetRowMaps(1, 2)[0]["metric1"], Equals, int32(5))
+
+	// This row should not be collapsed with the others, because it falls in a different time interval.
+	table.InsertRowMaps([]RowMap{{"at": 60 * 60, "dim1": "string1", "metric1": 7.0}})
+	Assert(t, table.GetRowMaps(2, 3)[0]["metric1"], Equals, int32(7))
+}
+
+func TestInsertAndReadNullValues(t *testing.T) {
+	table := tableFixture()
+	insertRow(table, hour(0), "a", 0.0)
+	insertRow(table, hour(1), nil, 1.0)
+	results := table.GetRowMaps(0, table.Count)
+	Assert(t, results[0]["dim1"], Equals, "a")
+	Assert(t, results[0]["metric1"], Equals, int32(0))
+	Assert(t, results[1]["dim1"], Equals, nil)
+	Assert(t, results[1]["metric1"].(int32), Equals, int32(1))
+}
