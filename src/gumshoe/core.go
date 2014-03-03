@@ -87,6 +87,7 @@ type FactTable struct {
 	Count       int // The number of used rows currently in the table. This is <= ROWS.
 	ColumnCount int // The number of columns in use in the table. This is <= COLS.
 	RowSize     int // In bytes
+	Schema      *Schema
 	// A mapping from column index => column's DimensionTable. Dimension tables exist for string columns only.
 	DimensionTables     map[string]*DimensionTable
 	ColumnNameToIndex   map[string]int
@@ -152,6 +153,7 @@ func NewFactTable(filePath string, schema *Schema) *FactTable {
 	}
 	table.TimestampColumnName = schema.TimestampColumn
 	table.SegmentSizeInBytes = schema.SegmentSizeInBytes
+	table.Schema = schema
 
 	columnToType := make(map[string]int)
 	for k, v := range schema.DimensionColumns {
@@ -303,16 +305,19 @@ func (table *FactTable) normalizeRow(rowMap RowMap) ([]byte, error) {
 	}
 	rowSlice := make([]byte, table.RowSize)
 	for columnIndex, value := range rowAsArray {
+		columnName := table.ColumnIndexToName[columnIndex]
 		if value == nil {
+			_, ok := table.Schema.MetricColumns[columnName]
+			if ok {
+				return nil, fmt.Errorf("Metric columns cannot be nil. %s is nil.", columnName)
+			}
 			table.setColumnValue(rowSlice, columnIndex, value)
 			continue
 		}
 		var valueAsFloat64 float64
-		columnName := table.ColumnIndexToName[columnIndex]
 		if table.stringColumnsMap[columnName] {
 			if !isString(value) {
-				return nil, fmt.Errorf("Cannot insert a non-string value into column %s.",
-					table.ColumnIndexToName[columnIndex])
+				return nil, fmt.Errorf("Cannot insert a non-string value into column %s.", columnName)
 			}
 			stringValue := value.(string)
 			dimensionTable := table.DimensionTables[columnName]
@@ -327,7 +332,7 @@ func (table *FactTable) normalizeRow(rowMap RowMap) ([]byte, error) {
 				valueAsFloat64 = value.(float64)
 			default:
 				return nil, fmt.Errorf("Expected float64 as the type for column %s, but received %s",
-					table.ColumnIndexToName[columnIndex], reflect.TypeOf(value))
+					columnName, reflect.TypeOf(value))
 			}
 		}
 		table.setColumnValue(rowSlice, columnIndex, valueAsFloat64)

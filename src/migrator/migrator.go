@@ -69,7 +69,7 @@ func copyOldDataToNewTable(oldTable *gumshoe.FactTable, newTable *gumshoe.FactTa
 		}
 		log.Printf("Migrating data from rows %d to %d", start, end)
 		rows := oldTable.GetRowMaps(start, end)
-		prepareRows(rows, newColumnNames, deletedColumnNames)
+		prepareRows(rows, newColumnNames, deletedColumnNames, newTable.Schema)
 		err := newTable.InsertRowMaps(rows)
 		if err != nil {
 			log.Fatal("Error encountered when inserting rows: ", err)
@@ -89,33 +89,40 @@ func subtractColumnNames(table1 *gumshoe.FactTable, table2 *gumshoe.FactTable) [
 	return columns
 }
 
-func prepareRows(rows []gumshoe.RowMap, newColumnNames []string, deletedColumnNames []string) {
+func prepareRows(rows []gumshoe.RowMap, newColumnNames []string, deletedColumnNames []string,
+	newSchema *gumshoe.Schema) {
 	for _, row := range rows {
-		for _, newColumnName := range newColumnNames {
-			row[newColumnName] = nil
+		for _, column := range newColumnNames {
+			// The default value for dimension columns is nil. For metric columns (which are not nullable), it's 0.
+			_, ok := newSchema.DimensionColumns[column]
+			if ok {
+				row[column] = nil
+			} else {
+				row[column] = 0.0
+			}
 		}
-		for _, deletedColumnName := range deletedColumnNames {
-			delete(row, deletedColumnName)
+		for _, column := range deletedColumnNames {
+			delete(row, column)
 		}
 		// TODO: This switch is necessary because table.InsertRowMaps(table.GetRowMaps(0, 1)) panics on non-string,
 		// non-float64 types. Ideally, table.InsertRowMaps would not panic if an unexpected numeric type can be
 		// safely coerced.
-		for columnName, value := range row {
+		for column, value := range row {
 			switch value.(type) {
 			case uint8:
-				row[columnName] = float64(value.(uint8))
+				row[column] = float64(value.(uint8))
 			case int8:
-				row[columnName] = float64(value.(int8))
+				row[column] = float64(value.(int8))
 			case uint16:
-				row[columnName] = float64(value.(uint16))
+				row[column] = float64(value.(uint16))
 			case int16:
-				row[columnName] = float64(value.(int16))
+				row[column] = float64(value.(int16))
 			case uint32:
-				row[columnName] = float64(value.(uint32))
+				row[column] = float64(value.(uint32))
 			case int32:
-				row[columnName] = float64(value.(int32))
+				row[column] = float64(value.(int32))
 			case float32:
-				row[columnName] = float64(value.(float32))
+				row[column] = float64(value.(float32))
 			}
 		}
 	}
