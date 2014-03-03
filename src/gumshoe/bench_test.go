@@ -19,8 +19,11 @@ const (
 
 var factTable *gumshoe.FactTable
 
-func init() {
-	factTable = setupFactTable()
+func setup(b *testing.B) {
+	if factTable == nil {
+		factTable = setupFactTable()
+		b.ResetTimer()
+	}
 }
 
 func checkResult(b *testing.B, actual interface{}, expected interface{}) {
@@ -32,6 +35,7 @@ func checkResult(b *testing.B, actual interface{}, expected interface{}) {
 
 // A query which only sums aggregates.
 func BenchmarkAggregateQuery(b *testing.B) {
+	setup(b)
 	query := createQuery(nil, nil)
 	if err := gumshoe.ValidateQuery(factTable, query); err != nil {
 		b.Fatal(err)
@@ -48,6 +52,7 @@ func BenchmarkAggregateQuery(b *testing.B) {
 
 // A query which filters rows by a single, simple filter function.
 func BenchmarkFilterQuery(b *testing.B) {
+	setup(b)
 	// column2 cycles between 0 and 1, so this will filter out 1/2 the columns.
 	query := createQuery(nil, []gumshoe.QueryFilter{{">", "column002", 0}})
 	if err := gumshoe.ValidateQuery(factTable, query); err != nil {
@@ -66,7 +71,7 @@ func BenchmarkFilterQuery(b *testing.B) {
 // A query which groups by a column. Each column has 10 possible values, so the result set will contain 10 row
 // aggregates.
 func BenchmarkGroupByQuery(b *testing.B) {
-	setBytes(b)
+	setup(b)
 	// This creates 10 groupings.
 	query := createQuery([]gumshoe.QueryGrouping{{"", "column002", "column002"}}, nil)
 	if err := gumshoe.ValidateQuery(factTable, query); err != nil {
@@ -84,10 +89,12 @@ func BenchmarkGroupByQuery(b *testing.B) {
 			"column001": BenchmarkRows / groupCount, "column002": i, "rowCount": BenchmarkRows / groupCount}
 	}
 	checkResult(b, result["results"], expectedResult)
+	setBytes(b)
 }
 
 // A query which groups by a column that is transformed using a time transform function.
 func BenchmarkGroupByWithTimeTransformQuery(b *testing.B) {
+	setup(b)
 	query := createQuery([]gumshoe.QueryGrouping{{"hour", "column002", "column002"}}, nil)
 	if err := gumshoe.ValidateQuery(factTable, query); err != nil {
 		panic(err)
