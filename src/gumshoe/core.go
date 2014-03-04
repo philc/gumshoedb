@@ -428,19 +428,23 @@ func (table *FactTable) findCollapsibleRowInInterval(row []byte, interval *Inter
 	// To determine whether rows are collapsible, we need to compare the bytes representing nils values, and the
 	// value of all dimension columns.
 	start := countColumnSize
-	end := start + table.numNilBytes() + table.DimensionColumnsWidth
-	rowDimensions := row[start:end]
-	for _, segment := range interval.Segments {
-		for i := 0; i < len(segment); i += rowSize {
-			segmentRowDimensions := segment[i+start : i+end]
-			if bytes.Equal(rowDimensions, segmentRowDimensions) {
-				if segment[0] < 255 {
-					return segment[i : i+rowSize], true
-				}
+	sliceLength := table.numNilBytes() + table.DimensionColumnsWidth
+	rowDimensions := row[start : start+sliceLength]
+	for i, segment := range interval.Segments {
+		segmentLength := len(segment)
+		if i == len(interval.Segments)-1 {
+			segmentLength = interval.NextInsertOffset
+		}
+		end := segmentLength + start
+		for i := start; i < end; i += rowSize {
+			segmentRowDimensions := segment[i : i+sliceLength]
+			if bytes.Equal(rowDimensions, segmentRowDimensions) && segment[0] < 255 {
+				rowOffset := i - start
+				return segment[rowOffset : rowOffset+rowSize], true
 			}
 		}
 	}
-	return []byte{}, false
+	return nil, false
 }
 
 // Adds all of b's metrics columns to a's metrics columns, and increments a's row count by one.
