@@ -310,36 +310,37 @@ func convertQueryFilterToFilterFunc(queryFilter QueryFilter, table *FactTable) F
 	columnOffset := table.ColumnIndexToOffset[columnIndex]
 	columnType := table.ColumnIndexToType[columnIndex]
 
+	// NOTE(philc): This list of filters is duplicated in query_parser.go.
 	switch queryFilter.Type {
-	case "greaterThan", ">":
+	case "=":
 		f = func(row uintptr) bool {
 			return !table.columnIsNil(row, columnIndex) &&
-				getColumnValueAsFloat64(row, columnOffset, columnType) > value
+				getColumnValueAsFloat64(row, columnOffset, columnType) == value
 		}
-	case "greaterThanOrEqualTo", ">=":
-		f = func(row uintptr) bool {
-			return !table.columnIsNil(row, columnIndex) &&
-				getColumnValueAsFloat64(row, columnOffset, columnType) >= value
-		}
-	case "lessThan", "<":
-		f = func(row uintptr) bool {
-			return !table.columnIsNil(row, columnIndex) &&
-				getColumnValueAsFloat64(row, columnOffset, columnType) < value
-		}
-	case "lessThanOrEqualTo", "<=":
-		f = func(row uintptr) bool {
-			return !table.columnIsNil(row, columnIndex) &&
-				getColumnValueAsFloat64(row, columnOffset, columnType) <= value
-		}
-	case "notEqual", "!=":
+	case "!=":
 		f = func(row uintptr) bool {
 			return !table.columnIsNil(row, columnIndex) &&
 				getColumnValueAsFloat64(row, columnOffset, columnType) != value
 		}
-	case "equal", "=":
+	case ">":
 		f = func(row uintptr) bool {
 			return !table.columnIsNil(row, columnIndex) &&
-				getColumnValueAsFloat64(row, columnOffset, columnType) == value
+				getColumnValueAsFloat64(row, columnOffset, columnType) > value
+		}
+	case ">=":
+		f = func(row uintptr) bool {
+			return !table.columnIsNil(row, columnIndex) &&
+				getColumnValueAsFloat64(row, columnOffset, columnType) >= value
+		}
+	case "<":
+		f = func(row uintptr) bool {
+			return !table.columnIsNil(row, columnIndex) &&
+				getColumnValueAsFloat64(row, columnOffset, columnType) < value
+		}
+	case "<=":
+		f = func(row uintptr) bool {
+			return !table.columnIsNil(row, columnIndex) &&
+				getColumnValueAsFloat64(row, columnOffset, columnType) <= value
 		}
 	case "in":
 		count := len(values)

@@ -55,25 +55,25 @@ func runWithGroupBy(table *FactTable, filter QueryGrouping) []map[string]Untyped
 
 func TestInvokeQueryFiltersRowsUsingEqualsFilter(t *testing.T) {
 	table := createTableFixtureForFilterTests()
-	results := runWithFilter(table, QueryFilter{"equal", "metric1", 2})
+	results := runWithFilter(table, QueryFilter{"=", "metric1", 2})
 	Assert(t, results[0]["metric1"], Equals, 2.0)
 
-	results = runWithFilter(table, QueryFilter{"equal", "dim1", "string2"})
+	results = runWithFilter(table, QueryFilter{"=", "dim1", "string2"})
 	Assert(t, results[0]["metric1"], Equals, 2.0)
 
 	// These match zero rows.
-	results = runWithFilter(table, QueryFilter{"equal", "metric1", 3})
+	results = runWithFilter(table, QueryFilter{"=", "metric1", 3})
 	Assert(t, results[0]["metric1"], Equals, 0.0)
 
-	results = runWithFilter(table, QueryFilter{"equal", "dim1", "non-existant"})
+	results = runWithFilter(table, QueryFilter{"=", "dim1", "non-existant"})
 	Assert(t, results[0]["metric1"], Equals, 0.0)
 }
 
 func TestInvokeQueryFiltersRowsUsingLessThan(t *testing.T) {
 	table := createTableFixtureForFilterTests()
-	Assert(t, runWithFilter(table, QueryFilter{"lessThan", "metric1", 2})[0]["metric1"], Equals, 1.0)
+	Assert(t, runWithFilter(table, QueryFilter{"<", "metric1", 2})[0]["metric1"], Equals, 1.0)
 	// Matches zero rows.
-	Assert(t, runWithFilter(table, QueryFilter{"lessThan", "metric1", 1})[0]["metric1"], Equals, 0.0)
+	Assert(t, runWithFilter(table, QueryFilter{"<", "metric1", 1})[0]["metric1"], Equals, 0.0)
 }
 
 func TestInvokeQueryFiltersRowsUsingIn(t *testing.T) {
@@ -124,7 +124,7 @@ func TestAggregateQueryWithNullValues(t *testing.T) {
 
 func TestFilterQueryWithNullValues(t *testing.T) {
 	table := createTableFixtureForNullQueryTests()
-	results := runWithFilter(table, QueryFilter{"equal", "dim1", "a"})
+	results := runWithFilter(table, QueryFilter{"=", "dim1", "a"})
 	Assert(t, results[0], utils.HasEqualJSON, map[string]Untyped{"metric1": 1, "rowCount": 1})
 	// TODO(philc): Enable equals filters by nil values on string columns.
 	// results = runWithFilter(table, QueryFilter{"equals", "dim1", nil})
