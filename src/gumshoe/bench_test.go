@@ -46,15 +46,15 @@ func BenchmarkAggregateQuery(b *testing.B) {
 		result = factTable.InvokeQuery(query)
 	}
 	checkResult(b, result["results"],
-		[]map[string]gumshoe.Untyped{{"column001": BenchmarkRows, "rowCount": BenchmarkRows}})
+		[]map[string]gumshoe.Untyped{{"metric001": BenchmarkRows, "rowCount": BenchmarkRows}})
 	setBytes(b)
 }
 
 // A query which filters rows by a single, simple filter function.
 func BenchmarkFilterQuery(b *testing.B) {
 	setup(b)
-	// column2 cycles between 0 and 1, so this will filter out 1/2 the columns.
-	query := createQuery(nil, []gumshoe.QueryFilter{{">", "column002", 0}})
+	// Metric 2 cycles between 0 and 1, so this will filter out 1/2 the columns.
+	query := createQuery(nil, []gumshoe.QueryFilter{{">", "metric002", 0}})
 	if err := gumshoe.ValidateQuery(factTable, query); err != nil {
 		b.Fatal(err)
 	}
@@ -64,7 +64,7 @@ func BenchmarkFilterQuery(b *testing.B) {
 		result = factTable.InvokeQuery(query)
 	}
 	checkResult(b, result["results"],
-		[]map[string]int{{"column001": BenchmarkRows / 2, "rowCount": BenchmarkRows / 2}})
+		[]map[string]int{{"metric001": BenchmarkRows / 2, "rowCount": BenchmarkRows / 2}})
 	setBytes(b)
 }
 
@@ -72,8 +72,8 @@ func BenchmarkFilterQuery(b *testing.B) {
 // aggregates.
 func BenchmarkGroupByQuery(b *testing.B) {
 	setup(b)
-	// This creates 10 groupings.
-	query := createQuery([]gumshoe.QueryGrouping{{"", "column002", "column002"}}, nil)
+	groupCount := 2
+	query := createQuery([]gumshoe.QueryGrouping{{"", "dim2", "dim2"}}, nil)
 	if err := gumshoe.ValidateQuery(factTable, query); err != nil {
 		panic(err)
 	}
@@ -82,11 +82,10 @@ func BenchmarkGroupByQuery(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		result = factTable.InvokeQuery(query)
 	}
-	groupCount := 2
 	expectedResult := make([]map[string]gumshoe.Untyped, groupCount)
 	for i := range expectedResult {
 		expectedResult[i] = map[string]gumshoe.Untyped{
-			"column001": BenchmarkRows / groupCount, "column002": i, "rowCount": BenchmarkRows / groupCount}
+			"metric001": BenchmarkRows / groupCount, "dim2": i, "rowCount": BenchmarkRows / groupCount}
 	}
 	checkResult(b, result["results"], expectedResult)
 	setBytes(b)
@@ -95,7 +94,7 @@ func BenchmarkGroupByQuery(b *testing.B) {
 // A query which groups by a column that is transformed using a time transform function.
 func BenchmarkGroupByWithTimeTransformQuery(b *testing.B) {
 	setup(b)
-	query := createQuery([]gumshoe.QueryGrouping{{"hour", "column002", "column002"}}, nil)
+	query := createQuery([]gumshoe.QueryGrouping{{"hour", "dim2", "dim2"}}, nil)
 	if err := gumshoe.ValidateQuery(factTable, query); err != nil {
 		panic(err)
 	}
@@ -109,7 +108,7 @@ func BenchmarkGroupByWithTimeTransformQuery(b *testing.B) {
 func createQuery(groupings []gumshoe.QueryGrouping, filters []gumshoe.QueryFilter) *gumshoe.Query {
 	return &gumshoe.Query{
 		TableName:  "tableName",
-		Aggregates: createQueryAggregates([]string{"column001"}),
+		Aggregates: createQueryAggregates([]string{"metric001"}),
 		Groupings:  groupings,
 		Filters:    filters,
 	}
@@ -126,17 +125,19 @@ func createQueryAggregates(columns []string) []gumshoe.QueryAggregate {
 
 // The test fact table is constructed to represent a realistic schema.
 func setupFactTable() (table *gumshoe.FactTable) {
-	columnNames := make([]string, BenchmarkColumns)
+	metricCount := BenchmarkColumns - 2
+	columnNames := make([]string, metricCount)
 	for i := range columnNames {
 		// The columns are named columni where i has up to 2 leading zeros.
-		columnNames[i] = fmt.Sprintf("column%03d", i)
+		columnNames[i] = fmt.Sprintf("metric%03d", i)
 	}
 	schema := gumshoe.NewSchema()
 	for _, column := range columnNames {
 		schema.MetricColumns[column] = gumshoe.TypeInt32
 	}
-	// We use the 3rd column for grouping operations.
-	schema.MetricColumns[columnNames[2]] = gumshoe.TypeUint16
+	schema.DimensionColumns["dim1"] = gumshoe.TypeInt16
+	// Used for grouping operations.
+	schema.DimensionColumns["dim2"] = gumshoe.TypeInt16
 	schema.TimestampColumn = "at"
 	// Note that we're using an in-memory table so that these benchmarks start up faster.
 	table = gumshoe.NewFactTable("", schema)
@@ -148,14 +149,16 @@ func populateTableWithTestingData(table *gumshoe.FactTable) {
 	rows := make([]gumshoe.RowMap, BenchmarkRows)
 
 	for i := range rows {
-		row := make(gumshoe.RowMap, table.ColumnCount)
-		for j := 3; j < table.ColumnCount; j++ {
-			row[table.ColumnIndexToName[j]] = float64(i % 10)
+		row := make(gumshoe.RowMap, len(table.Schema.MetricColumns))
+		row["metric000"] = 0.0
+		row["metric001"] = float64(1)
+		row["metric002"] = float64(i % 2)
+
+		for j := 3; j < len(table.Schema.MetricColumns); j++ {
+			row[fmt.Sprintf("metric%03d", j)] = float64(i % 10)
 		}
-		// We use properties of these column values to construct sanity-check assertions in our benchmarks.
-		row[table.ColumnIndexToName[0]] = float64(0)
-		row[table.ColumnIndexToName[1]] = float64(1)
-		row[table.ColumnIndexToName[2]] = float64(i % 2)
+		row["dim1"] = float64(i)     // Since this is unique per row, it prevents row collapsing.
+		row["dim2"] = float64(i % 2) // We use this for grouping operations.
 		row["at"] = 0
 		rows[i] = row
 	}
