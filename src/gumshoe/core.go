@@ -425,22 +425,25 @@ func (table *FactTable) nilBitsToString(row int) string {
 // Finds a row in the interval with the same dimensions and which doesn't have its count at the max value.
 func (table *FactTable) findCollapsibleRowInInterval(row []byte, interval *Interval) ([]byte, bool) {
 	rowSize := table.RowSize
-	// To determine whether rows are collapsible, we need to compare the bytes representing nils values, and the
+	// To determine whether rows are collapsible, we need to compare the bytes representing nil values, and the
 	// value of all dimension columns.
 	start := countColumnSize
 	sliceLength := table.numNilBytes() + table.DimensionColumnsWidth
 	rowDimensions := row[start : start+sliceLength]
-	for i, segment := range interval.Segments {
+	for si, segment := range interval.Segments {
 		segmentLength := len(segment)
-		if i == len(interval.Segments)-1 {
+		if si == len(interval.Segments)-1 {
 			segmentLength = interval.NextInsertOffset
 		}
 		end := segmentLength + start
 		for i := start; i < end; i += rowSize {
 			segmentRowDimensions := segment[i : i+sliceLength]
-			if bytes.Equal(rowDimensions, segmentRowDimensions) && segment[0] < 255 {
+			if bytes.Equal(rowDimensions, segmentRowDimensions) {
 				rowOffset := i - start
-				return segment[rowOffset : rowOffset+rowSize], true
+				rowCount := segment[rowOffset]
+				if rowCount < 255 {
+					return segment[rowOffset : rowOffset+rowSize], true
+				}
 			}
 		}
 	}
