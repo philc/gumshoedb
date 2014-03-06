@@ -2,8 +2,10 @@ GumshoeDB
 =========
 
 GumshoeDB is a database for quickly scouring hundreds of millions of analytics events and finding
-answers. It's a work-in-progress and not ready for consumption. Details about typical use cases and key design
-choices are coming soon.
+answers. It is has a similar design to the Dremel and Druid data stores.
+
+It's a work-in-progress and not yet documented for public consumption. Details about typical use cases and key
+design choices are coming soon.
 
 To run:
 
