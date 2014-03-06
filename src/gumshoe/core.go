@@ -424,6 +424,9 @@ func (table *FactTable) nilBitsToString(row int) string {
 
 // Finds a row in the interval with the same dimensions and which doesn't have its count at the max value.
 func (table *FactTable) findCollapsibleRowInInterval(row []byte, interval *Interval) ([]byte, bool) {
+	// TODO(philc): I'm disabling row collapsing because the n^2 insertion time is too slow (who'd have
+	// thought!?). We'll need to implement something faster.
+	return nil, false
 	rowSize := table.RowSize
 	// To determine whether rows are collapsible, we need to compare the bytes representing nil values, and the
 	// value of all dimension columns.
