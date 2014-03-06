@@ -94,8 +94,7 @@ func prepareRows(rows []gumshoe.RowMap, newColumnNames []string, deletedColumnNa
 	for _, row := range rows {
 		for _, column := range newColumnNames {
 			// The default value for dimension columns is nil. For metric columns (which are not nullable), it's 0.
-			_, ok := newSchema.DimensionColumns[column]
-			if ok {
+			if _, ok := newSchema.DimensionColumns[column]; ok {
 				row[column] = nil
 			} else {
 				row[column] = 0.0

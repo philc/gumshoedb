@@ -427,7 +427,6 @@ func (table *FactTable) findCollapsibleRowInInterval(row []byte, interval *Inter
 	// TODO(philc): I'm disabling row collapsing because the n^2 insertion time is too slow (who'd have
 	// thought!?). We'll need to implement something faster.
 	return nil, false
-	rowSize := table.RowSize
 	// To determine whether rows are collapsible, we need to compare the bytes representing nil values, and the
 	// value of all dimension columns.
 	start := countColumnSize
@@ -439,13 +438,13 @@ func (table *FactTable) findCollapsibleRowInInterval(row []byte, interval *Inter
 			segmentLength = interval.NextInsertOffset
 		}
 		end := segmentLength + start
-		for i := start; i < end; i += rowSize {
+		for i := start; i < end; i += table.RowSize {
 			segmentRowDimensions := segment[i : i+sliceLength]
 			if bytes.Equal(rowDimensions, segmentRowDimensions) {
 				rowOffset := i - start
 				rowCount := segment[rowOffset]
 				if rowCount < 255 {
-					return segment[rowOffset : rowOffset+rowSize], true
+					return segment[rowOffset : rowOffset+table.RowSize], true
 				}
 			}
 		}
@@ -460,7 +459,7 @@ func (table *FactTable) collapseRow(a []byte, b []byte) {
 	*(*uint8)(unsafe.Pointer(aPtr)) += 1 // Increment the count of rows.
 	// Iterate over all metric columns and add from b to a.
 	firstMetricColumn := len(table.Schema.DimensionColumns)
-	for i := firstMetricColumn; i < len(table.ColumnIndexToOffset); i++ {
+	for i := firstMetricColumn; i < table.ColumnCount; i++ {
 		columnOffset := table.ColumnIndexToOffset[i]
 		aColumnPtr := unsafe.Pointer(aPtr + columnOffset)
 		bColumnPtr := unsafe.Pointer(bPtr + columnOffset)
@@ -492,20 +491,19 @@ func (table *FactTable) insertNormalizedRow(timestamp time.Time, row []byte) {
 		interval = table.createInterval(timestamp)
 		table.Intervals = append(table.Intervals, interval)
 	}
-	existingRow, ok := table.findCollapsibleRowInInterval(row, interval)
-	if ok {
+	if existingRow, ok := table.findCollapsibleRowInInterval(row, interval); ok {
 		table.collapseRow(existingRow, row)
-	} else {
-		if interval.SegmentsAreFull() {
-			interval.AddSegment(table)
-		}
-		segment := interval.Segments[len(interval.Segments)-1]
-		rowSlice := segment[interval.NextInsertOffset : interval.NextInsertOffset+table.RowSize]
-		copy(rowSlice, row)
-		rowSlice[0] = 1 // Set the count to 1.
-		interval.NextInsertOffset += table.RowSize
-		table.Count++
+		return
 	}
+	if interval.SegmentsAreFull() {
+		interval.AddSegment(table)
+	}
+	segment := interval.Segments[len(interval.Segments)-1]
+	rowSlice := segment[interval.NextInsertOffset : interval.NextInsertOffset+table.RowSize]
+	copy(rowSlice, row)
+	rowSlice[0] = 1 // Set the count to 1.
+	interval.NextInsertOffset += table.RowSize
+	table.Count++
 }
 
 func getIntervalForTimestamp(table *FactTable, timestamp time.Time) *Interval {
