@@ -574,6 +574,27 @@ func (table *DimensionTable) addRow(rowValue string) int32 {
 	return nextId
 }
 
+// The fraction of the table's rows are compressed together. Returns a number between 0 and 1. For example, if
+// 4 rows are stored in the table but only 1 row of space is used, then the compression factor is 0.75. Note
+// that performing this computation requires scanning the entire table.
+func (table *FactTable) GetCompressionFactor() float64 {
+	rows := 0
+	rowsStored := 0
+	for _, interval := range table.Intervals {
+		for i, segment := range interval.Segments {
+			segmentSize := len(segment)
+			if i == len(interval.Segments)-1 {
+				segmentSize = interval.NextInsertOffset
+			}
+			for j := 0; j < segmentSize; j += table.RowSize {
+				rows += int(segment[j]) // Sum the row's count byte
+				rowsStored++
+			}
+		}
+	}
+	return float64(rows-rowsStored) / float64(rows)
+}
+
 func isString(value interface{}) bool {
 	result := false
 	switch value.(type) {

@@ -64,6 +64,16 @@ func TestRowsGetCollapsedUponInsertion(t *testing.T) {
 	Assert(t, table.GetRowMaps(2, 3)[0]["metric1"], Equals, int32(7))
 }
 
+func TestGetCompressionFactorWorks(t *testing.T) {
+	table := tableFixture()
+	for i := 0; i < 4; i++ {
+		table.InsertRowMaps([]RowMap{{"at": 0, "dim1": "string1", "metric1": 1.0}})
+	}
+	Assert(t, table.GetRowMaps(0, 1)[0]["metric1"], Equals, int32(4))
+	// 4 rows are collapsed into 1 row, so that's a 0.75 compression factor.
+	Assert(t, table.GetCompressionFactor(), Equals, 0.75)
+}
+
 func TestInsertAndReadNullValues(t *testing.T) {
 	table := tableFixture()
 	insertRow(table, hour(0), "a", 0.0)
