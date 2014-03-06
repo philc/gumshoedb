@@ -22,6 +22,10 @@ func hour(n int) int {
 	return n * 60 * 60
 }
 
+func insertRow(table *FactTable, at int, dimensionValue Untyped, metricValue Untyped) {
+	table.InsertRowMaps([]RowMap{{"at": at, "dim1": dimensionValue, "metric1": metricValue}})
+}
+
 func TestConvertRowMapToRowArrayThrowsErrorForUnrecognizedColumn(t *testing.T) {
 	_, err := tableFixture().convertRowMapToRowArray(
 		RowMap{"at": 0, "dim1": "string1", "unknownColumn": 10})

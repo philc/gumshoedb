@@ -8,10 +8,6 @@ import (
 	. "github.com/cespare/a"
 )
 
-func insertRow(table *FactTable, at int, dimensionValue Untyped, metricValue Untyped) {
-	table.InsertRowMaps([]RowMap{{"at": at, "dim1": dimensionValue, "metric1": metricValue}})
-}
-
 func createQuery() Query {
 	query := Query{"", []QueryAggregate{{"sum", "metric1", "metric1"}}, nil, nil}
 	return query
