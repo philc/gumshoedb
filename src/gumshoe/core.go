@@ -85,8 +85,8 @@ type FactTable struct {
 	InsertLock *sync.Mutex `json:"-"`
 	// TODO(philc): Eliminate rows, as the storage is now contained within Intervals.
 	rows        []byte
-	Count       int // The number of used rows currently in the table. This is <= ROWS.
-	ColumnCount int // The number of columns in use in the table. This is <= COLS.
+	Count       int // The number of used rows currently in the table.
+	ColumnCount int // The number of columns in use in the table.
 	RowSize     int // In bytes
 	Schema      *Schema
 	// A mapping from column index => column's DimensionTable. Dimension tables exist for string columns only.

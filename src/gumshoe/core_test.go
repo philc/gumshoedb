@@ -36,14 +36,13 @@ func TestNewIntervalsAreAllocatedAsNeeded(t *testing.T) {
 	err := table.InsertRowMaps([]RowMap{
 		{"at": 0, "dim1": "a", "metric1": 1.0},
 		{"at": 0, "dim1": "b", "metric1": 2.0}})
-	Assert(t, err, Equals, nil)
+	Assert(t, err, IsNil)
 	Assert(t, len(table.Intervals), Equals, 1)
 	Assert(t, len(table.Intervals[0].Segments), Equals, 2)
 }
 
 func TestNilMetricColumnsAreRejected(t *testing.T) {
 	table := tableFixture()
-	// These two rows should be collapsed.
 	err := table.InsertRowMaps([]RowMap{{"at": 0, "dim1": "string1", "metric1": nil}})
 	Assert(t, strings.Contains(err.Error(), "Metric columns cannot be nil"), IsTrue)
 }
