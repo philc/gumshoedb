@@ -52,7 +52,7 @@ type Schema struct {
 
 // TODO(philc): In the future this interval duration will be configurable, and variable (e.g. older data has
 // larger granularities, graphite-style).
-const intervalDuration = time.Duration(1) * time.Hour
+const intervalDuration = time.Hour
 
 type Interval struct {
 	Start            time.Time
@@ -564,9 +564,8 @@ func (table *FactTable) InsertRowMaps(rows []RowMap) error {
 			return err
 		}
 		timestamp := rowMap[table.TimestampColumnName].(int)
-		// Truncate the timestamp to the interval's duration.
-		timestamp = timestamp - (timestamp % int(intervalDuration/time.Second))
-		table.insertNormalizedRow(time.Unix(int64(timestamp), 0), normalizedRow)
+		truncated := time.Unix(int64(timestamp), 0).Truncate(intervalDuration)
+		table.insertNormalizedRow(truncated, normalizedRow)
 	}
 	return nil
 }
