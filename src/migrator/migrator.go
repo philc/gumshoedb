@@ -1,16 +1,3 @@
-package main
-
-import (
-	"flag"
-	"log"
-	"time"
-
-	"config"
-	"gumshoe"
-
-	"github.com/BurntSushi/toml"
-)
-
 // Migrator currently handles adding new columns and deleting old columns. It will also happily modify
 // column sizes (e.g., int16 -> int32), but has no special handling or safety for lossy type changes.
 
@@ -25,6 +12,19 @@ NOTE(dmac): These are rough guidelines for the future implementor of allowing mi
 
 3. When a downcast is necessary, if the value is out of range, insert null instead of the value.
 */
+
+package main
+
+import (
+	"flag"
+	"log"
+	"time"
+
+	"config"
+	"gumshoe"
+
+	"github.com/BurntSushi/toml"
+)
 
 func main() {
 	oldTablePath := flag.String("old-table", "db/table", "Old table file to migrate")

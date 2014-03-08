@@ -1,4 +1,5 @@
 // The table creation and insertion functions.
+
 package gumshoe
 
 import (

@@ -1,5 +1,6 @@
 // Make sure to run these with GOMAXPROCS=8 (or -test.cpu=8) for full effect. (And run on a machine with >= 8
 // cores to get meaningful numbers for the 8-way parallel case.)
+
 package synthetic
 
 import (

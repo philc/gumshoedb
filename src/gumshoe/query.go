@@ -1,10 +1,10 @@
+// Query execution functions.
+
 package gumshoe
 
 import (
 	"unsafe"
 )
-
-// Query execution functions.
 
 func (table *FactTable) InvokeQuery(query *Query) map[string]Untyped {
 	columnIndices := table.getColumnIndicesFromQuery(query)

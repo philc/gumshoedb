@@ -2,6 +2,7 @@
 // given technique. These benchmarks are helpful in providing an upper-bound for table scan speed, a
 // simplified view on what affects performance, and for sanity checking the performance of the main query
 // pipeline.
+
 package synthetic
 
 import (

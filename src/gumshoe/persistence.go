@@ -5,6 +5,7 @@
 //
 // NOTE(philc): I would use gobs for serializing the table metadata and dimension tables, but I had trouble
 // getting gobs to fields on a struct which are maps when serializing the top-level FactTable struct.
+
 package gumshoe
 
 import (
