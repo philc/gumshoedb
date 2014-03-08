@@ -74,8 +74,8 @@ func NewSchema() *Schema {
 	}
 }
 
-// A fixed sized table of rows.
-// When we insert more rows than the table's capacity, we wrap around and begin inserting rows at index 0.
+// A FactTable is a database in GumshoeDB. The data is split into intervals by time and within each interval
+// into size-bounded segments.
 type FactTable struct {
 	// NOTE(philc): map[int]Interval would be more convenient, but it's not JSON serializable.
 	Intervals []*Interval
@@ -271,10 +271,6 @@ func (table *FactTable) convertRowMapToRowArray(rowMap RowMap) ([]Untyped, error
 		result[columnIndex] = value
 	}
 	return result, nil
-}
-
-func (table *FactTable) getRowOffset(row int) int {
-	return row * table.RowSize
 }
 
 func (table *FactTable) getRowSlice(rowIndex int) ([]byte, *Interval) {
@@ -490,7 +486,6 @@ func (table *FactTable) insertNormalizedRow(timestamp time.Time, row []byte) {
 	interval := getIntervalForTimestamp(table, timestamp)
 	if interval == nil {
 		interval = table.createInterval(timestamp)
-		table.Intervals = append(table.Intervals, interval)
 	}
 	if existingRow, ok := table.findCollapsibleRowInInterval(row, interval); ok {
 		table.collapseRow(existingRow, row)
@@ -507,7 +502,7 @@ func (table *FactTable) insertNormalizedRow(timestamp time.Time, row []byte) {
 	table.Count++
 }
 
-func getIntervalForTimestamp(table *FactTable, timestamp time.Time) *Interval {
+func (table *FactTable) getIntervalForTimestamp(timestamp time.Time) *Interval {
 	for _, interval := range table.Intervals {
 		if interval.Start == timestamp {
 			return interval
@@ -516,13 +511,16 @@ func getIntervalForTimestamp(table *FactTable, timestamp time.Time) *Interval {
 	return nil
 }
 
+// createInterval creates and returns a new, empty Interval in this table for the given timestamp.
 func (table *FactTable) createInterval(timestamp time.Time) *Interval {
-	return &Interval{
+	interval := &Interval{
 		Start:            timestamp,
 		Duration:         intervalDuration,
 		NextInsertOffset: 0, // A byte offset of the last segment.
 		Segments:         [][]byte{},
 	}
+	table.Intervals = append(table.Intervals, interval)
+	return interval
 }
 
 // Appends a new segment to the end of interval.Segments. Note that this should only be called when there is
