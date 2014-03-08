@@ -65,12 +65,12 @@ type Interval struct {
 }
 
 func NewSchema() *Schema {
-	s := new(Schema)
-	s.DimensionColumns = make(map[string]int)
-	s.MetricColumns = make(map[string]int)
-	s.StringColumns = make([]string, 0)
-	s.SegmentSizeInBytes = defaultSegmentSize
-	return s
+	return &Schema{
+		DimensionColumns:   make(map[string]int),
+		MetricColumns:      make(map[string]int),
+		StringColumns:      make([]string, 0),
+		SegmentSizeInBytes: defaultSegmentSize,
+	}
 }
 
 // A fixed sized table of rows.
@@ -142,8 +142,8 @@ func getSortedKeys(m map[string]int) []string {
 
 // Allocates a new FactTable. If a non-empty filePath is specified, this table's rows are immediately
 // persisted to disk in the form of a memory-mapped file.
-// String columns appear first, and then numeric columns, for no particular reason other than
-// implementation convenience in a few places.
+// String columns appear first, and then numeric columns, for no particular reason other than implementation
+// convenience in a few places.
 func NewFactTable(filePath string, schema *Schema) *FactTable {
 	dimensionColumnNames := getSortedKeys(schema.DimensionColumns)
 	metricColumnNames := getSortedKeys(schema.MetricColumns)
@@ -599,12 +599,8 @@ func (table *FactTable) GetCompressionFactor() float64 {
 }
 
 func isString(value interface{}) bool {
-	result := false
-	switch value.(type) {
-	case string:
-		result = true
-	}
-	return result
+	_, ok := value.(string)
+	return ok
 }
 
 func convertUntypedToFloat64(v Untyped) float64 {

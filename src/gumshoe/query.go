@@ -1,10 +1,10 @@
-// Query execution functions.
 package gumshoe
 
 import (
-	"math"
 	"unsafe"
 )
+
+// Query execution functions.
 
 func (table *FactTable) InvokeQuery(query *Query) map[string]Untyped {
 	columnIndices := table.getColumnIndicesFromQuery(query)
@@ -18,14 +18,14 @@ func (table *FactTable) InvokeQuery(query *Query) map[string]Untyped {
 		}
 
 		// Only support computing the max value of 8 and 16 bit unsigned types, since that set of values
-		// can efficiently be mapped to array indices for the purposes of grouping.
+		// can efficiently be mapped to slice indices for the purposes of grouping.
 		switch table.ColumnIndexToType[groupingParams.ColumnIndex] {
 		case TypeUint8:
 			groupingParams.KnownCardinality = true
-			groupingParams.MaxValue = int(math.Pow(2, 8))
+			groupingParams.Cardinality = 1 << 8
 		case TypeUint16:
 			groupingParams.KnownCardinality = true
-			groupingParams.MaxValue = int(math.Pow(2, 16))
+			groupingParams.Cardinality = 1 << 16
 		}
 		if grouping.TimeTransform != "" {
 			groupingParams.TransformFn = convertTimeTransformToFunc(grouping.TimeTransform)
@@ -49,7 +49,7 @@ type GroupingParams struct {
 	ColumnIndex      int
 	TransformFn      func(float64) float64
 	KnownCardinality bool
-	MaxValue         int
+	Cardinality      int
 	// We assume the minValue is zero.
 }
 
@@ -57,19 +57,21 @@ type GroupingParams struct {
 // critical.
 func (table *FactTable) scan(filters []FactTableFilterFunc, columnIndices []int,
 	groupingParams GroupingParams) []RowAggregate {
-	var useGrouping bool
-	var groupedAggregatesMap map[float64]*RowAggregate
-	var groupedAggregatesSlice []RowAggregate
-	var groupByColumnOffset uintptr
-	var groupByColumnType int
-	var groupByColumnIndex int
-	var groupByColumnTransformFn func(float64) float64
-	var useSliceForGrouping bool
+	var (
+		useGrouping              bool
+		groupedAggregatesMap     map[float64]*RowAggregate
+		groupedAggregatesSlice   []RowAggregate
+		groupByColumnOffset      uintptr
+		groupByColumnType        int
+		groupByColumnIndex       int
+		groupByColumnTransformFn func(float64) float64
+		useSliceForGrouping      bool
+	)
 
 	if useGrouping = groupingParams.UseGrouping; useGrouping {
 		if groupingParams.KnownCardinality {
 			useSliceForGrouping = true
-			groupedAggregatesSlice = make([]RowAggregate, groupingParams.MaxValue)
+			groupedAggregatesSlice = make([]RowAggregate, groupingParams.Cardinality)
 		} else {
 			groupedAggregatesMap = make(map[float64]*RowAggregate)
 		}

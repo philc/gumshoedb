@@ -2,6 +2,7 @@ package gumshoe
 
 import (
 	"testing"
+
 	. "github.com/cespare/a"
 )
 
