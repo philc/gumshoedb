@@ -6,7 +6,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"flag"
-	"io/ioutil"
 	"log"
 	"math"
 	"net/http"
@@ -38,10 +37,14 @@ func WriteJSONResponse(w http.ResponseWriter, objectToSerialize interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	encoder := json.NewEncoder(w)
 	if err := encoder.Encode(objectToSerialize); err != nil {
-		log.Print(err)
-		http.Error(w, err.Error(), 500)
+		WriteError(w, err)
 		return
 	}
+}
+
+func WriteError(w http.ResponseWriter, err error) {
+	log.Print(err)
+	http.Error(w, err.Error(), 500)
 }
 
 // Given an array of JSON rows, insert them.
@@ -49,15 +52,13 @@ func (s *Server) HandleInsertRoute(w http.ResponseWriter, r *http.Request) {
 	decoder := json.NewDecoder(r.Body)
 	jsonBody := []gumshoe.RowMap{}
 	if err := decoder.Decode(&jsonBody); err != nil {
-		log.Print(err)
-		http.Error(w, err.Error(), 500)
+		WriteError(w, err)
 		return
 	}
 	log.Printf("Inserting %d rows", len(jsonBody))
 
 	if err := s.Table.InsertRowMaps(jsonBody); err != nil {
-		log.Print(err)
-		http.Error(w, err.Error(), 500)
+		WriteError(w, err)
 		return
 	}
 }
@@ -66,8 +67,8 @@ func (s *Server) HandleInsertRoute(w http.ResponseWriter, r *http.Request) {
 func (s *Server) HandleFactTableRoute(w http.ResponseWriter, r *http.Request) {
 	// For now, only return up to 1000 rows. We can't serialize the entire table unless we stream the response,
 	// and for debugging, we only need a few rows to inspect that importing is working correctly.
-	maxRowsToReturn := 1000
-	rowCount := int(math.Min(float64(s.Table.Count), float64(maxRowsToReturn)))
+	const maxRowsToReturn = 1000
+	rowCount := int(math.Min(float64(s.Table.Count), maxRowsToReturn))
 	WriteJSONResponse(w, s.Table.GetRowMaps(0, rowCount))
 }
 
@@ -90,20 +91,17 @@ func (s *Server) HandleDimensionsTableRoute(w http.ResponseWriter, r *http.Reque
 // See the README for the query JSON structure and the structure of the reuslts.
 func (s *Server) HandleQueryRoute(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
-	requestBody, _ := ioutil.ReadAll(r.Body)
-	query, err := gumshoe.ParseJSONQuery(string(requestBody))
+	query, err := gumshoe.ParseJSONQuery(r.Body)
 	if err != nil {
-		log.Print(err)
-		http.Error(w, err.Error(), 500)
+		WriteError(w, err)
 		return
 	}
 	if err = gumshoe.ValidateQuery(s.Table, query); err != nil {
-		log.Print(err)
-		http.Error(w, err.Error(), 500)
+		WriteError(w, err)
 		return
 	}
 	results := s.Table.InvokeQuery(query)
-	results["duration"] = (time.Since(start)).Nanoseconds() / (1000.0 * 1000.0)
+	results["duration"] = time.Since(start).Seconds() * 1000.0
 	WriteJSONResponse(w, results)
 }
 
@@ -141,16 +139,15 @@ func (s *Server) HandleMetricz(w http.ResponseWriter) {
 	}
 
 	metriczJSON, err := json.Marshal(metricz)
-
 	if err != nil {
-		log.Print(err)
-		http.Error(w, err.Error(), 500)
+		WriteError(w, err)
+		return
 	}
 
 	var buf bytes.Buffer
 	if err := json.Indent(&buf, metriczJSON, "", "    "); err != nil {
-		log.Print(err)
-		http.Error(w, err.Error(), 500)
+		WriteError(w, err)
+		return
 	}
 	buf.WriteTo(w)
 }

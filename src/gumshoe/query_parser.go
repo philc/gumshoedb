@@ -4,6 +4,7 @@ package gumshoe
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 )
 
 type Untyped interface{}
@@ -40,7 +41,13 @@ func isValidColumn(table *FactTable, name string) bool {
 	return ok || name == table.TimestampColumnName
 }
 
-var validFilterTypes = []string{"=", "!=", ">", ">=", "<", "<=", "in"}
+var validFilterTypes = make(map[string]bool)
+
+func init() {
+	for _, filterType := range []string{"=", "!=", ">", ">=", "<", "<=", "in"} {
+		validFilterTypes[filterType] = true
+	}
+}
 
 func ValidateQuery(table *FactTable, query *Query) error {
 	for _, aggregate := range query.Aggregates {
@@ -54,14 +61,13 @@ func ValidateQuery(table *FactTable, query *Query) error {
 		}
 	}
 	for _, grouping := range query.Groupings {
-
-		_, ok := table.Schema.DimensionColumns[grouping.Column]
-		if !ok {
+		if _, ok := table.Schema.DimensionColumns[grouping.Column]; !ok {
 			return fmt.Errorf("Only dimension columns can be used in grouping. %s is not a dimension column.",
 				grouping.Column)
 		}
-		if grouping.TimeTransform != "" && grouping.TimeTransform != "minute" &&
-			grouping.TimeTransform != "hour" && grouping.TimeTransform != "day" {
+		switch grouping.TimeTransform {
+		case "", "minute", "hour", "day":
+		default:
 			return fmt.Errorf("Unrecogized time transform function: %s. Use one of {minute, hour, day}.",
 				grouping.TimeTransform)
 		}
@@ -70,25 +76,18 @@ func ValidateQuery(table *FactTable, query *Query) error {
 		if !isValidColumn(table, filter.Column) {
 			return fmt.Errorf("Unrecognized column name in filter clause: %s", filter.Column)
 		}
-		isValidFilter := false
-		for _, t := range validFilterTypes {
-			if t == filter.Type {
-				isValidFilter = true
-			}
-		}
-		if !isValidFilter {
+		if _, ok := validFilterTypes[filter.Type]; !ok {
 			return fmt.Errorf("%s is not a valid filter type.", filter.Type)
 		}
-
 	}
 	return nil
 }
 
-func ParseJSONQuery(jsonString string) (*Query, error) {
-	result := new(Query)
-	err := json.Unmarshal([]byte(jsonString), result)
-	if err != nil {
+func ParseJSONQuery(r io.Reader) (*Query, error) {
+	query := new(Query)
+	decoder := json.NewDecoder(r)
+	if err := decoder.Decode(query); err != nil {
 		return nil, err
 	}
-	return result, nil
+	return query, nil
 }

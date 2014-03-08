@@ -292,7 +292,7 @@ func convertQueryFilterToFilterFunc(queryFilter QueryFilter, table *FactTable) F
 		} else {
 			values = make([]float64, 0, len(untypedQueryValues))
 			for _, value := range untypedQueryValues {
-				values = append(values, float64(convertUntypedToFloat64(value)))
+				values = append(values, convertUntypedToFloat64(value))
 			}
 		}
 	} else {
