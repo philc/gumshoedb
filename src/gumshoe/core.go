@@ -484,7 +484,7 @@ func (table *FactTable) collapseRow(a []byte, b []byte) {
 }
 
 func (table *FactTable) insertNormalizedRow(timestamp time.Time, row []byte) {
-	interval := getIntervalForTimestamp(table, timestamp)
+	interval := table.getIntervalForTimestamp(timestamp)
 	if interval == nil {
 		interval = table.createInterval(timestamp)
 	}
