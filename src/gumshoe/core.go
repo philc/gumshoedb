@@ -83,12 +83,10 @@ type FactTable struct {
 	// TODO(caleb): This is not enough. Reads still race with writes. We need to fix this, possibly by removing
 	// the circular writes and instead persisting historic chunks to disk (or deleting them) and allocating
 	// fresh tables.
-	InsertLock *sync.Mutex `json:"-"`
-	// TODO(philc): Eliminate rows, as the storage is now contained within Intervals.
-	rows        []byte
-	Count       int // The number of used rows currently in the table.
-	ColumnCount int // The number of columns in use in the table.
-	RowSize     int // In bytes
+	InsertLock  *sync.Mutex `json:"-"`
+	Count       int         // The number of used rows currently in the table.
+	ColumnCount int         // The number of columns in use in the table.
+	RowSize     int         // In bytes
 	Schema      *Schema
 	// A mapping from column index => column's DimensionTable. Dimension tables exist for string columns only.
 	DimensionTables       map[string]*DimensionTable
@@ -100,10 +98,6 @@ type FactTable struct {
 	stringColumnsMap      map[string]bool
 	TimestampColumnName   string // Name of the column used for grouping rows into time buckets.
 	SegmentSizeInBytes    int
-}
-
-func (table *FactTable) Rows() []byte {
-	return table.rows
 }
 
 // A DimensionTable is a mapping of string column values to int IDs, so that the FactTable can store rows of
