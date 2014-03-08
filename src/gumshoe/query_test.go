@@ -20,7 +20,7 @@ func createTableFixtureForFilterTests() *FactTable {
 	return table
 }
 
-func createTableFixtureForNullQueryTests() *FactTable {
+func createTableFixtureForNilQueryTests() *FactTable {
 	schema := NewSchema()
 	schema.DimensionColumns = map[string]int{"dim1": TypeInt32}
 	schema.MetricColumns = map[string]int{"metric1": TypeInt32}
@@ -112,14 +112,14 @@ func TestGroupingWithATimeTransformFunctionWorks(t *testing.T) {
 		"metric1": 270})
 }
 
-func TestAggregateQueryWithNullValues(t *testing.T) {
-	table := createTableFixtureForNullQueryTests()
+func TestAggregateQueryWithNilValues(t *testing.T) {
+	table := createTableFixtureForNilQueryTests()
 	results := runQuery(table, createQuery())
 	Assert(t, results[0], utils.HasEqualJSON, map[string]Untyped{"metric1": 7, "rowCount": 3})
 }
 
-func TestFilterQueryWithNullValues(t *testing.T) {
-	table := createTableFixtureForNullQueryTests()
+func TestFilterQueryWithNilValues(t *testing.T) {
+	table := createTableFixtureForNilQueryTests()
 	results := runWithFilter(table, QueryFilter{"=", "dim1", "a"})
 	Assert(t, results[0], utils.HasEqualJSON, map[string]Untyped{"metric1": 1, "rowCount": 1})
 	// TODO(philc): Enable equals filters by nil values on string columns.
@@ -127,8 +127,8 @@ func TestFilterQueryWithNullValues(t *testing.T) {
 	// Assert(t, results[0], utils.HasEqualJSON, map[string]Untyped{"metric1": 5, "rowCount": 1})
 }
 
-func TestGroupByQueryWithNullValues(t *testing.T) {
-	table := createTableFixtureForNullQueryTests()
+func TestGroupByQueryWithNilValues(t *testing.T) {
+	table := createTableFixtureForNilQueryTests()
 	results := runWithGroupBy(table, QueryGrouping{"", "dim1", "groupbykey"})
 	Assert(t, results, utils.HasEqualJSON, []interface{}{
 		map[string]Untyped{"metric1": 1, "groupbykey": "a", "rowCount": 1},

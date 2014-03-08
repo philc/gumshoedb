@@ -79,7 +79,7 @@ func TestGetCompressionFactorWorks(t *testing.T) {
 	Assert(t, table.GetCompressionFactor(), Equals, 0.75)
 }
 
-func TestInsertAndReadNullValues(t *testing.T) {
+func TestInsertAndReadNilValues(t *testing.T) {
 	table := tableFixture()
 	insertRow(table, hour(0), "a", 0.0)
 	insertRow(table, hour(1), nil, 1.0)

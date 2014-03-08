@@ -10,7 +10,7 @@ NOTE(dmac): These are rough guidelines for the future implementor of allowing mi
 2. If a value can be safely downcast, do so. If it can't, throw an error and abort unless an override flag is
    present.
 
-3. When a downcast is necessary, if the value is out of range, insert null instead of the value.
+3. When a downcast is necessary, if the value is out of range, insert nil instead of the value.
 */
 
 package main

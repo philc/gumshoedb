@@ -5,7 +5,6 @@ package gumshoe
 import (
 	"bytes"
 	"fmt"
-	"math"
 	"reflect"
 	"sort"
 	"strings"
@@ -83,11 +82,12 @@ type FactTable struct {
 	// TODO(caleb): This is not enough. Reads still race with writes. We need to fix this, possibly by removing
 	// the circular writes and instead persisting historic chunks to disk (or deleting them) and allocating
 	// fresh tables.
-	InsertLock  *sync.Mutex `json:"-"`
-	Count       int         // The number of used rows currently in the table.
-	ColumnCount int         // The number of columns in use in the table.
-	RowSize     int         // In bytes
-	Schema      *Schema
+	InsertLock           *sync.Mutex `json:"-"`
+	Count                int         // The number of used rows currently in the table.
+	DimensionColumnCount int
+	ColumnCount          int // The number of columns in use in the table.
+	RowSize              int // In bytes
+	Schema               *Schema
 	// A mapping from column index => column's DimensionTable. Dimension tables exist for string columns only.
 	DimensionTables       map[string]*DimensionTable
 	ColumnNameToIndex     map[string]int
@@ -144,9 +144,10 @@ func NewFactTable(filePath string, schema *Schema) *FactTable {
 	metricColumnNames := getSortedKeys(schema.MetricColumns)
 	allColumnNames := append(dimensionColumnNames, metricColumnNames...)
 	table := &FactTable{
-		ColumnCount: len(allColumnNames),
-		FilePath:    filePath,
-		InsertLock:  new(sync.Mutex),
+		DimensionColumnCount: len(dimensionColumnNames),
+		ColumnCount:          len(allColumnNames),
+		FilePath:             filePath,
+		InsertLock:           new(sync.Mutex),
 	}
 	table.TimestampColumnName = schema.TimestampColumn
 	table.SegmentSizeInBytes = schema.SegmentSizeInBytes
@@ -195,10 +196,9 @@ func NewFactTable(filePath string, schema *Schema) *FactTable {
 	return table
 }
 
-// Returns the number of bytes a row requires in order to have one nil bit per column.
-// TODO(caleb) We only need to store nil bytes for the dimension columns, not metrics.
+// Returns the number of bytes a row requires in order to have one nil bit per dimension column.
 func (table *FactTable) numNilBytes() int {
-	return int(math.Ceil(float64(table.ColumnCount) / 8.0))
+	return (table.DimensionColumnCount-1)/8 + 1
 }
 
 // Return a set of row maps. Useful for debugging the contents of the table.
@@ -343,6 +343,12 @@ func (table *FactTable) normalizeRow(rowMap RowMap) ([]byte, error) {
 }
 
 func (table *FactTable) columnIsNil(rowPtr uintptr, columnIndex int) bool {
+	if columnIndex >= table.DimensionColumnCount {
+		// Metric columns cannot be nil.
+		// TODO(caleb): We should have better separation of dimension and metric columns so that this method isn't
+		// called for metric columns at all.
+		return false
+	}
 	nilBytePtr := unsafe.Pointer(rowPtr + uintptr(countColumnSize+columnIndex/8))
 	nilBitIndex := uint(columnIndex) % 8
 	isNil := *(*uint)(nilBytePtr) & (1 << (7 - nilBitIndex))
@@ -379,6 +385,9 @@ func (table *FactTable) getColumnValue(row []byte, column int) Untyped {
 func (table *FactTable) setColumnValue(row []byte, column int, value Untyped) {
 	rowPtr := uintptr(unsafe.Pointer(&row[0]))
 	if value == nil {
+		if column >= table.DimensionColumnCount {
+			panic("metric columns cannot be nil")
+		}
 		nilBytePtr := unsafe.Pointer(rowPtr + uintptr(countColumnSize+column/8))
 		nilBitIndex := uint(column) % 8
 		*(*uint8)(nilBytePtr) = *(*uint8)(nilBytePtr) | (1 << (7 - nilBitIndex))
