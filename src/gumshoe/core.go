@@ -27,7 +27,7 @@ const (
 	TypeFloat32
 )
 
-var typeSizes = map[int]int{
+var typeSizes = []int{
 	TypeUint8:   int(unsafe.Sizeof(uint8(0))),
 	TypeInt8:    int(unsafe.Sizeof(int8(0))),
 	TypeUint16:  int(unsafe.Sizeof(uint16(0))),
@@ -230,12 +230,12 @@ func (table *FactTable) GetRowMaps(start, end int) []RowMap {
 func (table *FactTable) denormalizeColumnValue(value Untyped, columnName string) Untyped {
 	if value == nil {
 		return value
-	} else if table.stringColumnsMap[columnName] {
+	}
+	if table.stringColumnsMap[columnName] {
 		dimensionTable := table.DimensionTables[columnName]
 		return dimensionTable.Rows[int(convertUntypedToFloat64(value))]
-	} else {
-		return value
 	}
+	return value
 }
 
 // Takes a normalized row vector and returns a map consisting of column names and values pulled from the
