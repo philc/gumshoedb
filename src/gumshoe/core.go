@@ -202,6 +202,7 @@ func NewFactTable(filePath string, schema *Schema) *FactTable {
 }
 
 // Returns the number of bytes a row requires in order to have one nil bit per column.
+// TODO(caleb) We only need to store nil bytes for the dimension columns, not metrics.
 func (table *FactTable) numNilBytes() int {
 	return int(math.Ceil(float64(table.ColumnCount) / 8.0))
 }

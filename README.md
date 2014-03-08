@@ -47,16 +47,53 @@ and make changes.
 
 Gumshoedb is licensed under [the MIT license](http://www.opensource.org/licenses/mit-license.php).
 
+Data Model
+==========
+
+A GumshoeDB database is logically similar a single table in a relational database: there is a schema, which
+specifies fixed columns, and there are many rows which follow that schema. There are two kinds of columns:
+*dimensions* and *metrics*. Dimensions are attributes of the data, and the values may be strings or numeric
+types. Metrics are numeric counts (floating-point or integer types).
+
+When new data is inserted into GumshoeDB, each row must be associated with a timestamp. The data in a
+GumshoeDB database is grouped into sequential, non-overlapping time intervals (right now, one hour -- this
+will be configurable in the future). Queries will return data at this granularity.
+
 Implementation
 ==============
 
-The data in GumshoeDB is represented as a flat byte array. Rows are laid out in 8, 16, 32, or 64-bit slots
-according to their type. The final block of memory in each row is reserved for "nil-bits" which indicate
-which columns, if any, should be interpreted as nil. This is to differentiate nil from 0.
+Internally, each interval in a GumshoeDB database is divided into size-bounded *segments*. Each segment is a
+flat block of bytes. This is a `[]byte` in memory which may be backed by a file using `mmap(2)`.
 
-    [01010000][...c0...][.......c1.......][...c2...][...c3...]
-    |--------| nil bits: c1 and c3 are nil
-    |----------------- table.RowSize ------------------------|
+As data is inserted, each input row is inserted into the appropriate interval based on its timestamp. The
+timestamp is not stored with the data. Within the interval, rows are collapsed together if possible. This
+means that if two rows in the same interval have the same value for each dimension, then they are combined
+into a single row by summing the values of the metrics.
+
+A segment is composed of many sequential rows. Each row is laid out using 8, 16, 32, or 64-bit slots according
+to the type of the column. The initial few bytes of the row contain a bit of metadata.
+
+* The first byte is the *count column*: it indicates how many input rows have been collapsed together to form
+  that row.
+* After that, there are a few *nil bytes*: this is a bit vector for the dimensions columns in that row that
+  indicates whether each column has a nil value. The number of nil bytes can be computed from the number of
+  dimension columns in the schema.
+* Next come the dimension columns. String-valued columns use a separate dictionary of string to int and so all
+  values in the row are numeric.
+* Finally, the metric columns are laid out.
+
+Here is a picture of an example row:
+
+```
+[0011][0010][...d0...][.......d1.......][...d2...][...m0...][...m1...][...m2...]
+ count nil  <-------- dimension columns ---------><------ metric columns ------>
+<-------------------------- table.RowSize (16) -------------------------------->
+```
+
+In this example, the schema has 3 dimension columns and 3 metric columns. All the column types are 8 bits
+except for d1, a 16-bit type. The count is 3, so three input rows with the same values for the dimension
+columns were collapsed together to form this row. There is only one nil byte, and the only set bit is at
+position 1, so dimension column 1 (d1) is the only nil column.
 
 Schema Changes
 ==============
