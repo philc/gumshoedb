@@ -1,4 +1,4 @@
 .vagrant
-pkg
-bin
-db/*
+/bin
+/db
+/glp/_cache

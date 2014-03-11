@@ -18,6 +18,6 @@ dimension_columns = [
 ]
 
 metric_columns = [
-  ["visits", "uint8"]
+  ["visits", "uint8"],
   ["clicks", "uint8"],
 ]

@@ -7,8 +7,10 @@ choices are coming soon.
 
 To run:
 
-    make deps
-    make run-web
+* Install [glp](https://github.com/cespare/glp)
+* `glp sync`
+* `glp build -o bin/server server`
+* `./server`
 
 This starts a GumshoeDB daemon at [localhost:9000](http://localhost:9000).
 
