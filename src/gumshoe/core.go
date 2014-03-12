@@ -329,10 +329,9 @@ func (table *FactTable) normalizeRow(rowMap RowMap) ([]byte, error) {
 			}
 			valueAsFloat64 = float64(dimensionRowId)
 		} else {
-			switch value.(type) {
-			case float64:
-				valueAsFloat64 = value.(float64)
-			default:
+			var ok bool
+			valueAsFloat64, ok = value.(float64)
+			if !ok {
 				return nil, fmt.Errorf("Expected float64 as the type for column %s, but received %s",
 					columnName, reflect.TypeOf(value))
 			}
