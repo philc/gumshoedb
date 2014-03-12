@@ -26,8 +26,8 @@ func insertRow(table *FactTable, at int, dimensionValue Untyped, metricValue Unt
 	table.InsertRowMaps([]RowMap{{"at": at, "dim1": dimensionValue, "metric1": metricValue}})
 }
 
-func TestConvertRowMapToRowArrayThrowsErrorForUnrecognizedColumn(t *testing.T) {
-	_, err := tableFixture().convertRowMapToRowArray(
+func TestConvertRowMapToRowSliceThrowsErrorForUnrecognizedColumn(t *testing.T) {
+	_, err := tableFixture().convertRowMapToRowSlice(
 		RowMap{"at": 0, "dim1": "string1", "unknownColumn": 10})
 	Assert(t, err, NotNil)
 }

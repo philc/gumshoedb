@@ -208,8 +208,8 @@ func (table *FactTable) GetRowMaps(start, end int) []RowMap {
 		panic("Invalid row indices passed to GetRowMaps")
 	}
 	for i := start; i < end; i++ {
-		rowSlice, interval := table.getRowSlice(i)
-		row := table.DenormalizeRow(rowSlice)
+		rowBytes, interval := table.getRowBytes(i)
+		row := table.DenormalizeRow(rowBytes)
 		// We don't store the timestamp column in the row itself, so add it in, since it's helpful to have it in
 		// the row map.
 		row[table.TimestampColumnName] = int(interval.Start.Unix()) // Convert to seconds since epoch
@@ -245,11 +245,11 @@ func (table *FactTable) DenormalizeRow(row []byte) RowMap {
 	return result
 }
 
-// Takes a map of column names => values, and returns a vector with the map's values in the correct column
-// position according to the table's schema, e.g.:
-// e.g. {"country": "Japan", "browser": "Chrome", "age": 17} => ["Chrome", 17, "Japan"]
+// convertRowMapToRowSlice takes a map of column names => values and returns a slice with the map's values in
+// the correct column position according to the table's schema. For example:
+// {"country": "Japan", "browser": "Chrome", "age": 17} => ["Chrome", 17, "Japan"]
 // Returns an error if there are unrecognized columns, or if a column is missing.
-func (table *FactTable) convertRowMapToRowArray(rowMap RowMap) ([]Untyped, error) {
+func (table *FactTable) convertRowMapToRowSlice(rowMap RowMap) ([]Untyped, error) {
 	result := make([]Untyped, table.ColumnCount)
 	expectedColumns := len(table.ColumnNameToIndex) + 1 // +1 to account for the timestamp column.
 	if len(rowMap) != expectedColumns {
@@ -268,7 +268,7 @@ func (table *FactTable) convertRowMapToRowArray(rowMap RowMap) ([]Untyped, error
 	return result, nil
 }
 
-func (table *FactTable) getRowSlice(rowIndex int) ([]byte, *Interval) {
+func (table *FactTable) getRowBytes(rowIndex int) ([]byte, *Interval) {
 	if rowIndex >= table.Count {
 		panic(fmt.Sprintf("Row index %d is out of bounds (table size is %d).", rowIndex, table.Count))
 	}
@@ -301,19 +301,19 @@ func (table *FactTable) getRowSlice(rowIndex int) ([]byte, *Interval) {
 // Note that all numeric values are assumed to be float64 (this is what Go's JSON unmarshaller produces).
 // e.g. {"country": "Japan", "browser": "Chrome", "age": 17} => [0, 1, 17]
 func (table *FactTable) normalizeRow(rowMap RowMap) ([]byte, error) {
-	rowAsArray, err := table.convertRowMapToRowArray(rowMap)
+	rowSlice, err := table.convertRowMapToRowSlice(rowMap)
 	if err != nil {
 		return nil, err
 	}
-	rowSlice := make([]byte, table.RowSize)
-	for columnIndex, value := range rowAsArray {
+	rowBytes := make([]byte, table.RowSize)
+	for columnIndex, value := range rowSlice {
 		columnName := table.ColumnIndexToName[columnIndex]
 		if value == nil {
 			_, ok := table.Schema.MetricColumns[columnName]
 			if ok {
 				return nil, fmt.Errorf("Metric columns cannot be nil. %s is nil.", columnName)
 			}
-			table.setColumnValue(rowSlice, columnIndex, value)
+			table.setColumnValue(rowBytes, columnIndex, value)
 			continue
 		}
 		var valueAsFloat64 float64
@@ -336,9 +336,9 @@ func (table *FactTable) normalizeRow(rowMap RowMap) ([]byte, error) {
 					columnName, reflect.TypeOf(value))
 			}
 		}
-		table.setColumnValue(rowSlice, columnIndex, valueAsFloat64)
+		table.setColumnValue(rowBytes, columnIndex, valueAsFloat64)
 	}
-	return rowSlice, nil
+	return rowBytes, nil
 }
 
 func (table *FactTable) columnIsNil(rowPtr uintptr, columnIndex int) bool {
@@ -415,8 +415,12 @@ func (table *FactTable) setColumnValue(row []byte, column int, value Untyped) {
 // Useful for inspecting the nil bits of a row when debugging.
 func (table *FactTable) nilBitsToString(row int) string {
 	var parts []string
-	rowSlice, _ := table.getRowSlice(row)
-	for _, b := range rowSlice[countColumnSize : countColumnSize+table.numNilBytes()] {
+	rowBytes, err := table.getRowBytes(row)
+	if err != nil {
+		// TODO(caleb): handle
+		panic(err)
+	}
+	for _, b := range rowBytes[countColumnSize : countColumnSize+table.numNilBytes()] {
 		parts = append(parts, fmt.Sprintf("%08b", b))
 	}
 	return strings.Join(parts, " ")
@@ -498,9 +502,9 @@ func (table *FactTable) insertNormalizedRow(timestamp time.Time, row []byte) {
 		interval.AddSegment(table)
 	}
 	segment := interval.Segments[len(interval.Segments)-1]
-	rowSlice := segment[interval.NextInsertOffset : interval.NextInsertOffset+table.RowSize]
-	copy(rowSlice, row)
-	rowSlice[0] = 1 // Set the count to 1.
+	rowBytes := segment[interval.NextInsertOffset : interval.NextInsertOffset+table.RowSize]
+	copy(rowBytes, row)
+	rowBytes[0] = 1 // Set the count to 1.
 	interval.NextInsertOffset += table.RowSize
 	table.Count++
 }
