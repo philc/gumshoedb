@@ -75,6 +75,7 @@ func NewSchema() *Schema {
 
 // A FactTable is a database in GumshoeDB. The data is split into intervals by time and within each interval
 // into size-bounded segments.
+// TODO(caleb): Make fields safe to access concurrently (or remove): Count, DimensionTables
 type FactTable struct {
 	// NOTE(philc): map[int]Interval would be more convenient, but it's not JSON serializable.
 	Intervals []*Interval
@@ -428,9 +429,6 @@ func (table *FactTable) nilBitsToString(row int) string {
 
 // Finds a row in the interval with the same dimensions and which doesn't have its count at the max value.
 func (table *FactTable) findCollapsibleRowInInterval(row []byte, interval *Interval) ([]byte, bool) {
-	// TODO(philc): I'm disabling row collapsing because the n^2 insertion time is too slow (who'd have
-	// thought!?). We'll need to implement something faster.
-	return nil, false
 	// To determine whether rows are collapsible, we need to compare the bytes representing nil values, and the
 	// value of all dimension columns.
 	start := countColumnSize
@@ -489,14 +487,16 @@ func (table *FactTable) collapseRow(a []byte, b []byte) {
 	}
 }
 
-func (table *FactTable) insertNormalizedRow(timestamp time.Time, row []byte) {
+func (table *FactTable) insertNormalizedRow(timestamp time.Time, row []byte, collapse bool) {
 	interval := table.getIntervalForTimestamp(timestamp)
 	if interval == nil {
 		interval = table.createInterval(timestamp)
 	}
-	if existingRow, ok := table.findCollapsibleRowInInterval(row, interval); ok {
-		table.collapseRow(existingRow, row)
-		return
+	if collapse {
+		if existingRow, ok := table.findCollapsibleRowInInterval(row, interval); ok {
+			table.collapseRow(existingRow, row)
+			return
+		}
 	}
 	if interval.SegmentsAreFull() {
 		interval.AddSegment(table)
@@ -571,8 +571,20 @@ func (table *FactTable) InsertRowMaps(rows []RowMap) error {
 		}
 		timestamp := rowMap[table.TimestampColumnName].(int)
 		truncated := time.Unix(int64(timestamp), 0).Truncate(intervalDuration)
-		table.insertNormalizedRow(truncated, normalizedRow)
+		table.insertNormalizedRow(truncated, normalizedRow, true)
 	}
+	return nil
+}
+
+// TODO(caleb): Remove these two functions later when unneeded to make benchmark run fast enough
+
+func (table *FactTable) NormalizeRow(rowMap RowMap) ([]byte, error) {
+	return table.normalizeRow(rowMap)
+}
+
+func (table *FactTable) InsertNormalizedRowNoCollapse(row []byte, timestamp int) error {
+	truncated := time.Unix(int64(timestamp), 0).Truncate(intervalDuration)
+	table.insertNormalizedRow(truncated, row, false)
 	return nil
 }
 
@@ -583,10 +595,11 @@ func (table *DimensionTable) addRow(rowValue string) int32 {
 	return nextId
 }
 
-// The fraction of the table's rows are compressed together. Returns a number between 0 and 1. For example, if
-// 4 rows are stored in the table but only 1 row of space is used, then the compression factor is 0.75. Note
-// that performing this computation requires scanning the entire table.
-func (table *FactTable) GetCompressionFactor() float64 {
+// CompressionFactor returns the fraction of the logical rows in the table that physically exist. Returns a
+// number between 0 and 1. For example, if 4 rows are stored in the table but only 1 row of space is used,
+// then the compression factor is 0.25. Note that performing this computation requires scanning the entire
+// table.
+func (table *FactTable) CompressionFactor() float64 {
 	rows := 0
 	rowsStored := 0
 	for _, interval := range table.Intervals {
@@ -601,7 +614,7 @@ func (table *FactTable) GetCompressionFactor() float64 {
 			}
 		}
 	}
-	return float64(rows-rowsStored) / float64(rows)
+	return float64(rowsStored) / float64(rows)
 }
 
 func isString(value interface{}) bool {
