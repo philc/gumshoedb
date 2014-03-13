@@ -96,7 +96,7 @@ type FactTable struct {
 	ColumnIndexToOffset   []uintptr // The byte offset of each column from the beggining byte of the row
 	DimensionColumnsWidth int       // The combined width of all dimension columns
 	ColumnIndexToType     []int     // Index => one of the type constants (e.g. TypeUint8).
-	stringColumnsMap      map[string]bool
+	StringColumnsMap      map[string]bool
 	TimestampColumnName   string // Name of the column used for grouping rows into time buckets.
 	SegmentSizeInBytes    int
 }
@@ -187,10 +187,10 @@ func NewFactTable(filePath string, schema *Schema) *FactTable {
 		table.ColumnNameToIndex[name] = i
 	}
 
-	table.stringColumnsMap = make(map[string]bool, len(schema.StringColumns))
+	table.StringColumnsMap = make(map[string]bool, len(schema.StringColumns))
 	table.DimensionTables = make(map[string]*DimensionTable, len(schema.StringColumns))
 	for _, column := range schema.StringColumns {
-		table.stringColumnsMap[column] = true
+		table.StringColumnsMap[column] = true
 		table.DimensionTables[column] = NewDimensionTable(column)
 	}
 
@@ -226,7 +226,7 @@ func (table *FactTable) denormalizeColumnValue(value Untyped, columnName string)
 	if value == nil {
 		return value
 	}
-	if table.stringColumnsMap[columnName] {
+	if table.StringColumnsMap[columnName] {
 		dimensionTable := table.DimensionTables[columnName]
 		return dimensionTable.Rows[int(convertUntypedToFloat64(value))]
 	}
@@ -318,7 +318,7 @@ func (table *FactTable) normalizeRow(rowMap RowMap) ([]byte, error) {
 			continue
 		}
 		var valueAsFloat64 float64
-		if table.stringColumnsMap[columnName] {
+		if table.StringColumnsMap[columnName] {
 			if !isString(value) {
 				return nil, fmt.Errorf("Cannot insert a non-string value into column %s.", columnName)
 			}
