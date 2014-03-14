@@ -1,0 +1,17 @@
+listen_addr = ":9000"
+
+database_dir = "db"
+
+# The maximum amount of time between saves to disk.
+flush_duration = "3m"
+
+# Every row must have a timestamp column.
+timestamp_column = ["at", "uint32"]
+
+dimension_columns = [
+  ["foo", "string:uint16"],
+]
+
+metric_columns = [
+  ["bar", "uint32"],
+]

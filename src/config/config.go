@@ -2,6 +2,7 @@ package config
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -9,57 +10,98 @@ import (
 )
 
 type Config struct {
-	Rows             int        `toml:"rows"`
-	TimestampColumn  string     `toml:"timestamp_column"`
-	ListenAddr       string     `toml:"listen_addr"`
-	TableFilePath    string     `toml:"table_file_path"`
-	SaveDuration     Duration   `toml:"save_duration"`
-	DimensionColumns [][]string `toml:"dimension_columns"`
-	MetricColumns    [][]string `toml:"metric_columns"`
+	ListenAddr       string      `toml:"listen_addr"`
+	DatabaseDir      string      `toml:"database_dir"`
+	FlushDuration    Duration    `toml:"flush_duration"`
+	TimestampColumn  [2]string   `toml:"timestamp_column"`
+	DimensionColumns [][2]string `toml:"dimension_columns"`
+	MetricColumns    [][2]string `toml:"metric_columns"`
 }
 
-func (c *Config) Validate() error {
-	if c.Rows <= 0 {
-		return errors.New("Must set the row count to be > 0.")
+// Produces a Schema based on the config file's values.
+func (c *Config) ToSchema() (*gumshoe.Schema, error) {
+	name, typ, isString := parseColumn(c.TimestampColumn)
+	if typ != "uint32" {
+		return nil, fmt.Errorf("timestamp column (%q) must be uint32", name)
 	}
-	if c.TimestampColumn == "" {
-		return errors.New("Must provide the name of a timestamp column.")
+	if isString {
+		return nil, errors.New("timestamp column cannot be a string")
 	}
+	timestampColumn, err := gumshoe.MakeDimensionColumn(name, typ, isString)
+	if err != nil {
+		return nil, err
+	}
+
+	dimensions := make([]gumshoe.DimensionColumn, len(c.DimensionColumns))
+	for i, colPair := range c.DimensionColumns {
+		name, typ, isString := parseColumn(colPair)
+		if isString {
+			switch typ {
+			case "uint8", "uint16", "uint32":
+			default:
+				return nil, fmt.Errorf("got type %q for column %q (must be unsigned int type)", typ, name)
+			}
+		}
+		col, err := gumshoe.MakeDimensionColumn(name, typ, isString)
+		if err != nil {
+			return nil, err
+		}
+		dimensions[i] = col
+	}
+
 	if len(c.MetricColumns) == 0 {
-		return errors.New("Must provide at least one metric column in your configuration.")
+		return nil, fmt.Errorf("schema must include at least one metric column")
 	}
-	return nil
+	metrics := make([]gumshoe.MetricColumn, len(c.MetricColumns))
+	for i, colPair := range c.MetricColumns {
+		name, typ, isString := parseColumn(colPair)
+		if isString {
+			return nil, fmt.Errorf("metric column (%q) has string type; not allowed for metric columns", name)
+		}
+		col, err := gumshoe.MakeMetricColumn(name, typ)
+		if err != nil {
+			return nil, err
+		}
+		metrics[i] = col
+	}
+
+	// Check that we haven't duplicated any column names
+	names := map[string]bool{timestampColumn.Name: true}
+	for _, col := range dimensions {
+		if names[col.Name] {
+			return nil, fmt.Errorf("duplicate column name %q", col.Name)
+		}
+		names[col.Name] = true
+	}
+	for _, col := range metrics {
+		if names[col.Name] {
+			return nil, fmt.Errorf("duplicate column name %q", col.Name)
+		}
+		names[col.Name] = true
+	}
+
+	return &gumshoe.Schema{
+		TimestampColumn:  timestampColumn.Column,
+		DimensionColumns: dimensions,
+		MetricColumns:    metrics,
+		SegmentSize:      1e6,
+		Dir:              c.DatabaseDir,
+		FlushDuration:    c.FlushDuration.Duration,
+	}, nil
+}
+
+func parseColumn(col [2]string) (name, typ string, isString bool) {
+	name = col[0]
+	typ = col[1]
+	if strings.HasPrefix(typ, "string:") {
+		typ = strings.TrimPrefix(typ, "string:")
+		isString = true
+	}
+	return
 }
 
 type Duration struct {
 	time.Duration
-}
-
-var stringToSchemaType = map[string]int{
-	"uint8":   gumshoe.TypeUint8,
-	"int8":    gumshoe.TypeInt8,
-	"uint16":  gumshoe.TypeUint16,
-	"int16":   gumshoe.TypeInt16,
-	"uint32":  gumshoe.TypeUint32,
-	"int32":   gumshoe.TypeInt32,
-	"float32": gumshoe.TypeFloat32,
-}
-
-// Produces a Schema based on the config file's values.
-func (c *Config) ToSchema() *gumshoe.Schema {
-	schema := gumshoe.NewSchema()
-	for _, columnPair := range c.DimensionColumns {
-		columnType := columnPair[1]
-		if strings.HasPrefix(columnType, "string:") {
-			columnType = strings.TrimPrefix(columnType, "string:")
-			schema.StringColumns = append(schema.StringColumns, columnPair[1])
-		}
-		schema.DimensionColumns[columnPair[0]] = stringToSchemaType[columnType]
-	}
-	for _, columnPair := range c.MetricColumns {
-		schema.MetricColumns[columnPair[0]] = stringToSchemaType[columnPair[1]]
-	}
-	return schema
 }
 
 func (d *Duration) UnmarshalText(text []byte) error {

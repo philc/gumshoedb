@@ -4,6 +4,8 @@
 
 // This file defines the value type used in this b-tree.
 
+package b
+
 type MetricWithCount struct {
 	Count  int
 	Metric []byte
