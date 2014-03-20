@@ -87,9 +87,9 @@ to the type of the column. The initial few bytes of the row contain a bit of met
 Here is a picture of an example row:
 
 ```
-[0011][0010][...d0...][.......d1.......][...d2...][...m0...][...m1...][...m2...]
- count nil  <-------- dimension columns ---------><------ metric columns ------>
-<-------------------------- table.RowSize (16) -------------------------------->
+[00000011][00000010][...d0...][.......d1.......][...d2...][...m0...][...m1...][...m2...]
+   count     nil    <-------- dimension columns ---------><------ metric columns ------>
+<------------------------------ table.RowSize (16) ------------------------------------>
 ```
 
 In this example, the schema has 3 dimension columns and 3 metric columns. All the column types are 8 bits
