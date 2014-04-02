@@ -203,11 +203,11 @@ func (db *DB) serializeRowMap(rowMap RowMap) (*insertionRow, error) {
 	timestampColumnName := db.TimestampColumn.Name
 	timestamp, ok := rowMap[timestampColumnName]
 	if !ok {
-		return nil, fmt.Errorf("row must have a value for the timestamp column (%s)", timestampColumnName)
+		return nil, fmt.Errorf("row must have a value for the timestamp column (%q)", timestampColumnName)
 	}
 	timestampMillis, ok := timestamp.(float64)
 	if !ok {
-		return nil, fmt.Errorf("timestamp column must have an integer value (%s)", timestampColumnName)
+		return nil, fmt.Errorf("timestamp column (%q) must have an numeric value", timestampColumnName)
 	}
 	dimensions := make(DimensionBytes, db.DimensionWidth)
 	for i, dimCol := range db.DimensionColumns {
