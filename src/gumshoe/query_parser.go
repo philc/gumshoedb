@@ -126,35 +126,7 @@ func (t *TimeTruncationType) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
-type FilterType int
-
-const (
-	FilterEqual FilterType = iota
-	FilterNotEqual
-	FilterGreaterThan
-	FilterGreaterThenOrEqual
-	FilterLessThan
-	FilterLessThanOrEqual
-	FilterIn
-)
-
-var filterTypeToName = []string{
-	FilterEqual:              "=",
-	FilterNotEqual:           "!=",
-	FilterGreaterThan:        ">",
-	FilterGreaterThenOrEqual: ">=",
-	FilterLessThan:           "<",
-	FilterLessThanOrEqual:    "<=",
-	FilterIn:                 "in",
-}
-
-var filterNameToType = make(map[string]FilterType)
-
-func init() {
-	for typ, name := range filterTypeToName {
-		filterNameToType[name] = FilterType(typ)
-	}
-}
+// See FilterType definitions in type_gen.go
 
 func (t FilterType) MarshalJSON() ([]byte, error) {
 	if int(t) >= len(filterTypeToName) {

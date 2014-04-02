@@ -378,12 +378,7 @@ func (s *State) postProcessScanRows(aggregates []*rowAggregate, query *Query,
 func (s *State) makeSumFunc(aggregate QueryAggregate, index int) sumFunc {
 	col := s.MetricColumns[index]
 	offset := s.MetricOffsets[index]
-	if col.Type == TypeUint32 {
-		return func(sum UntypedBytes, metrics MetricBytes) {
-			*(*uint32)(unsafe.Pointer(&sum[0])) += *(*uint32)(unsafe.Pointer(&metrics[offset]))
-		}
-	}
-	panic("unimplemented")
+	return typeToSumFunc[col.Type](offset)
 }
 
 // makeTimeTruncationFunc returns a function which, given a cell, performs a date truncation transformation.
@@ -430,13 +425,8 @@ func (s *State) makeMetricFilterFunc(filter QueryFilter, index int) (filterFunc,
 	}
 	col := s.MetricColumns[index]
 	offset := s.MetricStartOffset + s.MetricOffsets[index]
-	if col.Type == TypeUint32 && filter.Type == FilterEqual {
-		value := uint32(value)
-		return func(row RowBytes) bool {
-			return *(*uint32)(unsafe.Pointer(&row[offset])) == value
-		}, nil
-	}
-	panic("unimplemented")
+	filterGenFunc := typeAndFilterToMetricFilterFuncSimple[typeAndFilter{col.Type, filter.Type}]
+	return filterGenFunc(value, offset), nil
 }
 
 // Given a QueryFilter, return a filter function that can be tested against a row.
@@ -538,13 +528,3 @@ func (s *State) makeMetricFilterFunc(filter QueryFilter, index int) (filterFunc,
 //}
 //return f
 //}
-
-// numericCellValue decodes a numeric value from cell based on typ. It does not look into any dimension
-// tables.
-func (s *State) numericCellValue(cell unsafe.Pointer, typ Type) Untyped {
-	switch typ {
-	case TypeUint32:
-		return *(*uint32)(cell)
-	}
-	panic("Unimplemented")
-}
