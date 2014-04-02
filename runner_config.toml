@@ -1,6 +1,6 @@
 listen_addr = ":9000"
 
-database_dir = "db"
+database_dir = "MEMORY"
 
 # The maximum amount of time between saves to disk.
 flush_duration = "3m"

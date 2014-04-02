@@ -26,15 +26,15 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	//rows := []gumshoe.RowMap{
-	//{"at": 1.0, "foo": "a", "bar": 123.0},
-	//{"at": 1.0, "foo": "a", "bar": 10.0},
-	//{"at": 1.0, "foo": "b", "bar": 234.0},
-	//}
-	//if err := db.Insert(rows); err != nil {
-	//log.Fatal(err)
-	//}
-	//db.Flush()
+	rows := []gumshoe.RowMap{
+		{"at": 1.0, "foo": "a", "bar": 123.0},
+		{"at": 1.0, "foo": "a", "bar": 10.0},
+		{"at": 1.0, "foo": "b", "bar": 234.0},
+	}
+	if err := db.Insert(rows); err != nil {
+		log.Fatal(err)
+	}
+	db.Flush()
 
 	fmt.Printf("Compression ratio: %.2f\n", db.GetCompressionRatio())
 

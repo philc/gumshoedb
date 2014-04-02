@@ -74,17 +74,20 @@ func (ic *intervalCursor) Next() (key, val []byte, count int, ok bool) {
 // in. After it has been fully written it may be converted to an immutable read-only Interval by calling
 // ToInterval.
 type writeOnlyInterval struct {
+	DiskBacked     bool
 	Generation     int
 	Start          time.Time
 	End            time.Time
 	Segments       int
-	CurSegmentFile *os.File
+	CurSegment     io.Writer
 	CurSegmentSize int
 	NumRows        int
+	buffers        []*bytes.Buffer // Used if !DiskBacked
 }
 
-func newWriteOnlyInterval(generation int, start, end time.Time) *writeOnlyInterval {
+func newWriteOnlyInterval(diskBacked bool, generation int, start, end time.Time) *writeOnlyInterval {
 	return &writeOnlyInterval{
+		DiskBacked: diskBacked,
 		Generation: generation,
 		Start:      start,
 		End:        end,
@@ -92,16 +95,15 @@ func newWriteOnlyInterval(generation int, start, end time.Time) *writeOnlyInterv
 }
 
 func (iv *writeOnlyInterval) writeKeyValCount(key, val []byte, count uint32) error {
-	f := iv.CurSegmentFile
 	countBytes := make([]byte, countColumnWidth)
 	*(*uint32)(unsafe.Pointer(&countBytes[0])) = count
-	if _, err := f.Write(countBytes); err != nil {
+	if _, err := iv.CurSegment.Write(countBytes); err != nil {
 		return err
 	}
-	if _, err := f.Write(key); err != nil {
+	if _, err := iv.CurSegment.Write(key); err != nil {
 		return err
 	}
-	if _, err := f.Write(val); err != nil {
+	if _, err := iv.CurSegment.Write(val); err != nil {
 		return err
 	}
 	iv.NumRows++
@@ -112,20 +114,17 @@ func (iv *writeOnlyInterval) writeKeyValCount(key, val []byte, count uint32) err
 // represent directly). Rows must be inserted in increasing key (dimension) order, with one call for each row
 // of a given key.
 func (iv *writeOnlyInterval) appendRow(s *Schema, dimensions, metrics []byte, count int) error {
-	if iv.CurSegmentFile == nil || iv.CurSegmentSize > s.SegmentSize {
-		// Need to open a new segment after closing the current one, if it exists.
-		if iv.CurSegmentFile != nil {
-			if err := iv.CurSegmentFile.Close(); err != nil {
-				return err
-			}
-		}
-		filename := s.SegmentFilename(iv.Start, iv.Generation, iv.Segments)
-		iv.Segments++
-		f, err := os.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0666)
-		if err != nil {
+	if iv.CurSegmentSize > s.SegmentSize {
+		if err := iv.closeCurrentSegment(); err != nil {
 			return err
 		}
-		iv.CurSegmentFile = f
+		iv.CurSegment = nil
+	}
+
+	if iv.CurSegment == nil {
+		if err := iv.openFreshSegment(s); err != nil {
+			return err
+		}
 	}
 	if count > math.MaxUint32 {
 		panic("count greater than MaxUint32 is unrepresentable with uint32 for column count")
@@ -134,14 +133,16 @@ func (iv *writeOnlyInterval) appendRow(s *Schema, dimensions, metrics []byte, co
 }
 
 func (iv *writeOnlyInterval) freeze(s *Schema) (*Interval, error) {
-	if iv.CurSegmentFile != nil {
-		if err := iv.CurSegmentFile.Close(); err != nil {
-			return nil, err
-		}
+	if err := iv.closeCurrentSegment(); err != nil {
+		return nil, err
 	}
 
 	segments := make([]*Segment, iv.Segments)
 	for i := 0; i < iv.Segments; i++ {
+		if !iv.DiskBacked {
+			segments[i] = &Segment{Bytes: iv.buffers[i].Bytes()}
+			continue
+		}
 		filename := s.SegmentFilename(iv.Start, iv.Generation, i)
 		f, err := os.Open(filename)
 		if err != nil {
@@ -163,6 +164,31 @@ func (iv *writeOnlyInterval) freeze(s *Schema) (*Interval, error) {
 	}, nil
 }
 
+func (iv *writeOnlyInterval) openFreshSegment(s *Schema) error {
+	defer func() { iv.Segments++ }()
+
+	if !iv.DiskBacked {
+		iv.CurSegment = new(bytes.Buffer)
+		return nil
+	}
+
+	filename := s.SegmentFilename(iv.Start, iv.Generation, iv.Segments)
+	f, err := os.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0666)
+	if err != nil {
+		return err
+	}
+	iv.CurSegment = f
+	return nil
+}
+
+func (iv *writeOnlyInterval) closeCurrentSegment() error {
+	if iv.DiskBacked {
+		return iv.CurSegment.(*os.File).Close()
+	}
+	iv.buffers = append(iv.buffers, iv.CurSegment.(*bytes.Buffer))
+	return nil
+}
+
 func (s *Schema) SegmentFilename(start time.Time, generation, segmentIndex int) string {
 	name := fmt.Sprintf("interval.%d.generation%04d.segment%04d", start.Unix(), generation, segmentIndex)
 	return filepath.Join(s.Dir, name)
@@ -170,13 +196,13 @@ func (s *Schema) SegmentFilename(start time.Time, generation, segmentIndex int) 
 
 // WriteMemInterval writes out the data in memInterval to a fresh Interval with generation 0. Note that no
 // interval with this start time should exist.
-// TODO(caleb) param: diskBacked bool
 func (s *Schema) WriteMemInterval(memInterval *MemInterval) (*Interval, error) {
 	cursor, err := memInterval.Tree.SeekFirst()
 	if err != nil {
 		return nil, err
 	}
-	interval := newWriteOnlyInterval(0, memInterval.Start, memInterval.End)
+	diskBacked := s.Dir != ""
+	interval := newWriteOnlyInterval(diskBacked, 0, memInterval.Start, memInterval.End)
 	for {
 		key, val, err := cursor.Next()
 		if err != nil {
@@ -194,7 +220,6 @@ func (s *Schema) WriteMemInterval(memInterval *MemInterval) (*Interval, error) {
 
 // WriteCombinedInterval writes out the combined data from memInterval and stateInterval to a fresh Interval
 // with generation stateInterval.Generation+1.
-// TODO(caleb) param: diskBacked bool
 func (s *Schema) WriteCombinedInterval(memInterval *MemInterval, stateInterval *Interval) (*Interval, error) {
 	// Sanity check
 	if memInterval.Start != stateInterval.Start || memInterval.End != stateInterval.End {
@@ -206,7 +231,8 @@ func (s *Schema) WriteCombinedInterval(memInterval *MemInterval, stateInterval *
 		return nil, err
 	}
 	stateCursor := stateInterval.cursor(s)
-	interval := newWriteOnlyInterval(stateInterval.Generation+1, memInterval.Start, memInterval.End)
+	diskBacked := s.Dir != ""
+	interval := newWriteOnlyInterval(diskBacked, stateInterval.Generation+1, memInterval.Start, memInterval.End)
 
 	// Do an initial read from both mem and state, then loop and compare, advancing one or both (a classic
 	// merge).

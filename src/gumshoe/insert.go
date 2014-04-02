@@ -57,7 +57,7 @@ func (db *DB) insertRow(rowMap RowMap) error {
 			Start: timestamp,
 			End:   timestamp.Add(intervalDuration),
 			// Make a B+tree with bytes.Compare (lexicographical) as the key comparison function.
-			Tree:  b.TreeNew(bytes.Compare),
+			Tree: b.TreeNew(bytes.Compare),
 		}
 		db.memTable.Intervals[timestamp] = interval
 	}
@@ -163,14 +163,16 @@ func (db *DB) flush() {
 	// Wait for all requests on the old state to be done.
 	<-allRequestsFinished
 
-	// Write out the metadata
-	if err := db.writeMetadataFile(); err != nil {
-		// TODO(caleb): Handle
-		panic(err)
-	}
+	if db.Dir != "" {
+		// Write out the metadata
+		if err := db.writeMetadataFile(); err != nil {
+			// TODO(caleb): Handle
+			panic(err)
+		}
 
-	// Clean up any now-unused intervals (only associated with previous state).
-	db.cleanUpOldIntervals(intervalsForCleanup)
+		// Clean up any now-unused intervals (only associated with previous state).
+		db.cleanUpOldIntervals(intervalsForCleanup)
+	}
 
 	// Replace the MemTable with a fresh, empty one.
 	db.memTable = NewMemTable(db.Schema)

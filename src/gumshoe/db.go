@@ -31,8 +31,15 @@ type DB struct {
 // - Otherwise, Open loads an existing DB from schema.Dir after sanity checking against the given schema.
 func Open(schema *Schema) (*DB, error) {
 	if schema.Dir == "" {
-		panic("unimplemented")
+		// Memory-only
+		db := &DB{
+			Schema: schema,
+			State:  NewState(schema),
+		}
+		db.initialize()
+		return db, nil
 	}
+
 	metadataFilename := filepath.Join(schema.Dir, dbMetadataFilename)
 	var db *DB
 	f, err := os.Open(metadataFilename)
@@ -61,8 +68,13 @@ func Open(schema *Schema) (*DB, error) {
 		return nil, err
 	}
 
-	schema.initialize()
-	db.memTable = NewMemTable(schema)
+	db.initialize()
+	return db, nil
+}
+
+func (db *DB) initialize() {
+	db.Schema.initialize()
+	db.memTable = NewMemTable(db.Schema)
 	db.shutdown = make(chan struct{})
 	db.inserts = make(chan *InsertRequest)
 	db.flushSignals = make(chan chan struct{})
@@ -73,19 +85,17 @@ func Open(schema *Schema) (*DB, error) {
 	go db.HandleInserts()
 	go func() {
 		// Not using a ticker because I want a fixed break between flushes even if they take a long time.
-		timer := time.NewTimer(schema.FlushDuration)
+		timer := time.NewTimer(db.Schema.FlushDuration)
 		for {
 			select {
 			case <-db.shutdown:
 				return
 			case <-timer.C:
 				db.flushSignals <- nil
-				timer.Reset(schema.FlushDuration)
+				timer.Reset(db.Schema.FlushDuration)
 			}
 		}
 	}()
-
-	return db, nil
 }
 
 // Flush triggers a DB flush and waits for it to complete.

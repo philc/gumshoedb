@@ -75,6 +75,7 @@ func (s *State) initialize(schema *Schema) error {
 	for _, interval := range s.Intervals {
 		interval.Segments = make([]*Segment, interval.NumSegments)
 		for i := 0; i < interval.NumSegments; i++ {
+
 			f, err := os.Open(schema.SegmentFilename(interval.Start, interval.Generation, i))
 			if err != nil {
 				return err

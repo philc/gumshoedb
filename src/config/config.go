@@ -20,6 +20,12 @@ type Config struct {
 
 // Produces a Schema based on the config file's values.
 func (c *Config) ToSchema() (*gumshoe.Schema, error) {
+	switch c.DatabaseDir {
+	case "":
+		return nil, errors.New("database directory must be provided. Use 'MEMORY' to specify an in-memory DB.")
+	case "MEMORY":
+		c.DatabaseDir = ""
+	}
 	name, typ, isString := parseColumn(c.TimestampColumn)
 	if typ != "uint32" {
 		return nil, fmt.Errorf("timestamp column (%q) must be uint32", name)
