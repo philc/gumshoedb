@@ -15,6 +15,11 @@ func TestParseQuery(t *testing.T) {
      "filters": [{"type": "!=", "column": "at", "value": 1}]
 		}`
 	db := new(DB)
-	_, err := db.ParseJSONQuery(strings.NewReader(queryString))
+	query, err := db.ParseJSONQuery(strings.NewReader(queryString))
 	Assert(t, err, IsNil)
+
+	// Spot checks
+	Assert(t, query.Aggregates[0].Type, Equals, AggregateSum)
+	Assert(t, query.Groupings[0].Name, Equals, "grouping-name")
+	Assert(t, query.Filters[0].Type, Equals, FilterNotEqual)
 }
