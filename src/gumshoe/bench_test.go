@@ -1,3 +1,4 @@
+// +build ignore
 // Benchmarks which use the gumshoe core code paths in a representative way. These numbers should be compared
 // to the ideal, simplified synthetic benchmarks to find areas for improvement.
 

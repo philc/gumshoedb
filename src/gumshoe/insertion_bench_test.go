@@ -1,3 +1,5 @@
+// +build ignore
+
 package gumshoe_test
 
 import (

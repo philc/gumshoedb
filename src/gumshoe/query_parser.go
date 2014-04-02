@@ -8,87 +8,171 @@ import (
 	"io"
 )
 
-type Untyped interface{}
-
-type QueryAggregate struct {
-	Type   string
-	Column string
-	Name   string
-}
-
-type QueryGrouping struct {
-	// This provides a means of specifying an optional date truncation function, assuming the column is a
-	// timestamp. It makes it posisble to group by time intervals (minute, hour, day).
-	TimeTransform string
-	Column        string
-	Name          string
-}
-
-type QueryFilter struct {
-	Type   string
-	Column string
-	Value  Untyped
-}
-
-type Query struct {
-	TableName  string
-	Aggregates []QueryAggregate
-	Groupings  []QueryGrouping
-	Filters    []QueryFilter
-}
-
-func isValidColumn(table *FactTable, name string) bool {
-	_, ok := table.ColumnNameToIndex[name]
-	return ok || name == table.TimestampColumnName
-}
-
-var validFilterTypes = make(map[string]bool)
-
-func init() {
-	for _, filterType := range []string{"=", "!=", ">", ">=", "<", "<=", "in"} {
-		validFilterTypes[filterType] = true
-	}
-}
-
-func ValidateQuery(table *FactTable, query *Query) error {
-	for _, aggregate := range query.Aggregates {
-		if aggregate.Type != "sum" && aggregate.Type != "average" {
-			return fmt.Errorf("Unrecognized aggregate type: %s", aggregate.Type)
-		}
-		_, ok := table.Schema.MetricColumns[aggregate.Column]
-		if !ok {
-			return fmt.Errorf("Only metric columns can be used in aggregates. %s is not a metric column.",
-				aggregate.Column)
-		}
-	}
-	for _, grouping := range query.Groupings {
-		if _, ok := table.Schema.DimensionColumns[grouping.Column]; !ok {
-			return fmt.Errorf("Only dimension columns can be used in grouping. %s is not a dimension column.",
-				grouping.Column)
-		}
-		switch grouping.TimeTransform {
-		case "", "minute", "hour", "day":
-		default:
-			return fmt.Errorf("Unrecogized time transform function: %s. Use one of {minute, hour, day}.",
-				grouping.TimeTransform)
-		}
-	}
-	for _, filter := range query.Filters {
-		if !isValidColumn(table, filter.Column) {
-			return fmt.Errorf("Unrecognized column name in filter clause: %s", filter.Column)
-		}
-		if _, ok := validFilterTypes[filter.Type]; !ok {
-			return fmt.Errorf("%s is not a valid filter type.", filter.Type)
-		}
-	}
-	return nil
-}
-
-func ParseJSONQuery(r io.Reader) (*Query, error) {
+func (db *DB) ParseJSONQuery(r io.Reader) (*Query, error) {
 	query := new(Query)
 	decoder := json.NewDecoder(r)
 	if err := decoder.Decode(query); err != nil {
 		return nil, err
 	}
 	return query, nil
+}
+
+type Query struct {
+	Aggregates []QueryAggregate
+	Groupings  []QueryGrouping
+	Filters    []QueryFilter
+}
+
+type QueryAggregate struct {
+	Type   AggregateType
+	Column string
+	Name   string
+}
+
+type QueryGrouping struct {
+	// This provides a means of specifying an optional date truncation function, assuming the column is a
+	// timestamp. It makes it possible to group by time intervals (minute, hour, day).
+	TimeTransform TimeTruncationType
+	Column        string
+	Name          string
+}
+
+type QueryFilter struct {
+	Type   FilterType
+	Column string
+	Value  Untyped
+}
+
+type AggregateType int
+
+const (
+	AggregateSum AggregateType = iota
+	AggregateAvg
+)
+
+func (t AggregateType) MarshalJSON() ([]byte, error) {
+	switch t {
+	case AggregateSum:
+		return []byte(`"sum"`), nil
+	case AggregateAvg:
+		return []byte(`"average"`), nil
+	default:
+		panic("bad type")
+	}
+}
+
+func (t *AggregateType) UnmarshalJSON(b []byte) error {
+	var name string
+	if err := json.Unmarshal(b, &name); err != nil {
+		return err
+	}
+	switch name {
+	case "sum":
+		*t = AggregateSum
+	case "average":
+		*t = AggregateAvg
+	default:
+		return fmt.Errorf("bad aggregate type: %q", name)
+	}
+	return nil
+}
+
+type TimeTruncationType int
+
+const (
+	TimeTruncationNone TimeTruncationType = iota
+	TimeTruncationMinute
+	TimeTruncationHour
+	TimeTruncationDay
+)
+
+func (t TimeTruncationType) MarshalJSON() ([]byte, error) {
+	var name string
+	switch t {
+	case TimeTruncationNone:
+		return []byte("null"), nil
+	case TimeTruncationMinute:
+		name = "minute"
+	case TimeTruncationHour:
+		name = "hour"
+	case TimeTruncationDay:
+		name = "day"
+	default:
+		panic("bad time truncation type")
+	}
+	return []byte(fmt.Sprintf("%q", name)), nil
+}
+
+func (t *TimeTruncationType) UnmarshalJSON(b []byte) error {
+	if string(b) == "null" {
+		*t = TimeTruncationNone
+		return nil
+	}
+
+	var name string
+	if err := json.Unmarshal(b, &name); err != nil {
+		return err
+	}
+	switch name {
+	case "minute":
+		*t = TimeTruncationMinute
+	case "hour":
+		*t = TimeTruncationHour
+	case "day":
+		*t = TimeTruncationDay
+	default:
+		return fmt.Errorf("bad time truncation function: %q", name)
+	}
+	return nil
+}
+
+type FilterType int
+
+const (
+	FilterEqual FilterType = iota
+	FilterNotEqual
+	FilterGreaterThan
+	FilterGreaterThenOrEqual
+	FilterLessThan
+	FilterLessThanOrEqual
+	FilterIn
+)
+
+var filterTypeToName = []string{
+	FilterEqual:              "=",
+	FilterNotEqual:           "!=",
+	FilterGreaterThan:        ">",
+	FilterGreaterThenOrEqual: ">=",
+	FilterLessThan:           "<",
+	FilterLessThanOrEqual:    "<=",
+	FilterIn:                 "in",
+}
+
+var filterNameToType = make(map[string]FilterType)
+
+func init() {
+	for typ, name := range filterTypeToName {
+		filterNameToType[name] = FilterType(typ)
+	}
+}
+
+func (t FilterType) MarshalJSON() ([]byte, error) {
+	if int(t) >= len(filterTypeToName) {
+		panic("bad filter type")
+	}
+	name := filterTypeToName[t]
+	return []byte(fmt.Sprintf("%q", name)), nil
+}
+
+func (t *FilterType) UnmarshalJSON(b []byte) error {
+	var name string
+	if err := json.Unmarshal(b, &name); err != nil {
+		return err
+	}
+	typ, ok := filterNameToType[name]
+	if !ok {
+		return fmt.Errorf("%q is not a valid filter type", name)
+	}
+	*t = typ
+	return nil
 }

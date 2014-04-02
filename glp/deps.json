@@ -2,7 +2,7 @@
 	"deps": [
 		{
 			"name": "github.com/BurntSushi/toml",
-			"rev": "50ab0c35d35f5355cee28b0120b18dfbbd13ad36"
+			"rev": "996ef0250e4610df51f20f20fb04c30a3e92787c"
 		},
 		{
 			"name": "github.com/cespare/a",
