@@ -3,6 +3,8 @@ package gumshoe
 import (
 	"testing"
 
+	"utils"
+
 	. "github.com/cespare/a"
 )
 
@@ -123,20 +125,21 @@ func TestInvokeQueryFiltersRowsUsingLessThan(t *testing.T) {
 //"metric1": 270})
 //}
 
-//func TestAggregateQueryWithNilValues(t *testing.T) {
-//table := createTableFixtureForNilQueryTests()
-//results := runQuery(table, createQuery())
-//Assert(t, results[0], utils.HasEqualJSON, map[string]Untyped{"metric1": 7, "rowCount": 3})
-//}
+func TestAggregateQueryWithNilValues(t *testing.T) {
+	db := createTestDBForNilQueryTests()
+	results := runQuery(db, createQuery())
+	Assert(t, results[0], utils.HasEqualJSON, map[string]Untyped{"metric1": 7, "rowCount": 3})
+}
 
-//func TestFilterQueryWithNilValues(t *testing.T) {
-//table := createTableFixtureForNilQueryTests()
-//results := runWithFilter(table, QueryFilter{"=", "dim1", "a"})
-//Assert(t, results[0], utils.HasEqualJSON, map[string]Untyped{"metric1": 1, "rowCount": 1})
-//// TODO(philc): Enable equals filters by nil values on string columns.
-//// results = runWithFilter(table, QueryFilter{"equals", "dim1", nil})
-//// Assert(t, results[0], utils.HasEqualJSON, map[string]Untyped{"metric1": 5, "rowCount": 1})
-//}
+func TestFilterQueryWithNilValues(t *testing.T) {
+	db := createTestDBForNilQueryTests()
+
+	results := runWithFilter(db, QueryFilter{FilterEqual, "dim1", "a"})
+	Assert(t, results[0], utils.HasEqualJSON, map[string]Untyped{"metric1": 1, "rowCount": 1})
+
+	results = runWithFilter(db, QueryFilter{FilterEqual, "dim1", nil})
+	Assert(t, results[0], utils.HasEqualJSON, map[string]Untyped{"metric1": 4, "rowCount": 1})
+}
 
 //func TestGroupByQueryWithNilValues(t *testing.T) {
 //table := createTableFixtureForNilQueryTests()
