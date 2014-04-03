@@ -463,7 +463,62 @@ func (s *State) makeDimensionFilterFunc(filter QueryFilter, index int) (filterFu
 }
 
 func (s *State) makeDimensionFilterFuncIn(filter QueryFilter, index int) (filterFunc, error) {
-	panic("unimplemented")
+	valueSlice, ok := filter.Value.([]interface{})
+	if !ok {
+		return nil, fmt.Errorf("'in' queries require a list for comparison; got %v", filter.Value)
+	}
+	if len(valueSlice) == 0 {
+		return falseFilterFunc, nil
+	}
+
+	col := s.DimensionColumns[index]
+	mask := byte(1) << byte(index%8)
+	nilOffset := s.DimensionStartOffset + index/8
+	valueOffset := s.DimensionStartOffset + s.DimensionOffsets[index]
+	acceptNil := false
+	isString := false
+	// For string columns, values is []uint32, otherwise it's []float64.
+	var values interface{}
+
+	if col.String {
+		var dimIndices []uint32
+		for _, v := range valueSlice {
+			if v == nil {
+				acceptNil = true
+				continue
+			}
+			str, ok := v.(string)
+			if !ok {
+				return nil, fmt.Errorf("'in' queries on dimension %q take string or null values; got %v", col.Name, v)
+			}
+			if dimIndex, ok := s.DimensionTables[index].Get(str); ok {
+				dimIndices = append(dimIndices, dimIndex)
+			}
+		}
+		if len(dimIndices) == 0 && !acceptNil {
+			return falseFilterFunc, nil
+		}
+		values = dimIndices
+		isString = true
+	} else {
+		var floats []float64
+		for _, v := range valueSlice {
+			if v == nil {
+				acceptNil = true
+				continue
+			}
+			float, ok := v.(float64)
+			if !ok {
+				err := fmt.Errorf("'in' queries on dimension %q take numeric or null values; got %v", col.Name, v)
+				return nil, err
+			}
+			floats = append(floats, float)
+		}
+		values = floats
+	}
+
+	filterGenFunc := makeDimensionFilterFuncIn(col.Type, isString)
+	return filterGenFunc(values, acceptNil, nilOffset, mask, valueOffset), nil
 }
 
 func (s *State) makeMetricFilterFunc(filter QueryFilter, index int) (filterFunc, error) {

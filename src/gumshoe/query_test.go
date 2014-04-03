@@ -53,8 +53,6 @@ func runWithFilter(db *DB, filter QueryFilter) []RowMap {
 //return runQuery(table, query)
 //}
 
-// TODO(caleb) Reenable all assertions after all types implemented
-
 func TestInvokeQueryFiltersRowsUsingEqualsFilter(t *testing.T) {
 	db := createTestDBForFilterTests()
 	defer db.Close()
@@ -69,7 +67,7 @@ func TestInvokeQueryFiltersRowsUsingEqualsFilter(t *testing.T) {
 	results = runWithFilter(db, QueryFilter{FilterEqual, "metric1", 3.0})
 	Assert(t, results[0]["metric1"], Equals, uint32(0))
 
-	results = runWithFilter(db, QueryFilter{FilterEqual, "dim1", "non-existant"})
+	results = runWithFilter(db, QueryFilter{FilterEqual, "dim1", "non-existent"})
 	Assert(t, results[0]["metric1"], Equals, uint32(0))
 }
 
@@ -85,10 +83,17 @@ func TestInvokeQueryFiltersRowsUsingLessThan(t *testing.T) {
 	Assert(t, results[0]["metric1"], Equals, uint32(0))
 }
 
-func inList(ns ...float64) []interface{} {
-	list := make([]interface{}, len(ns))
-	for i, n := range ns {
-		list[i] = n
+func inList(items ...interface{}) []interface{} {
+	list := make([]interface{}, len(items))
+	for i, item := range items {
+		switch typed := item.(type) {
+		case string, float64, nil:
+			list[i] = typed
+		case int:
+			list[i] = float64(typed)
+		default:
+			panic("bad type")
+		}
 	}
 	return list
 }
@@ -100,12 +105,14 @@ func TestInvokeQueryFiltersRowsUsingIn(t *testing.T) {
 	results := runWithFilter(db, QueryFilter{FilterIn, "metric1", inList(2, 1)})
 	Assert(t, results[0]["metric1"], Equals, uint32(3))
 
-	//Assert(t, runWithFilter(table, QueryFilter{"in", "dim1", []interface{}{"string1"}})[0]["metric1"],
-	//Equals, 1.0)
-	//// These match zero rows.
-	//Assert(t, runWithFilter(table, QueryFilter{"in", "metric1", []interface{}{3}})[0]["metric1"], Equals, 0.0)
-	//Assert(t, runWithFilter(table, QueryFilter{"in", "dim1", []interface{}{"non-existant"}})[0]["metric1"],
-	//Equals, 0.0)
+	results = runWithFilter(db, QueryFilter{FilterIn, "dim1", inList("string1")})
+	Assert(t, results[0]["metric1"], Equals, uint32(1))
+
+	// These match zero rows.
+	results = runWithFilter(db, QueryFilter{FilterIn, "metric1", inList(3)})
+	Assert(t, results[0]["metric1"], Equals, uint32(0))
+	results = runWithFilter(db, QueryFilter{FilterIn, "dim1", inList("non-existent")})
+	Assert(t, results[0]["metric1"], Equals, uint32(0))
 }
 
 //func TestInvokeQueryWorksWhenGroupingByAStringColumn(t *testing.T) {
@@ -149,6 +156,12 @@ func TestFilterQueryWithNilValues(t *testing.T) {
 
 	results = runWithFilter(db, QueryFilter{FilterEqual, "dim1", nil})
 	Assert(t, results[0], utils.HasEqualJSON, map[string]Untyped{"metric1": 4, "rowCount": 1})
+}
+
+func TestFilterQueryUsingInWithNilValues(t *testing.T) {
+	db := createTestDBForNilQueryTests()
+	results := runWithFilter(db, QueryFilter{FilterIn, "dim1", inList("b", nil)})
+	Assert(t, results[0], utils.HasEqualJSON, map[string]Untyped{"metric1": 6, "rowCount": 2})
 }
 
 //func TestGroupByQueryWithNilValues(t *testing.T) {

@@ -241,6 +241,48 @@ func makeDimensionFilterFuncSimple(typ Type, filter FilterType, isString bool) f
 	panic("unreached")
 }
 
+func makeDimensionFilterFuncIn(typ Type, isString bool) func(interface{}, bool, int, byte, int) filterFunc {
+	{{range $type := .Types}}{{range $str := $.Bools}}
+	if typ == {{$type.GumshoeTypeName}} && isString == {{$str}} {
+		return func(values interface{}, acceptNil bool, nilOffset int, mask byte, valueOffset int) filterFunc {
+			var typedValues []{{$type.GoName}}
+			{{if $str}}
+			for _, v := range values.([]uint32) {
+			{{else}}
+			for _, v := range values.([]float64) {
+			{{end}}
+				typedValues = append(typedValues, {{$type.GoName}}(v))
+			}
+			return func(row RowBytes) bool {
+				if row[nilOffset] & mask > 0 {
+					return acceptNil
+				}
+				value := *(*{{$type.GoName}})(unsafe.Pointer(&row[valueOffset]))
+				for _, v := range typedValues {
+					if value == v {
+						return true
+					}
+				}
+				return false
+			}
+		}
+	}{{end}}{{end}}
+	panic("unreached")
+}
+
+func makeMetricFilterFuncSimple(typ Type, filter FilterType) func(value float64, offset int) filterFunc {
+	{{range $type := .Types}}{{range $filter := $.SimpleFilterTypes}}
+	if typ == {{$type.GumshoeTypeName}} && filter == {{$filter.GumshoeTypeName}} {
+		return func(value float64, offset int) filterFunc {
+			v := {{$type.GoName}}(value)
+			return func(row RowBytes) bool {
+				return *(*{{$type.GoName}})(unsafe.Pointer(&row[offset])) {{$filter.GoOperator}} v
+			}
+		}
+	}{{end}}{{end}}
+	panic("unreached")
+}
+
 func makeMetricFilterFuncIn(typ Type) func(floats []float64, offset int) filterFunc {
 	{{range .Types}}
 	if typ == {{.GumshoeTypeName}} {
@@ -260,19 +302,6 @@ func makeMetricFilterFuncIn(typ Type) func(floats []float64, offset int) filterF
 			}
 		}
 	}{{end}}
-	panic("unreached")
-}
-
-func makeMetricFilterFuncSimple(typ Type, filter FilterType) func(value float64, offset int) filterFunc {
-	{{range $type := .Types}}{{range $filter := $.SimpleFilterTypes}}
-	if typ == {{$type.GumshoeTypeName}} && filter == {{$filter.GumshoeTypeName}} {
-		return func(value float64, offset int) filterFunc {
-			v := {{$type.GoName}}(value)
-			return func(row RowBytes) bool {
-				return *(*{{$type.GoName}})(unsafe.Pointer(&row[offset])) {{$filter.GoOperator}} v
-			}
-		}
-	}{{end}}{{end}}
 	panic("unreached")
 }
 `

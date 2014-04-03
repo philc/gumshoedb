@@ -1820,16 +1820,21 @@ func makeDimensionFilterFuncSimple(typ Type, filter FilterType, isString bool) f
 	panic("unreached")
 }
 
-func makeMetricFilterFuncIn(typ Type) func(floats []float64, offset int) filterFunc {
+func makeDimensionFilterFuncIn(typ Type, isString bool) func(interface{}, bool, int, byte, int) filterFunc {
 
-	if typ == TypeUint8 {
-		return func(floats []float64, offset int) filterFunc {
-			typedValues := make([]uint8, len(floats))
-			for i, f := range floats {
-				typedValues[i] = uint8(f)
+	if typ == TypeUint8 && isString == true {
+		return func(values interface{}, acceptNil bool, nilOffset int, mask byte, valueOffset int) filterFunc {
+			var typedValues []uint8
+
+			for _, v := range values.([]uint32) {
+
+				typedValues = append(typedValues, uint8(v))
 			}
 			return func(row RowBytes) bool {
-				value := *(*uint8)(unsafe.Pointer(&row[offset]))
+				if row[nilOffset]&mask > 0 {
+					return acceptNil
+				}
+				value := *(*uint8)(unsafe.Pointer(&row[valueOffset]))
 				for _, v := range typedValues {
 					if value == v {
 						return true
@@ -1839,14 +1844,19 @@ func makeMetricFilterFuncIn(typ Type) func(floats []float64, offset int) filterF
 			}
 		}
 	}
-	if typ == TypeInt8 {
-		return func(floats []float64, offset int) filterFunc {
-			typedValues := make([]int8, len(floats))
-			for i, f := range floats {
-				typedValues[i] = int8(f)
+	if typ == TypeUint8 && isString == false {
+		return func(values interface{}, acceptNil bool, nilOffset int, mask byte, valueOffset int) filterFunc {
+			var typedValues []uint8
+
+			for _, v := range values.([]float64) {
+
+				typedValues = append(typedValues, uint8(v))
 			}
 			return func(row RowBytes) bool {
-				value := *(*int8)(unsafe.Pointer(&row[offset]))
+				if row[nilOffset]&mask > 0 {
+					return acceptNil
+				}
+				value := *(*uint8)(unsafe.Pointer(&row[valueOffset]))
 				for _, v := range typedValues {
 					if value == v {
 						return true
@@ -1856,14 +1866,19 @@ func makeMetricFilterFuncIn(typ Type) func(floats []float64, offset int) filterF
 			}
 		}
 	}
-	if typ == TypeUint16 {
-		return func(floats []float64, offset int) filterFunc {
-			typedValues := make([]uint16, len(floats))
-			for i, f := range floats {
-				typedValues[i] = uint16(f)
+	if typ == TypeInt8 && isString == true {
+		return func(values interface{}, acceptNil bool, nilOffset int, mask byte, valueOffset int) filterFunc {
+			var typedValues []int8
+
+			for _, v := range values.([]uint32) {
+
+				typedValues = append(typedValues, int8(v))
 			}
 			return func(row RowBytes) bool {
-				value := *(*uint16)(unsafe.Pointer(&row[offset]))
+				if row[nilOffset]&mask > 0 {
+					return acceptNil
+				}
+				value := *(*int8)(unsafe.Pointer(&row[valueOffset]))
 				for _, v := range typedValues {
 					if value == v {
 						return true
@@ -1873,14 +1888,19 @@ func makeMetricFilterFuncIn(typ Type) func(floats []float64, offset int) filterF
 			}
 		}
 	}
-	if typ == TypeInt16 {
-		return func(floats []float64, offset int) filterFunc {
-			typedValues := make([]int16, len(floats))
-			for i, f := range floats {
-				typedValues[i] = int16(f)
+	if typ == TypeInt8 && isString == false {
+		return func(values interface{}, acceptNil bool, nilOffset int, mask byte, valueOffset int) filterFunc {
+			var typedValues []int8
+
+			for _, v := range values.([]float64) {
+
+				typedValues = append(typedValues, int8(v))
 			}
 			return func(row RowBytes) bool {
-				value := *(*int16)(unsafe.Pointer(&row[offset]))
+				if row[nilOffset]&mask > 0 {
+					return acceptNil
+				}
+				value := *(*int8)(unsafe.Pointer(&row[valueOffset]))
 				for _, v := range typedValues {
 					if value == v {
 						return true
@@ -1890,14 +1910,19 @@ func makeMetricFilterFuncIn(typ Type) func(floats []float64, offset int) filterF
 			}
 		}
 	}
-	if typ == TypeUint32 {
-		return func(floats []float64, offset int) filterFunc {
-			typedValues := make([]uint32, len(floats))
-			for i, f := range floats {
-				typedValues[i] = uint32(f)
+	if typ == TypeUint16 && isString == true {
+		return func(values interface{}, acceptNil bool, nilOffset int, mask byte, valueOffset int) filterFunc {
+			var typedValues []uint16
+
+			for _, v := range values.([]uint32) {
+
+				typedValues = append(typedValues, uint16(v))
 			}
 			return func(row RowBytes) bool {
-				value := *(*uint32)(unsafe.Pointer(&row[offset]))
+				if row[nilOffset]&mask > 0 {
+					return acceptNil
+				}
+				value := *(*uint16)(unsafe.Pointer(&row[valueOffset]))
 				for _, v := range typedValues {
 					if value == v {
 						return true
@@ -1907,14 +1932,19 @@ func makeMetricFilterFuncIn(typ Type) func(floats []float64, offset int) filterF
 			}
 		}
 	}
-	if typ == TypeInt32 {
-		return func(floats []float64, offset int) filterFunc {
-			typedValues := make([]int32, len(floats))
-			for i, f := range floats {
-				typedValues[i] = int32(f)
+	if typ == TypeUint16 && isString == false {
+		return func(values interface{}, acceptNil bool, nilOffset int, mask byte, valueOffset int) filterFunc {
+			var typedValues []uint16
+
+			for _, v := range values.([]float64) {
+
+				typedValues = append(typedValues, uint16(v))
 			}
 			return func(row RowBytes) bool {
-				value := *(*int32)(unsafe.Pointer(&row[offset]))
+				if row[nilOffset]&mask > 0 {
+					return acceptNil
+				}
+				value := *(*uint16)(unsafe.Pointer(&row[valueOffset]))
 				for _, v := range typedValues {
 					if value == v {
 						return true
@@ -1924,14 +1954,173 @@ func makeMetricFilterFuncIn(typ Type) func(floats []float64, offset int) filterF
 			}
 		}
 	}
-	if typ == TypeFloat32 {
-		return func(floats []float64, offset int) filterFunc {
-			typedValues := make([]float32, len(floats))
-			for i, f := range floats {
-				typedValues[i] = float32(f)
+	if typ == TypeInt16 && isString == true {
+		return func(values interface{}, acceptNil bool, nilOffset int, mask byte, valueOffset int) filterFunc {
+			var typedValues []int16
+
+			for _, v := range values.([]uint32) {
+
+				typedValues = append(typedValues, int16(v))
 			}
 			return func(row RowBytes) bool {
-				value := *(*float32)(unsafe.Pointer(&row[offset]))
+				if row[nilOffset]&mask > 0 {
+					return acceptNil
+				}
+				value := *(*int16)(unsafe.Pointer(&row[valueOffset]))
+				for _, v := range typedValues {
+					if value == v {
+						return true
+					}
+				}
+				return false
+			}
+		}
+	}
+	if typ == TypeInt16 && isString == false {
+		return func(values interface{}, acceptNil bool, nilOffset int, mask byte, valueOffset int) filterFunc {
+			var typedValues []int16
+
+			for _, v := range values.([]float64) {
+
+				typedValues = append(typedValues, int16(v))
+			}
+			return func(row RowBytes) bool {
+				if row[nilOffset]&mask > 0 {
+					return acceptNil
+				}
+				value := *(*int16)(unsafe.Pointer(&row[valueOffset]))
+				for _, v := range typedValues {
+					if value == v {
+						return true
+					}
+				}
+				return false
+			}
+		}
+	}
+	if typ == TypeUint32 && isString == true {
+		return func(values interface{}, acceptNil bool, nilOffset int, mask byte, valueOffset int) filterFunc {
+			var typedValues []uint32
+
+			for _, v := range values.([]uint32) {
+
+				typedValues = append(typedValues, uint32(v))
+			}
+			return func(row RowBytes) bool {
+				if row[nilOffset]&mask > 0 {
+					return acceptNil
+				}
+				value := *(*uint32)(unsafe.Pointer(&row[valueOffset]))
+				for _, v := range typedValues {
+					if value == v {
+						return true
+					}
+				}
+				return false
+			}
+		}
+	}
+	if typ == TypeUint32 && isString == false {
+		return func(values interface{}, acceptNil bool, nilOffset int, mask byte, valueOffset int) filterFunc {
+			var typedValues []uint32
+
+			for _, v := range values.([]float64) {
+
+				typedValues = append(typedValues, uint32(v))
+			}
+			return func(row RowBytes) bool {
+				if row[nilOffset]&mask > 0 {
+					return acceptNil
+				}
+				value := *(*uint32)(unsafe.Pointer(&row[valueOffset]))
+				for _, v := range typedValues {
+					if value == v {
+						return true
+					}
+				}
+				return false
+			}
+		}
+	}
+	if typ == TypeInt32 && isString == true {
+		return func(values interface{}, acceptNil bool, nilOffset int, mask byte, valueOffset int) filterFunc {
+			var typedValues []int32
+
+			for _, v := range values.([]uint32) {
+
+				typedValues = append(typedValues, int32(v))
+			}
+			return func(row RowBytes) bool {
+				if row[nilOffset]&mask > 0 {
+					return acceptNil
+				}
+				value := *(*int32)(unsafe.Pointer(&row[valueOffset]))
+				for _, v := range typedValues {
+					if value == v {
+						return true
+					}
+				}
+				return false
+			}
+		}
+	}
+	if typ == TypeInt32 && isString == false {
+		return func(values interface{}, acceptNil bool, nilOffset int, mask byte, valueOffset int) filterFunc {
+			var typedValues []int32
+
+			for _, v := range values.([]float64) {
+
+				typedValues = append(typedValues, int32(v))
+			}
+			return func(row RowBytes) bool {
+				if row[nilOffset]&mask > 0 {
+					return acceptNil
+				}
+				value := *(*int32)(unsafe.Pointer(&row[valueOffset]))
+				for _, v := range typedValues {
+					if value == v {
+						return true
+					}
+				}
+				return false
+			}
+		}
+	}
+	if typ == TypeFloat32 && isString == true {
+		return func(values interface{}, acceptNil bool, nilOffset int, mask byte, valueOffset int) filterFunc {
+			var typedValues []float32
+
+			for _, v := range values.([]uint32) {
+
+				typedValues = append(typedValues, float32(v))
+			}
+			return func(row RowBytes) bool {
+				if row[nilOffset]&mask > 0 {
+					return acceptNil
+				}
+				value := *(*float32)(unsafe.Pointer(&row[valueOffset]))
+				for _, v := range typedValues {
+					if value == v {
+						return true
+					}
+				}
+				return false
+			}
+		}
+	}
+	if typ == TypeFloat32 && isString == false {
+		return func(values interface{}, acceptNil bool, nilOffset int, mask byte, valueOffset int) filterFunc {
+			var typedValues []float32
+
+			for _, v := range values.([]float64) {
+
+				typedValues = append(typedValues, float32(v))
+			}
+			return func(row RowBytes) bool {
+				if row[nilOffset]&mask > 0 {
+					return acceptNil
+				}
+				value := *(*float32)(unsafe.Pointer(&row[valueOffset]))
 				for _, v := range typedValues {
 					if value == v {
 						return true
@@ -2279,6 +2468,130 @@ func makeMetricFilterFuncSimple(typ Type, filter FilterType) func(value float64,
 			v := float32(value)
 			return func(row RowBytes) bool {
 				return *(*float32)(unsafe.Pointer(&row[offset])) <= v
+			}
+		}
+	}
+	panic("unreached")
+}
+
+func makeMetricFilterFuncIn(typ Type) func(floats []float64, offset int) filterFunc {
+
+	if typ == TypeUint8 {
+		return func(floats []float64, offset int) filterFunc {
+			typedValues := make([]uint8, len(floats))
+			for i, f := range floats {
+				typedValues[i] = uint8(f)
+			}
+			return func(row RowBytes) bool {
+				value := *(*uint8)(unsafe.Pointer(&row[offset]))
+				for _, v := range typedValues {
+					if value == v {
+						return true
+					}
+				}
+				return false
+			}
+		}
+	}
+	if typ == TypeInt8 {
+		return func(floats []float64, offset int) filterFunc {
+			typedValues := make([]int8, len(floats))
+			for i, f := range floats {
+				typedValues[i] = int8(f)
+			}
+			return func(row RowBytes) bool {
+				value := *(*int8)(unsafe.Pointer(&row[offset]))
+				for _, v := range typedValues {
+					if value == v {
+						return true
+					}
+				}
+				return false
+			}
+		}
+	}
+	if typ == TypeUint16 {
+		return func(floats []float64, offset int) filterFunc {
+			typedValues := make([]uint16, len(floats))
+			for i, f := range floats {
+				typedValues[i] = uint16(f)
+			}
+			return func(row RowBytes) bool {
+				value := *(*uint16)(unsafe.Pointer(&row[offset]))
+				for _, v := range typedValues {
+					if value == v {
+						return true
+					}
+				}
+				return false
+			}
+		}
+	}
+	if typ == TypeInt16 {
+		return func(floats []float64, offset int) filterFunc {
+			typedValues := make([]int16, len(floats))
+			for i, f := range floats {
+				typedValues[i] = int16(f)
+			}
+			return func(row RowBytes) bool {
+				value := *(*int16)(unsafe.Pointer(&row[offset]))
+				for _, v := range typedValues {
+					if value == v {
+						return true
+					}
+				}
+				return false
+			}
+		}
+	}
+	if typ == TypeUint32 {
+		return func(floats []float64, offset int) filterFunc {
+			typedValues := make([]uint32, len(floats))
+			for i, f := range floats {
+				typedValues[i] = uint32(f)
+			}
+			return func(row RowBytes) bool {
+				value := *(*uint32)(unsafe.Pointer(&row[offset]))
+				for _, v := range typedValues {
+					if value == v {
+						return true
+					}
+				}
+				return false
+			}
+		}
+	}
+	if typ == TypeInt32 {
+		return func(floats []float64, offset int) filterFunc {
+			typedValues := make([]int32, len(floats))
+			for i, f := range floats {
+				typedValues[i] = int32(f)
+			}
+			return func(row RowBytes) bool {
+				value := *(*int32)(unsafe.Pointer(&row[offset]))
+				for _, v := range typedValues {
+					if value == v {
+						return true
+					}
+				}
+				return false
+			}
+		}
+	}
+	if typ == TypeFloat32 {
+		return func(floats []float64, offset int) filterFunc {
+			typedValues := make([]float32, len(floats))
+			for i, f := range floats {
+				typedValues[i] = float32(f)
+			}
+			return func(row RowBytes) bool {
+				value := *(*float32)(unsafe.Pointer(&row[offset]))
+				for _, v := range typedValues {
+					if value == v {
+						return true
+					}
+				}
+				return false
 			}
 		}
 	}
