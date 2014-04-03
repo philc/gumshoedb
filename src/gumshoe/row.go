@@ -60,7 +60,7 @@ func (db *DB) setDimensionValue(dimensions DimensionBytes, index int, value Unty
 			dimValueIndex, _ = db.memTable.DimensionTables[index].GetAndMaybeSet(stringValue)
 			// The index in a memtable's dimension table must be offset by the size of the state's dimension table
 			// (with which it will be later combined).
-			dimValueIndex += int32(len(db.State.DimensionTables[index].Values))
+			dimValueIndex += uint32(len(db.State.DimensionTables[index].Values))
 		}
 		if float64(dimValueIndex) > typeMaxes[column.Type] {
 			return fmt.Errorf("adding a new value (%v) to dimension %s overflows the dimension table",

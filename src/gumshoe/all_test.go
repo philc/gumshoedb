@@ -2,7 +2,6 @@ package gumshoe
 
 import "time"
 
-// This is a func instead of just a var because creating columns depends on NameToType being initialized.
 func schemaFixture() *Schema {
 	return &Schema{
 		TimestampColumn:  makeColumn("at", "uint32"),

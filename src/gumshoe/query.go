@@ -37,6 +37,9 @@ type groupingParams struct {
 	Cardinality       int
 }
 
+// TODO(caleb): There are some places where we create filterFuncs and timestampFilterFuncs that always return
+// false. Optimize this case -- we can immediately return an empty result.
+
 type (
 	transformFunc       func(cell unsafe.Pointer, isNil bool) Untyped
 	filterFunc          func(row RowBytes) bool
@@ -411,7 +414,49 @@ func (s *State) makeTimestampFilterFunc(filter QueryFilter) (timestampFilterFunc
 }
 
 func (s *State) makeDimensionFilterFunc(filter QueryFilter, index int) (filterFunc, error) {
-	panic("unimplemented")
+	if filter.Type == FilterIn {
+		panic("unimplemented")
+	}
+
+	col := s.DimensionColumns[index]
+
+	mask := byte(1) << byte(index%8)
+	nilOffset := s.DimensionStartOffset + index/8
+	valueOffset := s.DimensionStartOffset + s.DimensionOffsets[index]
+	filterGenFuncKey := typeAndFilter{col.Type, filter.Type}
+
+	// Comparison table: (x is some not-nil value, OP is some operator that is not '=' or '!=')
+	// nil	=		x		false
+	// nil	!=	x		true
+	// nil	OP	x		false
+	// nil	=		nil	true
+	// nil	!=	nil	false
+	// nil	OP	nil	false
+
+	if filter.Value == nil {
+		filterGenFunc := typeAndFilterToNilFilterFuncSimple[filterGenFuncKey]
+		return filterGenFunc(nilOffset, mask), nil
+	}
+
+	if col.String {
+		str, ok := filter.Value.(string)
+		if !ok {
+			return nil, fmt.Errorf("need a string value to filter column %q; got %v", col.Name, filter.Value)
+		}
+		dimIndex, ok := s.DimensionTables[index].Get(str)
+		if !ok {
+			return func(RowBytes) bool { return false }, nil
+		}
+		filterGenFunc := typeAndFilterToStringFilterFuncSimple[filterGenFuncKey]
+		return filterGenFunc(dimIndex, nilOffset, mask, valueOffset), nil
+	}
+
+	float, ok := filter.Value.(float64)
+	if !ok {
+		return nil, fmt.Errorf("need a numeric value to filter column %q; got %v", col.Name, filter.Value)
+	}
+	filterGenFunc := typeAndFilterToDimensionFilterFuncSimple[filterGenFuncKey]
+	return filterGenFunc(float, nilOffset, mask, valueOffset), nil
 }
 
 func (s *State) makeMetricFilterFunc(filter QueryFilter, index int) (filterFunc, error) {
@@ -419,112 +464,12 @@ func (s *State) makeMetricFilterFunc(filter QueryFilter, index int) (filterFunc,
 		panic("unimplemented")
 	}
 
-	value, ok := filter.Value.(float64)
+	float, ok := filter.Value.(float64)
 	if !ok {
-		return nil, fmt.Errorf("need a numeric value for filter comparisons; got %v", filter.Value)
+		return nil, fmt.Errorf("need a numeric value for metric filter comparisons; got %v", filter.Value)
 	}
 	col := s.MetricColumns[index]
 	offset := s.MetricStartOffset + s.MetricOffsets[index]
 	filterGenFunc := typeAndFilterToMetricFilterFuncSimple[typeAndFilter{col.Type, filter.Type}]
-	return filterGenFunc(value, offset), nil
+	return filterGenFunc(float, offset), nil
 }
-
-// Given a QueryFilter, return a filter function that can be tested against a row.
-//func convertQueryFilterToFilterFunc(queryFilter QueryFilter, table *FactTable) FactTableFilterFunc {
-//columnIndex := table.ColumnNameToIndex[queryFilter.Column]
-//var f FactTableFilterFunc
-
-//// The query value can either be a single value (in the case of =, >, < queries) or an array of values (in
-//// the case of "in", "not in" queries.
-//var value float64
-//var values []float64
-
-//queryValueIsList := queryFilter.Type == "in"
-
-//// TODO(philc): Enforce that the argument is a string when the column itself is a string type.
-//if queryValueIsList {
-//untypedQueryValues := queryFilter.Value.([]interface{})
-//shouldTranslateToDimensionColumnIds := len(untypedQueryValues) > 0 && isString(untypedQueryValues[0])
-//if shouldTranslateToDimensionColumnIds {
-//// Convert this slice of untyped objects to []string. We encounter a panic if we try to cast straight
-//// to []string; I'm not sure why.
-//valuesAsStrings := make([]string, 0, len(untypedQueryValues))
-//for _, value := range untypedQueryValues {
-//valuesAsStrings = append(valuesAsStrings, value.(string))
-//}
-//dimensionTable := table.DimensionTables[queryFilter.Column]
-//values = dimensionTable.getDimensionRowIdsForValues(valuesAsStrings)
-//} else {
-//values = make([]float64, 0, len(untypedQueryValues))
-//for _, value := range untypedQueryValues {
-//values = append(values, convertUntypedToFloat64(value))
-//}
-//}
-//} else {
-//if isString(queryFilter.Value) {
-//dimensionTable := table.DimensionTables[queryFilter.Column]
-//matchingRowIds := dimensionTable.getDimensionRowIdsForValues([]string{queryFilter.Value.(string)})
-//if len(matchingRowIds) == 0 {
-//return func(row uintptr) bool { return false }
-//} else {
-//value = matchingRowIds[0]
-//}
-//} else {
-//value = convertUntypedToFloat64(queryFilter.Value)
-//}
-//}
-
-//columnOffset := table.ColumnIndexToOffset[columnIndex]
-//columnType := table.ColumnIndexToType[columnIndex]
-
-//// NOTE(philc): This list of filters is duplicated in query_parser.go.
-//switch queryFilter.Type {
-//case "=":
-//f = func(row uintptr) bool {
-//return !table.columnIsNil(row, columnIndex) &&
-//getColumnValueAsFloat64(row, columnOffset, columnType) == value
-//}
-//case "!=":
-//f = func(row uintptr) bool {
-//return !table.columnIsNil(row, columnIndex) &&
-//getColumnValueAsFloat64(row, columnOffset, columnType) != value
-//}
-//case ">":
-//f = func(row uintptr) bool {
-//return !table.columnIsNil(row, columnIndex) &&
-//getColumnValueAsFloat64(row, columnOffset, columnType) > value
-//}
-//case ">=":
-//f = func(row uintptr) bool {
-//return !table.columnIsNil(row, columnIndex) &&
-//getColumnValueAsFloat64(row, columnOffset, columnType) >= value
-//}
-//case "<":
-//f = func(row uintptr) bool {
-//return !table.columnIsNil(row, columnIndex) &&
-//getColumnValueAsFloat64(row, columnOffset, columnType) < value
-//}
-//case "<=":
-//f = func(row uintptr) bool {
-//return !table.columnIsNil(row, columnIndex) &&
-//getColumnValueAsFloat64(row, columnOffset, columnType) <= value
-//}
-//case "in":
-//count := len(values)
-//// TODO(philc): A hash table may be more efficient for longer lists. We should determine what that list
-//// size is and use a hash table in that case.
-//f = func(row uintptr) bool {
-//if table.columnIsNil(row, columnIndex) {
-//return false
-//}
-//columnValue := getColumnValueAsFloat64(row, columnOffset, columnType)
-//for i := 0; i < count; i++ {
-//if columnValue == values[i] {
-//return true
-//}
-//}
-//return false
-//}
-//}
-//return f
-//}

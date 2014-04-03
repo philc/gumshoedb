@@ -6,12 +6,12 @@ import (
 
 type DimensionTable struct {
 	Values       []string
-	ValueToIndex map[string]int32 `json:"-"`
+	ValueToIndex map[string]uint32 `json:"-"`
 }
 
 func newDimensionTable() *DimensionTable {
 	return &DimensionTable{
-		ValueToIndex: make(map[string]int32),
+		ValueToIndex: make(map[string]uint32),
 	}
 }
 
@@ -25,15 +25,15 @@ func NewDimensionTablesForSchema(schema *Schema) []*DimensionTable {
 	return dimTables
 }
 
-func (t *DimensionTable) Get(s string) (index int32, ok bool) {
+func (t *DimensionTable) Get(s string) (index uint32, ok bool) {
 	i, ok := t.ValueToIndex[s]
 	return i, ok
 }
 
-func (t *DimensionTable) GetAndMaybeSet(s string) (index int32, alreadyExisted bool) {
+func (t *DimensionTable) GetAndMaybeSet(s string) (index uint32, alreadyExisted bool) {
 	i, ok := t.ValueToIndex[s]
 	if !ok {
-		i = int32(len(t.Values))
+		i = uint32(len(t.Values))
 		t.ValueToIndex[s] = i
 		t.Values = append(t.Values, s)
 	}
@@ -46,9 +46,9 @@ func (d *DimensionTable) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	d.Values = v.Values
-	d.ValueToIndex = make(map[string]int32)
+	d.ValueToIndex = make(map[string]uint32)
 	for i, value := range d.Values {
-		d.ValueToIndex[value] = int32(i)
+		d.ValueToIndex[value] = uint32(i)
 	}
 	return nil
 }

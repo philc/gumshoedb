@@ -55,26 +55,33 @@ func runWithFilter(db *DB, filter QueryFilter) []RowMap {
 
 func TestInvokeQueryFiltersRowsUsingEqualsFilter(t *testing.T) {
 	db := createTestDBForFilterTests()
+	defer db.Close()
+
 	results := runWithFilter(db, QueryFilter{FilterEqual, "metric1", 2.0})
 	Assert(t, results[0]["metric1"], Equals, uint32(2))
 
-	//results = runWithFilter(db, QueryFilter{FilterEqual, "dim1", "string2"})
-	//Assert(t, results[0]["metric1"], Equals, uint32(2))
+	results = runWithFilter(db, QueryFilter{FilterEqual, "dim1", "string2"})
+	Assert(t, results[0]["metric1"], Equals, uint32(2))
 
 	// These match zero rows.
 	results = runWithFilter(db, QueryFilter{FilterEqual, "metric1", 3.0})
 	Assert(t, results[0]["metric1"], Equals, uint32(0))
 
-	//results = runWithFilter(db, QueryFilter{FilterEqual, "dim1", "non-existant"})
-	//Assert(t, results[0]["metric1"], Equals, uint32(0))
+	results = runWithFilter(db, QueryFilter{FilterEqual, "dim1", "non-existant"})
+	Assert(t, results[0]["metric1"], Equals, uint32(0))
 }
 
-//func TestInvokeQueryFiltersRowsUsingLessThan(t *testing.T) {
-//table := createTableFixtureForFilterTests()
-//Assert(t, runWithFilter(table, QueryFilter{"<", "metric1", 2})[0]["metric1"], Equals, 1.0)
-//// Matches zero rows.
-//Assert(t, runWithFilter(table, QueryFilter{"<", "metric1", 1})[0]["metric1"], Equals, 0.0)
-//}
+func TestInvokeQueryFiltersRowsUsingLessThan(t *testing.T) {
+	db := createTestDBForFilterTests()
+	defer db.Close()
+
+	results := runWithFilter(db, QueryFilter{FilterLessThan, "metric1", 2.0})
+	Assert(t, results[0]["metric1"], Equals, uint32(1))
+
+	// Matches zero rows.
+	results = runWithFilter(db, QueryFilter{FilterLessThan, "metric1", 1.0})
+	Assert(t, results[0]["metric1"], Equals, uint32(0))
+}
 
 //func TestInvokeQueryFiltersRowsUsingIn(t *testing.T) {
 //table := createTableFixtureForFilterTests()

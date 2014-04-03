@@ -52,6 +52,7 @@ func main() {
 	elements := struct {
 		Types             []Type
 		IntTypes          []Type
+		UintTypes         []Type
 		FloatTypes        []Type
 		FilterTypes       []FilterType
 		SimpleFilterTypes []FilterType // Binary op filters
@@ -65,6 +66,9 @@ func main() {
 		}
 		if strings.HasPrefix(name, "int") || strings.HasPrefix(name, "uint") {
 			elements.IntTypes = append(elements.IntTypes, typ)
+		}
+		if strings.HasPrefix(name, "uint") {
+			elements.UintTypes = append(elements.UintTypes, typ)
 		}
 		if strings.HasPrefix(name, "float") {
 			elements.FloatTypes = append(elements.FloatTypes, typ)
@@ -196,6 +200,48 @@ var typeToSumFunc = map[Type]func(offset int) sumFunc{ {{range .Types}}
 type typeAndFilter struct {
 	Type Type
 	Filter FilterType
+}
+
+var typeAndFilterToNilFilterFuncSimple = map[typeAndFilter]func(nilOffset int, mask byte) filterFunc{
+{{range $type := .Types}}{{range $filter := $.SimpleFilterTypes}}
+typeAndFilter{ {{$type.GumshoeTypeName}}, {{$filter.GumshoeTypeName}} }:
+func(nilOffset int, mask byte) filterFunc {
+	return func(row RowBytes) bool {
+		// See comparison truth table
+		if row[nilOffset] & mask > 0 {
+			return {{if eq $filter.Symbol "="}} true {{else}} false {{end}}
+		}
+		return {{if eq $filter.Symbol "!="}} true {{else}} false {{end}}
+	}
+},{{end}}{{end}}
+}
+
+var typeAndFilterToStringFilterFuncSimple = map[typeAndFilter]func(uint32, int, byte, int) filterFunc{
+{{range $type := .UintTypes}}{{range $filter := $.SimpleFilterTypes}}
+typeAndFilter{ {{$type.GumshoeTypeName}}, {{$filter.GumshoeTypeName}} }:
+func(index uint32, nilOffset int, mask byte, valueOffset int) filterFunc {
+	v := {{$type.GoName}}(index)
+	return func(row RowBytes) bool {
+		if row[nilOffset] & mask > 0 {
+			return {{if eq $filter.Symbol "!="}} true {{else}} false {{end}}
+		}
+		return *(*{{$type.GoName}})(unsafe.Pointer(&row[valueOffset])) {{$filter.GoOperator}} v
+	}
+},{{end}}{{end}}
+}
+
+var typeAndFilterToDimensionFilterFuncSimple = map[typeAndFilter]func(float64, int, byte, int) filterFunc{
+{{range $type := .Types}}{{range $filter := $.SimpleFilterTypes}}
+typeAndFilter{ {{$type.GumshoeTypeName}}, {{$filter.GumshoeTypeName}} }:
+func(value float64, nilOffset int, mask byte, valueOffset int) filterFunc {
+	v := {{$type.GoName}}(value)
+	return func(row RowBytes) bool {
+		if row[nilOffset] & mask > 0 {
+			return {{if eq $filter.Symbol "!="}} true {{else}} false {{end}}
+		}
+		return *(*{{$type.GoName}})(unsafe.Pointer(&row[valueOffset])) {{$filter.GoOperator}} v
+	}
+},{{end}}{{end}}
 }
 
 var typeAndFilterToMetricFilterFuncSimple = map[typeAndFilter]func(value float64, offset int) filterFunc{
