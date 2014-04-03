@@ -244,6 +244,26 @@ func(value float64, nilOffset int, mask byte, valueOffset int) filterFunc {
 },{{end}}{{end}}
 }
 
+var typeToMetricFilterFuncIn = map[Type]func(floats []float64, offset int) filterFunc{
+{{range .Types}}
+{{.GumshoeTypeName}}:
+func(floats []float64, offset int) filterFunc {
+	typedValues := make([]{{.GoName}}, len(floats))
+	for i, f := range floats {
+		typedValues[i] = {{.GoName}}(f)
+	}
+	return func(row RowBytes) bool {
+		value := *(*{{.GoName}})(unsafe.Pointer(&row[offset]))
+		for _, v := range typedValues {
+			if value == v {
+				return true
+			}
+		}
+		return false
+	}
+},{{end}}
+}
+
 var typeAndFilterToMetricFilterFuncSimple = map[typeAndFilter]func(value float64, offset int) filterFunc{
 {{range $type := .Types}}{{range $filter := $.SimpleFilterTypes}}
 typeAndFilter{ {{$type.GumshoeTypeName}}, {{$filter.GumshoeTypeName}} }:

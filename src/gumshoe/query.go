@@ -37,15 +37,15 @@ type groupingParams struct {
 	Cardinality       int
 }
 
-// TODO(caleb): There are some places where we create filterFuncs and timestampFilterFuncs that always return
-// false. Optimize this case -- we can immediately return an empty result.
-
 type (
 	transformFunc       func(cell unsafe.Pointer, isNil bool) Untyped
 	filterFunc          func(row RowBytes) bool
 	timestampFilterFunc func(timestamp uint32) bool
 	sumFunc             func(sum UntypedBytes, metrics MetricBytes)
 )
+
+// TODO(caleb): Wherever we use falseFilterFunc, we can optimize by immediately returning an empty result.
+var falseFilterFunc = func(RowBytes) bool { return false }
 
 // InvokeQuery runs query on a State. It returns a slice of aggregated row results.
 func (s *State) InvokeQuery(query *Query) ([]RowMap, error) {
@@ -445,7 +445,7 @@ func (s *State) makeDimensionFilterFunc(filter QueryFilter, index int) (filterFu
 		}
 		dimIndex, ok := s.DimensionTables[index].Get(str)
 		if !ok {
-			return func(RowBytes) bool { return false }, nil
+			return falseFilterFunc, nil
 		}
 		filterGenFunc := typeAndFilterToStringFilterFuncSimple[filterGenFuncKey]
 		return filterGenFunc(dimIndex, nilOffset, mask, valueOffset), nil
@@ -461,7 +461,7 @@ func (s *State) makeDimensionFilterFunc(filter QueryFilter, index int) (filterFu
 
 func (s *State) makeMetricFilterFunc(filter QueryFilter, index int) (filterFunc, error) {
 	if filter.Type == FilterIn {
-		panic("unimplemented")
+		return s.makeMetricFilterFuncIn(filter, index)
 	}
 
 	float, ok := filter.Value.(float64)
@@ -472,4 +472,28 @@ func (s *State) makeMetricFilterFunc(filter QueryFilter, index int) (filterFunc,
 	offset := s.MetricStartOffset + s.MetricOffsets[index]
 	filterGenFunc := typeAndFilterToMetricFilterFuncSimple[typeAndFilter{col.Type, filter.Type}]
 	return filterGenFunc(float, offset), nil
+}
+
+func (s *State) makeMetricFilterFuncIn(filter QueryFilter, index int) (filterFunc, error) {
+	values, ok := filter.Value.([]interface{})
+	if !ok {
+		return nil, fmt.Errorf("'in' queries require a list for comparison; got %v", filter.Value)
+	}
+	if len(values) == 0 {
+		return falseFilterFunc, nil
+	}
+	floats := make([]float64, len(values))
+	for i, v := range values {
+		float, ok := v.(float64)
+		if !ok {
+			return nil, fmt.Errorf("'in' queries on metric columns take numeric values only; got %v", v)
+		}
+		floats[i] = float
+	}
+	col := s.MetricColumns[index]
+	offset := s.MetricStartOffset + s.MetricOffsets[index]
+	// TODO(philc): A hash table may be more efficient for longer lists. We should determine what that list
+	// size is and use a hash table in that case.
+	filterGenFunc := typeToMetricFilterFuncIn[col.Type]
+	return filterGenFunc(floats, offset), nil
 }

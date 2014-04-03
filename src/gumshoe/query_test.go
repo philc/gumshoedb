@@ -85,18 +85,28 @@ func TestInvokeQueryFiltersRowsUsingLessThan(t *testing.T) {
 	Assert(t, results[0]["metric1"], Equals, uint32(0))
 }
 
-//func TestInvokeQueryFiltersRowsUsingIn(t *testing.T) {
-//table := createTableFixtureForFilterTests()
-//Assert(t, runWithFilter(table, QueryFilter{"in", "metric1", []interface{}{2}})[0]["metric1"], Equals, 2.0)
-//Assert(t, runWithFilter(table, QueryFilter{"in", "metric1", []interface{}{2, 1}})[0]["metric1"],
-//Equals, 3.0)
-//Assert(t, runWithFilter(table, QueryFilter{"in", "dim1", []interface{}{"string1"}})[0]["metric1"],
-//Equals, 1.0)
-//// These match zero rows.
-//Assert(t, runWithFilter(table, QueryFilter{"in", "metric1", []interface{}{3}})[0]["metric1"], Equals, 0.0)
-//Assert(t, runWithFilter(table, QueryFilter{"in", "dim1", []interface{}{"non-existant"}})[0]["metric1"],
-//Equals, 0.0)
-//}
+func inList(ns ...float64) []interface{} {
+	list := make([]interface{}, len(ns))
+	for i, n := range ns {
+		list[i] = n
+	}
+	return list
+}
+
+func TestInvokeQueryFiltersRowsUsingIn(t *testing.T) {
+	db := createTestDBForFilterTests()
+
+	Assert(t, runWithFilter(db, QueryFilter{FilterIn, "metric1", inList(2)})[0]["metric1"], Equals, uint32(2))
+	results := runWithFilter(db, QueryFilter{FilterIn, "metric1", inList(2, 1)})
+	Assert(t, results[0]["metric1"], Equals, uint32(3))
+
+	//Assert(t, runWithFilter(table, QueryFilter{"in", "dim1", []interface{}{"string1"}})[0]["metric1"],
+	//Equals, 1.0)
+	//// These match zero rows.
+	//Assert(t, runWithFilter(table, QueryFilter{"in", "metric1", []interface{}{3}})[0]["metric1"], Equals, 0.0)
+	//Assert(t, runWithFilter(table, QueryFilter{"in", "dim1", []interface{}{"non-existant"}})[0]["metric1"],
+	//Equals, 0.0)
+}
 
 //func TestInvokeQueryWorksWhenGroupingByAStringColumn(t *testing.T) {
 //table := tableFixture()
