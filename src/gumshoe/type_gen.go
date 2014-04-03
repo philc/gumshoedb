@@ -202,1340 +202,2085 @@ var filterNameToType = map[string]FilterType{
 	"in": FilterIn,
 }
 
-var typeToSumFunc = map[Type]func(offset int) sumFunc{
-	TypeUint8: func(offset int) sumFunc {
-		return func(sum UntypedBytes, metrics MetricBytes) {
-			*(*uint32)(unsafe.Pointer(&sum[0])) += *(*uint32)(unsafe.Pointer(&metrics[offset]))
+func makeSumFunc(typ Type) func(offset int) sumFunc {
+
+	if typ == TypeUint8 {
+		return func(offset int) sumFunc {
+			return func(sum UntypedBytes, metrics MetricBytes) {
+				*(*uint32)(unsafe.Pointer(&sum[0])) += *(*uint32)(unsafe.Pointer(&metrics[offset]))
+			}
 		}
-	},
-	TypeInt8: func(offset int) sumFunc {
-		return func(sum UntypedBytes, metrics MetricBytes) {
-			*(*uint32)(unsafe.Pointer(&sum[0])) += *(*uint32)(unsafe.Pointer(&metrics[offset]))
+	}
+	if typ == TypeInt8 {
+		return func(offset int) sumFunc {
+			return func(sum UntypedBytes, metrics MetricBytes) {
+				*(*uint32)(unsafe.Pointer(&sum[0])) += *(*uint32)(unsafe.Pointer(&metrics[offset]))
+			}
 		}
-	},
-	TypeUint16: func(offset int) sumFunc {
-		return func(sum UntypedBytes, metrics MetricBytes) {
-			*(*uint32)(unsafe.Pointer(&sum[0])) += *(*uint32)(unsafe.Pointer(&metrics[offset]))
+	}
+	if typ == TypeUint16 {
+		return func(offset int) sumFunc {
+			return func(sum UntypedBytes, metrics MetricBytes) {
+				*(*uint32)(unsafe.Pointer(&sum[0])) += *(*uint32)(unsafe.Pointer(&metrics[offset]))
+			}
 		}
-	},
-	TypeInt16: func(offset int) sumFunc {
-		return func(sum UntypedBytes, metrics MetricBytes) {
-			*(*uint32)(unsafe.Pointer(&sum[0])) += *(*uint32)(unsafe.Pointer(&metrics[offset]))
+	}
+	if typ == TypeInt16 {
+		return func(offset int) sumFunc {
+			return func(sum UntypedBytes, metrics MetricBytes) {
+				*(*uint32)(unsafe.Pointer(&sum[0])) += *(*uint32)(unsafe.Pointer(&metrics[offset]))
+			}
 		}
-	},
-	TypeUint32: func(offset int) sumFunc {
-		return func(sum UntypedBytes, metrics MetricBytes) {
-			*(*uint32)(unsafe.Pointer(&sum[0])) += *(*uint32)(unsafe.Pointer(&metrics[offset]))
+	}
+	if typ == TypeUint32 {
+		return func(offset int) sumFunc {
+			return func(sum UntypedBytes, metrics MetricBytes) {
+				*(*uint32)(unsafe.Pointer(&sum[0])) += *(*uint32)(unsafe.Pointer(&metrics[offset]))
+			}
 		}
-	},
-	TypeInt32: func(offset int) sumFunc {
-		return func(sum UntypedBytes, metrics MetricBytes) {
-			*(*uint32)(unsafe.Pointer(&sum[0])) += *(*uint32)(unsafe.Pointer(&metrics[offset]))
+	}
+	if typ == TypeInt32 {
+		return func(offset int) sumFunc {
+			return func(sum UntypedBytes, metrics MetricBytes) {
+				*(*uint32)(unsafe.Pointer(&sum[0])) += *(*uint32)(unsafe.Pointer(&metrics[offset]))
+			}
 		}
-	},
-	TypeFloat32: func(offset int) sumFunc {
-		return func(sum UntypedBytes, metrics MetricBytes) {
-			*(*uint32)(unsafe.Pointer(&sum[0])) += *(*uint32)(unsafe.Pointer(&metrics[offset]))
+	}
+	if typ == TypeFloat32 {
+		return func(offset int) sumFunc {
+			return func(sum UntypedBytes, metrics MetricBytes) {
+				*(*uint32)(unsafe.Pointer(&sum[0])) += *(*uint32)(unsafe.Pointer(&metrics[offset]))
+			}
 		}
-	},
+	}
+	panic("unreached")
 }
 
-type typeAndFilter struct {
-	Type   Type
-	Filter FilterType
+func makeNilFilterFuncSimple(typ Type, filter FilterType) func(nilOffset int, mask byte) filterFunc {
+
+	if typ == TypeUint8 && filter == FilterEqual {
+		return func(nilOffset int, mask byte) filterFunc {
+			return func(row RowBytes) bool {
+				// See comparison truth table
+				if row[nilOffset]&mask > 0 {
+					return true
+				}
+				return false
+			}
+		}
+	}
+	if typ == TypeUint8 && filter == FilterNotEqual {
+		return func(nilOffset int, mask byte) filterFunc {
+			return func(row RowBytes) bool {
+				// See comparison truth table
+				if row[nilOffset]&mask > 0 {
+					return false
+				}
+				return true
+			}
+		}
+	}
+	if typ == TypeUint8 && filter == FilterGreaterThan {
+		return func(nilOffset int, mask byte) filterFunc {
+			return func(row RowBytes) bool {
+				// See comparison truth table
+				if row[nilOffset]&mask > 0 {
+					return false
+				}
+				return false
+			}
+		}
+	}
+	if typ == TypeUint8 && filter == FilterGreaterThenOrEqual {
+		return func(nilOffset int, mask byte) filterFunc {
+			return func(row RowBytes) bool {
+				// See comparison truth table
+				if row[nilOffset]&mask > 0 {
+					return false
+				}
+				return false
+			}
+		}
+	}
+	if typ == TypeUint8 && filter == FilterLessThan {
+		return func(nilOffset int, mask byte) filterFunc {
+			return func(row RowBytes) bool {
+				// See comparison truth table
+				if row[nilOffset]&mask > 0 {
+					return false
+				}
+				return false
+			}
+		}
+	}
+	if typ == TypeUint8 && filter == FilterLessThanOrEqual {
+		return func(nilOffset int, mask byte) filterFunc {
+			return func(row RowBytes) bool {
+				// See comparison truth table
+				if row[nilOffset]&mask > 0 {
+					return false
+				}
+				return false
+			}
+		}
+	}
+	if typ == TypeInt8 && filter == FilterEqual {
+		return func(nilOffset int, mask byte) filterFunc {
+			return func(row RowBytes) bool {
+				// See comparison truth table
+				if row[nilOffset]&mask > 0 {
+					return true
+				}
+				return false
+			}
+		}
+	}
+	if typ == TypeInt8 && filter == FilterNotEqual {
+		return func(nilOffset int, mask byte) filterFunc {
+			return func(row RowBytes) bool {
+				// See comparison truth table
+				if row[nilOffset]&mask > 0 {
+					return false
+				}
+				return true
+			}
+		}
+	}
+	if typ == TypeInt8 && filter == FilterGreaterThan {
+		return func(nilOffset int, mask byte) filterFunc {
+			return func(row RowBytes) bool {
+				// See comparison truth table
+				if row[nilOffset]&mask > 0 {
+					return false
+				}
+				return false
+			}
+		}
+	}
+	if typ == TypeInt8 && filter == FilterGreaterThenOrEqual {
+		return func(nilOffset int, mask byte) filterFunc {
+			return func(row RowBytes) bool {
+				// See comparison truth table
+				if row[nilOffset]&mask > 0 {
+					return false
+				}
+				return false
+			}
+		}
+	}
+	if typ == TypeInt8 && filter == FilterLessThan {
+		return func(nilOffset int, mask byte) filterFunc {
+			return func(row RowBytes) bool {
+				// See comparison truth table
+				if row[nilOffset]&mask > 0 {
+					return false
+				}
+				return false
+			}
+		}
+	}
+	if typ == TypeInt8 && filter == FilterLessThanOrEqual {
+		return func(nilOffset int, mask byte) filterFunc {
+			return func(row RowBytes) bool {
+				// See comparison truth table
+				if row[nilOffset]&mask > 0 {
+					return false
+				}
+				return false
+			}
+		}
+	}
+	if typ == TypeUint16 && filter == FilterEqual {
+		return func(nilOffset int, mask byte) filterFunc {
+			return func(row RowBytes) bool {
+				// See comparison truth table
+				if row[nilOffset]&mask > 0 {
+					return true
+				}
+				return false
+			}
+		}
+	}
+	if typ == TypeUint16 && filter == FilterNotEqual {
+		return func(nilOffset int, mask byte) filterFunc {
+			return func(row RowBytes) bool {
+				// See comparison truth table
+				if row[nilOffset]&mask > 0 {
+					return false
+				}
+				return true
+			}
+		}
+	}
+	if typ == TypeUint16 && filter == FilterGreaterThan {
+		return func(nilOffset int, mask byte) filterFunc {
+			return func(row RowBytes) bool {
+				// See comparison truth table
+				if row[nilOffset]&mask > 0 {
+					return false
+				}
+				return false
+			}
+		}
+	}
+	if typ == TypeUint16 && filter == FilterGreaterThenOrEqual {
+		return func(nilOffset int, mask byte) filterFunc {
+			return func(row RowBytes) bool {
+				// See comparison truth table
+				if row[nilOffset]&mask > 0 {
+					return false
+				}
+				return false
+			}
+		}
+	}
+	if typ == TypeUint16 && filter == FilterLessThan {
+		return func(nilOffset int, mask byte) filterFunc {
+			return func(row RowBytes) bool {
+				// See comparison truth table
+				if row[nilOffset]&mask > 0 {
+					return false
+				}
+				return false
+			}
+		}
+	}
+	if typ == TypeUint16 && filter == FilterLessThanOrEqual {
+		return func(nilOffset int, mask byte) filterFunc {
+			return func(row RowBytes) bool {
+				// See comparison truth table
+				if row[nilOffset]&mask > 0 {
+					return false
+				}
+				return false
+			}
+		}
+	}
+	if typ == TypeInt16 && filter == FilterEqual {
+		return func(nilOffset int, mask byte) filterFunc {
+			return func(row RowBytes) bool {
+				// See comparison truth table
+				if row[nilOffset]&mask > 0 {
+					return true
+				}
+				return false
+			}
+		}
+	}
+	if typ == TypeInt16 && filter == FilterNotEqual {
+		return func(nilOffset int, mask byte) filterFunc {
+			return func(row RowBytes) bool {
+				// See comparison truth table
+				if row[nilOffset]&mask > 0 {
+					return false
+				}
+				return true
+			}
+		}
+	}
+	if typ == TypeInt16 && filter == FilterGreaterThan {
+		return func(nilOffset int, mask byte) filterFunc {
+			return func(row RowBytes) bool {
+				// See comparison truth table
+				if row[nilOffset]&mask > 0 {
+					return false
+				}
+				return false
+			}
+		}
+	}
+	if typ == TypeInt16 && filter == FilterGreaterThenOrEqual {
+		return func(nilOffset int, mask byte) filterFunc {
+			return func(row RowBytes) bool {
+				// See comparison truth table
+				if row[nilOffset]&mask > 0 {
+					return false
+				}
+				return false
+			}
+		}
+	}
+	if typ == TypeInt16 && filter == FilterLessThan {
+		return func(nilOffset int, mask byte) filterFunc {
+			return func(row RowBytes) bool {
+				// See comparison truth table
+				if row[nilOffset]&mask > 0 {
+					return false
+				}
+				return false
+			}
+		}
+	}
+	if typ == TypeInt16 && filter == FilterLessThanOrEqual {
+		return func(nilOffset int, mask byte) filterFunc {
+			return func(row RowBytes) bool {
+				// See comparison truth table
+				if row[nilOffset]&mask > 0 {
+					return false
+				}
+				return false
+			}
+		}
+	}
+	if typ == TypeUint32 && filter == FilterEqual {
+		return func(nilOffset int, mask byte) filterFunc {
+			return func(row RowBytes) bool {
+				// See comparison truth table
+				if row[nilOffset]&mask > 0 {
+					return true
+				}
+				return false
+			}
+		}
+	}
+	if typ == TypeUint32 && filter == FilterNotEqual {
+		return func(nilOffset int, mask byte) filterFunc {
+			return func(row RowBytes) bool {
+				// See comparison truth table
+				if row[nilOffset]&mask > 0 {
+					return false
+				}
+				return true
+			}
+		}
+	}
+	if typ == TypeUint32 && filter == FilterGreaterThan {
+		return func(nilOffset int, mask byte) filterFunc {
+			return func(row RowBytes) bool {
+				// See comparison truth table
+				if row[nilOffset]&mask > 0 {
+					return false
+				}
+				return false
+			}
+		}
+	}
+	if typ == TypeUint32 && filter == FilterGreaterThenOrEqual {
+		return func(nilOffset int, mask byte) filterFunc {
+			return func(row RowBytes) bool {
+				// See comparison truth table
+				if row[nilOffset]&mask > 0 {
+					return false
+				}
+				return false
+			}
+		}
+	}
+	if typ == TypeUint32 && filter == FilterLessThan {
+		return func(nilOffset int, mask byte) filterFunc {
+			return func(row RowBytes) bool {
+				// See comparison truth table
+				if row[nilOffset]&mask > 0 {
+					return false
+				}
+				return false
+			}
+		}
+	}
+	if typ == TypeUint32 && filter == FilterLessThanOrEqual {
+		return func(nilOffset int, mask byte) filterFunc {
+			return func(row RowBytes) bool {
+				// See comparison truth table
+				if row[nilOffset]&mask > 0 {
+					return false
+				}
+				return false
+			}
+		}
+	}
+	if typ == TypeInt32 && filter == FilterEqual {
+		return func(nilOffset int, mask byte) filterFunc {
+			return func(row RowBytes) bool {
+				// See comparison truth table
+				if row[nilOffset]&mask > 0 {
+					return true
+				}
+				return false
+			}
+		}
+	}
+	if typ == TypeInt32 && filter == FilterNotEqual {
+		return func(nilOffset int, mask byte) filterFunc {
+			return func(row RowBytes) bool {
+				// See comparison truth table
+				if row[nilOffset]&mask > 0 {
+					return false
+				}
+				return true
+			}
+		}
+	}
+	if typ == TypeInt32 && filter == FilterGreaterThan {
+		return func(nilOffset int, mask byte) filterFunc {
+			return func(row RowBytes) bool {
+				// See comparison truth table
+				if row[nilOffset]&mask > 0 {
+					return false
+				}
+				return false
+			}
+		}
+	}
+	if typ == TypeInt32 && filter == FilterGreaterThenOrEqual {
+		return func(nilOffset int, mask byte) filterFunc {
+			return func(row RowBytes) bool {
+				// See comparison truth table
+				if row[nilOffset]&mask > 0 {
+					return false
+				}
+				return false
+			}
+		}
+	}
+	if typ == TypeInt32 && filter == FilterLessThan {
+		return func(nilOffset int, mask byte) filterFunc {
+			return func(row RowBytes) bool {
+				// See comparison truth table
+				if row[nilOffset]&mask > 0 {
+					return false
+				}
+				return false
+			}
+		}
+	}
+	if typ == TypeInt32 && filter == FilterLessThanOrEqual {
+		return func(nilOffset int, mask byte) filterFunc {
+			return func(row RowBytes) bool {
+				// See comparison truth table
+				if row[nilOffset]&mask > 0 {
+					return false
+				}
+				return false
+			}
+		}
+	}
+	if typ == TypeFloat32 && filter == FilterEqual {
+		return func(nilOffset int, mask byte) filterFunc {
+			return func(row RowBytes) bool {
+				// See comparison truth table
+				if row[nilOffset]&mask > 0 {
+					return true
+				}
+				return false
+			}
+		}
+	}
+	if typ == TypeFloat32 && filter == FilterNotEqual {
+		return func(nilOffset int, mask byte) filterFunc {
+			return func(row RowBytes) bool {
+				// See comparison truth table
+				if row[nilOffset]&mask > 0 {
+					return false
+				}
+				return true
+			}
+		}
+	}
+	if typ == TypeFloat32 && filter == FilterGreaterThan {
+		return func(nilOffset int, mask byte) filterFunc {
+			return func(row RowBytes) bool {
+				// See comparison truth table
+				if row[nilOffset]&mask > 0 {
+					return false
+				}
+				return false
+			}
+		}
+	}
+	if typ == TypeFloat32 && filter == FilterGreaterThenOrEqual {
+		return func(nilOffset int, mask byte) filterFunc {
+			return func(row RowBytes) bool {
+				// See comparison truth table
+				if row[nilOffset]&mask > 0 {
+					return false
+				}
+				return false
+			}
+		}
+	}
+	if typ == TypeFloat32 && filter == FilterLessThan {
+		return func(nilOffset int, mask byte) filterFunc {
+			return func(row RowBytes) bool {
+				// See comparison truth table
+				if row[nilOffset]&mask > 0 {
+					return false
+				}
+				return false
+			}
+		}
+	}
+	if typ == TypeFloat32 && filter == FilterLessThanOrEqual {
+		return func(nilOffset int, mask byte) filterFunc {
+			return func(row RowBytes) bool {
+				// See comparison truth table
+				if row[nilOffset]&mask > 0 {
+					return false
+				}
+				return false
+			}
+		}
+	}
+	panic("unreached")
 }
 
-var typeAndFilterToNilFilterFuncSimple = map[typeAndFilter]func(nilOffset int, mask byte) filterFunc{
+func makeDimensionFilterFuncSimple(typ Type, filter FilterType, isString bool) func(interface{}, int, byte, int) filterFunc {
 
-	typeAndFilter{TypeUint8, FilterEqual}: func(nilOffset int, mask byte) filterFunc {
-		return func(row RowBytes) bool {
-			// See comparison truth table
-			if row[nilOffset]&mask > 0 {
-				return true
+	if typ == TypeUint8 && filter == FilterEqual && isString == true {
+		return func(value interface{}, nilOffset int, mask byte, valueOffset int) filterFunc {
+
+			v := uint8(value.(uint32))
+
+			return func(row RowBytes) bool {
+				if row[nilOffset]&mask > 0 {
+					return false
+				}
+				return *(*uint8)(unsafe.Pointer(&row[valueOffset])) == v
 			}
-			return false
 		}
-	},
-	typeAndFilter{TypeUint8, FilterNotEqual}: func(nilOffset int, mask byte) filterFunc {
-		return func(row RowBytes) bool {
-			// See comparison truth table
-			if row[nilOffset]&mask > 0 {
-				return false
+	}
+	if typ == TypeUint8 && filter == FilterEqual && isString == false {
+		return func(value interface{}, nilOffset int, mask byte, valueOffset int) filterFunc {
+
+			v := uint8(value.(float64))
+
+			return func(row RowBytes) bool {
+				if row[nilOffset]&mask > 0 {
+					return false
+				}
+				return *(*uint8)(unsafe.Pointer(&row[valueOffset])) == v
 			}
-			return true
 		}
-	},
-	typeAndFilter{TypeUint8, FilterGreaterThan}: func(nilOffset int, mask byte) filterFunc {
-		return func(row RowBytes) bool {
-			// See comparison truth table
-			if row[nilOffset]&mask > 0 {
-				return false
+	}
+	if typ == TypeUint8 && filter == FilterNotEqual && isString == true {
+		return func(value interface{}, nilOffset int, mask byte, valueOffset int) filterFunc {
+
+			v := uint8(value.(uint32))
+
+			return func(row RowBytes) bool {
+				if row[nilOffset]&mask > 0 {
+					return true
+				}
+				return *(*uint8)(unsafe.Pointer(&row[valueOffset])) != v
 			}
-			return false
 		}
-	},
-	typeAndFilter{TypeUint8, FilterGreaterThenOrEqual}: func(nilOffset int, mask byte) filterFunc {
-		return func(row RowBytes) bool {
-			// See comparison truth table
-			if row[nilOffset]&mask > 0 {
-				return false
+	}
+	if typ == TypeUint8 && filter == FilterNotEqual && isString == false {
+		return func(value interface{}, nilOffset int, mask byte, valueOffset int) filterFunc {
+
+			v := uint8(value.(float64))
+
+			return func(row RowBytes) bool {
+				if row[nilOffset]&mask > 0 {
+					return true
+				}
+				return *(*uint8)(unsafe.Pointer(&row[valueOffset])) != v
 			}
-			return false
 		}
-	},
-	typeAndFilter{TypeUint8, FilterLessThan}: func(nilOffset int, mask byte) filterFunc {
-		return func(row RowBytes) bool {
-			// See comparison truth table
-			if row[nilOffset]&mask > 0 {
-				return false
+	}
+	if typ == TypeUint8 && filter == FilterGreaterThan && isString == true {
+		return func(value interface{}, nilOffset int, mask byte, valueOffset int) filterFunc {
+
+			v := uint8(value.(uint32))
+
+			return func(row RowBytes) bool {
+				if row[nilOffset]&mask > 0 {
+					return false
+				}
+				return *(*uint8)(unsafe.Pointer(&row[valueOffset])) > v
 			}
-			return false
 		}
-	},
-	typeAndFilter{TypeUint8, FilterLessThanOrEqual}: func(nilOffset int, mask byte) filterFunc {
-		return func(row RowBytes) bool {
-			// See comparison truth table
-			if row[nilOffset]&mask > 0 {
-				return false
+	}
+	if typ == TypeUint8 && filter == FilterGreaterThan && isString == false {
+		return func(value interface{}, nilOffset int, mask byte, valueOffset int) filterFunc {
+
+			v := uint8(value.(float64))
+
+			return func(row RowBytes) bool {
+				if row[nilOffset]&mask > 0 {
+					return false
+				}
+				return *(*uint8)(unsafe.Pointer(&row[valueOffset])) > v
 			}
-			return false
 		}
-	},
-	typeAndFilter{TypeInt8, FilterEqual}: func(nilOffset int, mask byte) filterFunc {
-		return func(row RowBytes) bool {
-			// See comparison truth table
-			if row[nilOffset]&mask > 0 {
-				return true
+	}
+	if typ == TypeUint8 && filter == FilterGreaterThenOrEqual && isString == true {
+		return func(value interface{}, nilOffset int, mask byte, valueOffset int) filterFunc {
+
+			v := uint8(value.(uint32))
+
+			return func(row RowBytes) bool {
+				if row[nilOffset]&mask > 0 {
+					return false
+				}
+				return *(*uint8)(unsafe.Pointer(&row[valueOffset])) >= v
 			}
-			return false
 		}
-	},
-	typeAndFilter{TypeInt8, FilterNotEqual}: func(nilOffset int, mask byte) filterFunc {
-		return func(row RowBytes) bool {
-			// See comparison truth table
-			if row[nilOffset]&mask > 0 {
-				return false
+	}
+	if typ == TypeUint8 && filter == FilterGreaterThenOrEqual && isString == false {
+		return func(value interface{}, nilOffset int, mask byte, valueOffset int) filterFunc {
+
+			v := uint8(value.(float64))
+
+			return func(row RowBytes) bool {
+				if row[nilOffset]&mask > 0 {
+					return false
+				}
+				return *(*uint8)(unsafe.Pointer(&row[valueOffset])) >= v
 			}
-			return true
 		}
-	},
-	typeAndFilter{TypeInt8, FilterGreaterThan}: func(nilOffset int, mask byte) filterFunc {
-		return func(row RowBytes) bool {
-			// See comparison truth table
-			if row[nilOffset]&mask > 0 {
-				return false
+	}
+	if typ == TypeUint8 && filter == FilterLessThan && isString == true {
+		return func(value interface{}, nilOffset int, mask byte, valueOffset int) filterFunc {
+
+			v := uint8(value.(uint32))
+
+			return func(row RowBytes) bool {
+				if row[nilOffset]&mask > 0 {
+					return false
+				}
+				return *(*uint8)(unsafe.Pointer(&row[valueOffset])) < v
 			}
-			return false
 		}
-	},
-	typeAndFilter{TypeInt8, FilterGreaterThenOrEqual}: func(nilOffset int, mask byte) filterFunc {
-		return func(row RowBytes) bool {
-			// See comparison truth table
-			if row[nilOffset]&mask > 0 {
-				return false
+	}
+	if typ == TypeUint8 && filter == FilterLessThan && isString == false {
+		return func(value interface{}, nilOffset int, mask byte, valueOffset int) filterFunc {
+
+			v := uint8(value.(float64))
+
+			return func(row RowBytes) bool {
+				if row[nilOffset]&mask > 0 {
+					return false
+				}
+				return *(*uint8)(unsafe.Pointer(&row[valueOffset])) < v
 			}
-			return false
 		}
-	},
-	typeAndFilter{TypeInt8, FilterLessThan}: func(nilOffset int, mask byte) filterFunc {
-		return func(row RowBytes) bool {
-			// See comparison truth table
-			if row[nilOffset]&mask > 0 {
-				return false
+	}
+	if typ == TypeUint8 && filter == FilterLessThanOrEqual && isString == true {
+		return func(value interface{}, nilOffset int, mask byte, valueOffset int) filterFunc {
+
+			v := uint8(value.(uint32))
+
+			return func(row RowBytes) bool {
+				if row[nilOffset]&mask > 0 {
+					return false
+				}
+				return *(*uint8)(unsafe.Pointer(&row[valueOffset])) <= v
 			}
-			return false
 		}
-	},
-	typeAndFilter{TypeInt8, FilterLessThanOrEqual}: func(nilOffset int, mask byte) filterFunc {
-		return func(row RowBytes) bool {
-			// See comparison truth table
-			if row[nilOffset]&mask > 0 {
-				return false
+	}
+	if typ == TypeUint8 && filter == FilterLessThanOrEqual && isString == false {
+		return func(value interface{}, nilOffset int, mask byte, valueOffset int) filterFunc {
+
+			v := uint8(value.(float64))
+
+			return func(row RowBytes) bool {
+				if row[nilOffset]&mask > 0 {
+					return false
+				}
+				return *(*uint8)(unsafe.Pointer(&row[valueOffset])) <= v
 			}
-			return false
 		}
-	},
-	typeAndFilter{TypeUint16, FilterEqual}: func(nilOffset int, mask byte) filterFunc {
-		return func(row RowBytes) bool {
-			// See comparison truth table
-			if row[nilOffset]&mask > 0 {
-				return true
+	}
+	if typ == TypeInt8 && filter == FilterEqual && isString == true {
+		return func(value interface{}, nilOffset int, mask byte, valueOffset int) filterFunc {
+
+			v := int8(value.(uint32))
+
+			return func(row RowBytes) bool {
+				if row[nilOffset]&mask > 0 {
+					return false
+				}
+				return *(*int8)(unsafe.Pointer(&row[valueOffset])) == v
 			}
-			return false
 		}
-	},
-	typeAndFilter{TypeUint16, FilterNotEqual}: func(nilOffset int, mask byte) filterFunc {
-		return func(row RowBytes) bool {
-			// See comparison truth table
-			if row[nilOffset]&mask > 0 {
-				return false
+	}
+	if typ == TypeInt8 && filter == FilterEqual && isString == false {
+		return func(value interface{}, nilOffset int, mask byte, valueOffset int) filterFunc {
+
+			v := int8(value.(float64))
+
+			return func(row RowBytes) bool {
+				if row[nilOffset]&mask > 0 {
+					return false
+				}
+				return *(*int8)(unsafe.Pointer(&row[valueOffset])) == v
 			}
-			return true
 		}
-	},
-	typeAndFilter{TypeUint16, FilterGreaterThan}: func(nilOffset int, mask byte) filterFunc {
-		return func(row RowBytes) bool {
-			// See comparison truth table
-			if row[nilOffset]&mask > 0 {
-				return false
+	}
+	if typ == TypeInt8 && filter == FilterNotEqual && isString == true {
+		return func(value interface{}, nilOffset int, mask byte, valueOffset int) filterFunc {
+
+			v := int8(value.(uint32))
+
+			return func(row RowBytes) bool {
+				if row[nilOffset]&mask > 0 {
+					return true
+				}
+				return *(*int8)(unsafe.Pointer(&row[valueOffset])) != v
 			}
-			return false
 		}
-	},
-	typeAndFilter{TypeUint16, FilterGreaterThenOrEqual}: func(nilOffset int, mask byte) filterFunc {
-		return func(row RowBytes) bool {
-			// See comparison truth table
-			if row[nilOffset]&mask > 0 {
-				return false
+	}
+	if typ == TypeInt8 && filter == FilterNotEqual && isString == false {
+		return func(value interface{}, nilOffset int, mask byte, valueOffset int) filterFunc {
+
+			v := int8(value.(float64))
+
+			return func(row RowBytes) bool {
+				if row[nilOffset]&mask > 0 {
+					return true
+				}
+				return *(*int8)(unsafe.Pointer(&row[valueOffset])) != v
 			}
-			return false
 		}
-	},
-	typeAndFilter{TypeUint16, FilterLessThan}: func(nilOffset int, mask byte) filterFunc {
-		return func(row RowBytes) bool {
-			// See comparison truth table
-			if row[nilOffset]&mask > 0 {
-				return false
+	}
+	if typ == TypeInt8 && filter == FilterGreaterThan && isString == true {
+		return func(value interface{}, nilOffset int, mask byte, valueOffset int) filterFunc {
+
+			v := int8(value.(uint32))
+
+			return func(row RowBytes) bool {
+				if row[nilOffset]&mask > 0 {
+					return false
+				}
+				return *(*int8)(unsafe.Pointer(&row[valueOffset])) > v
 			}
-			return false
 		}
-	},
-	typeAndFilter{TypeUint16, FilterLessThanOrEqual}: func(nilOffset int, mask byte) filterFunc {
-		return func(row RowBytes) bool {
-			// See comparison truth table
-			if row[nilOffset]&mask > 0 {
-				return false
+	}
+	if typ == TypeInt8 && filter == FilterGreaterThan && isString == false {
+		return func(value interface{}, nilOffset int, mask byte, valueOffset int) filterFunc {
+
+			v := int8(value.(float64))
+
+			return func(row RowBytes) bool {
+				if row[nilOffset]&mask > 0 {
+					return false
+				}
+				return *(*int8)(unsafe.Pointer(&row[valueOffset])) > v
 			}
-			return false
 		}
-	},
-	typeAndFilter{TypeInt16, FilterEqual}: func(nilOffset int, mask byte) filterFunc {
-		return func(row RowBytes) bool {
-			// See comparison truth table
-			if row[nilOffset]&mask > 0 {
-				return true
+	}
+	if typ == TypeInt8 && filter == FilterGreaterThenOrEqual && isString == true {
+		return func(value interface{}, nilOffset int, mask byte, valueOffset int) filterFunc {
+
+			v := int8(value.(uint32))
+
+			return func(row RowBytes) bool {
+				if row[nilOffset]&mask > 0 {
+					return false
+				}
+				return *(*int8)(unsafe.Pointer(&row[valueOffset])) >= v
 			}
-			return false
 		}
-	},
-	typeAndFilter{TypeInt16, FilterNotEqual}: func(nilOffset int, mask byte) filterFunc {
-		return func(row RowBytes) bool {
-			// See comparison truth table
-			if row[nilOffset]&mask > 0 {
-				return false
+	}
+	if typ == TypeInt8 && filter == FilterGreaterThenOrEqual && isString == false {
+		return func(value interface{}, nilOffset int, mask byte, valueOffset int) filterFunc {
+
+			v := int8(value.(float64))
+
+			return func(row RowBytes) bool {
+				if row[nilOffset]&mask > 0 {
+					return false
+				}
+				return *(*int8)(unsafe.Pointer(&row[valueOffset])) >= v
 			}
-			return true
 		}
-	},
-	typeAndFilter{TypeInt16, FilterGreaterThan}: func(nilOffset int, mask byte) filterFunc {
-		return func(row RowBytes) bool {
-			// See comparison truth table
-			if row[nilOffset]&mask > 0 {
-				return false
+	}
+	if typ == TypeInt8 && filter == FilterLessThan && isString == true {
+		return func(value interface{}, nilOffset int, mask byte, valueOffset int) filterFunc {
+
+			v := int8(value.(uint32))
+
+			return func(row RowBytes) bool {
+				if row[nilOffset]&mask > 0 {
+					return false
+				}
+				return *(*int8)(unsafe.Pointer(&row[valueOffset])) < v
 			}
-			return false
 		}
-	},
-	typeAndFilter{TypeInt16, FilterGreaterThenOrEqual}: func(nilOffset int, mask byte) filterFunc {
-		return func(row RowBytes) bool {
-			// See comparison truth table
-			if row[nilOffset]&mask > 0 {
-				return false
+	}
+	if typ == TypeInt8 && filter == FilterLessThan && isString == false {
+		return func(value interface{}, nilOffset int, mask byte, valueOffset int) filterFunc {
+
+			v := int8(value.(float64))
+
+			return func(row RowBytes) bool {
+				if row[nilOffset]&mask > 0 {
+					return false
+				}
+				return *(*int8)(unsafe.Pointer(&row[valueOffset])) < v
 			}
-			return false
 		}
-	},
-	typeAndFilter{TypeInt16, FilterLessThan}: func(nilOffset int, mask byte) filterFunc {
-		return func(row RowBytes) bool {
-			// See comparison truth table
-			if row[nilOffset]&mask > 0 {
-				return false
+	}
+	if typ == TypeInt8 && filter == FilterLessThanOrEqual && isString == true {
+		return func(value interface{}, nilOffset int, mask byte, valueOffset int) filterFunc {
+
+			v := int8(value.(uint32))
+
+			return func(row RowBytes) bool {
+				if row[nilOffset]&mask > 0 {
+					return false
+				}
+				return *(*int8)(unsafe.Pointer(&row[valueOffset])) <= v
 			}
-			return false
 		}
-	},
-	typeAndFilter{TypeInt16, FilterLessThanOrEqual}: func(nilOffset int, mask byte) filterFunc {
-		return func(row RowBytes) bool {
-			// See comparison truth table
-			if row[nilOffset]&mask > 0 {
-				return false
+	}
+	if typ == TypeInt8 && filter == FilterLessThanOrEqual && isString == false {
+		return func(value interface{}, nilOffset int, mask byte, valueOffset int) filterFunc {
+
+			v := int8(value.(float64))
+
+			return func(row RowBytes) bool {
+				if row[nilOffset]&mask > 0 {
+					return false
+				}
+				return *(*int8)(unsafe.Pointer(&row[valueOffset])) <= v
 			}
-			return false
 		}
-	},
-	typeAndFilter{TypeUint32, FilterEqual}: func(nilOffset int, mask byte) filterFunc {
-		return func(row RowBytes) bool {
-			// See comparison truth table
-			if row[nilOffset]&mask > 0 {
-				return true
+	}
+	if typ == TypeUint16 && filter == FilterEqual && isString == true {
+		return func(value interface{}, nilOffset int, mask byte, valueOffset int) filterFunc {
+
+			v := uint16(value.(uint32))
+
+			return func(row RowBytes) bool {
+				if row[nilOffset]&mask > 0 {
+					return false
+				}
+				return *(*uint16)(unsafe.Pointer(&row[valueOffset])) == v
 			}
-			return false
 		}
-	},
-	typeAndFilter{TypeUint32, FilterNotEqual}: func(nilOffset int, mask byte) filterFunc {
-		return func(row RowBytes) bool {
-			// See comparison truth table
-			if row[nilOffset]&mask > 0 {
-				return false
+	}
+	if typ == TypeUint16 && filter == FilterEqual && isString == false {
+		return func(value interface{}, nilOffset int, mask byte, valueOffset int) filterFunc {
+
+			v := uint16(value.(float64))
+
+			return func(row RowBytes) bool {
+				if row[nilOffset]&mask > 0 {
+					return false
+				}
+				return *(*uint16)(unsafe.Pointer(&row[valueOffset])) == v
 			}
-			return true
 		}
-	},
-	typeAndFilter{TypeUint32, FilterGreaterThan}: func(nilOffset int, mask byte) filterFunc {
-		return func(row RowBytes) bool {
-			// See comparison truth table
-			if row[nilOffset]&mask > 0 {
-				return false
+	}
+	if typ == TypeUint16 && filter == FilterNotEqual && isString == true {
+		return func(value interface{}, nilOffset int, mask byte, valueOffset int) filterFunc {
+
+			v := uint16(value.(uint32))
+
+			return func(row RowBytes) bool {
+				if row[nilOffset]&mask > 0 {
+					return true
+				}
+				return *(*uint16)(unsafe.Pointer(&row[valueOffset])) != v
 			}
-			return false
 		}
-	},
-	typeAndFilter{TypeUint32, FilterGreaterThenOrEqual}: func(nilOffset int, mask byte) filterFunc {
-		return func(row RowBytes) bool {
-			// See comparison truth table
-			if row[nilOffset]&mask > 0 {
-				return false
+	}
+	if typ == TypeUint16 && filter == FilterNotEqual && isString == false {
+		return func(value interface{}, nilOffset int, mask byte, valueOffset int) filterFunc {
+
+			v := uint16(value.(float64))
+
+			return func(row RowBytes) bool {
+				if row[nilOffset]&mask > 0 {
+					return true
+				}
+				return *(*uint16)(unsafe.Pointer(&row[valueOffset])) != v
 			}
-			return false
 		}
-	},
-	typeAndFilter{TypeUint32, FilterLessThan}: func(nilOffset int, mask byte) filterFunc {
-		return func(row RowBytes) bool {
-			// See comparison truth table
-			if row[nilOffset]&mask > 0 {
-				return false
+	}
+	if typ == TypeUint16 && filter == FilterGreaterThan && isString == true {
+		return func(value interface{}, nilOffset int, mask byte, valueOffset int) filterFunc {
+
+			v := uint16(value.(uint32))
+
+			return func(row RowBytes) bool {
+				if row[nilOffset]&mask > 0 {
+					return false
+				}
+				return *(*uint16)(unsafe.Pointer(&row[valueOffset])) > v
 			}
-			return false
 		}
-	},
-	typeAndFilter{TypeUint32, FilterLessThanOrEqual}: func(nilOffset int, mask byte) filterFunc {
-		return func(row RowBytes) bool {
-			// See comparison truth table
-			if row[nilOffset]&mask > 0 {
-				return false
+	}
+	if typ == TypeUint16 && filter == FilterGreaterThan && isString == false {
+		return func(value interface{}, nilOffset int, mask byte, valueOffset int) filterFunc {
+
+			v := uint16(value.(float64))
+
+			return func(row RowBytes) bool {
+				if row[nilOffset]&mask > 0 {
+					return false
+				}
+				return *(*uint16)(unsafe.Pointer(&row[valueOffset])) > v
 			}
-			return false
 		}
-	},
-	typeAndFilter{TypeInt32, FilterEqual}: func(nilOffset int, mask byte) filterFunc {
-		return func(row RowBytes) bool {
-			// See comparison truth table
-			if row[nilOffset]&mask > 0 {
-				return true
+	}
+	if typ == TypeUint16 && filter == FilterGreaterThenOrEqual && isString == true {
+		return func(value interface{}, nilOffset int, mask byte, valueOffset int) filterFunc {
+
+			v := uint16(value.(uint32))
+
+			return func(row RowBytes) bool {
+				if row[nilOffset]&mask > 0 {
+					return false
+				}
+				return *(*uint16)(unsafe.Pointer(&row[valueOffset])) >= v
 			}
-			return false
 		}
-	},
-	typeAndFilter{TypeInt32, FilterNotEqual}: func(nilOffset int, mask byte) filterFunc {
-		return func(row RowBytes) bool {
-			// See comparison truth table
-			if row[nilOffset]&mask > 0 {
-				return false
+	}
+	if typ == TypeUint16 && filter == FilterGreaterThenOrEqual && isString == false {
+		return func(value interface{}, nilOffset int, mask byte, valueOffset int) filterFunc {
+
+			v := uint16(value.(float64))
+
+			return func(row RowBytes) bool {
+				if row[nilOffset]&mask > 0 {
+					return false
+				}
+				return *(*uint16)(unsafe.Pointer(&row[valueOffset])) >= v
 			}
-			return true
 		}
-	},
-	typeAndFilter{TypeInt32, FilterGreaterThan}: func(nilOffset int, mask byte) filterFunc {
-		return func(row RowBytes) bool {
-			// See comparison truth table
-			if row[nilOffset]&mask > 0 {
-				return false
+	}
+	if typ == TypeUint16 && filter == FilterLessThan && isString == true {
+		return func(value interface{}, nilOffset int, mask byte, valueOffset int) filterFunc {
+
+			v := uint16(value.(uint32))
+
+			return func(row RowBytes) bool {
+				if row[nilOffset]&mask > 0 {
+					return false
+				}
+				return *(*uint16)(unsafe.Pointer(&row[valueOffset])) < v
 			}
-			return false
 		}
-	},
-	typeAndFilter{TypeInt32, FilterGreaterThenOrEqual}: func(nilOffset int, mask byte) filterFunc {
-		return func(row RowBytes) bool {
-			// See comparison truth table
-			if row[nilOffset]&mask > 0 {
-				return false
+	}
+	if typ == TypeUint16 && filter == FilterLessThan && isString == false {
+		return func(value interface{}, nilOffset int, mask byte, valueOffset int) filterFunc {
+
+			v := uint16(value.(float64))
+
+			return func(row RowBytes) bool {
+				if row[nilOffset]&mask > 0 {
+					return false
+				}
+				return *(*uint16)(unsafe.Pointer(&row[valueOffset])) < v
 			}
-			return false
 		}
-	},
-	typeAndFilter{TypeInt32, FilterLessThan}: func(nilOffset int, mask byte) filterFunc {
-		return func(row RowBytes) bool {
-			// See comparison truth table
-			if row[nilOffset]&mask > 0 {
-				return false
+	}
+	if typ == TypeUint16 && filter == FilterLessThanOrEqual && isString == true {
+		return func(value interface{}, nilOffset int, mask byte, valueOffset int) filterFunc {
+
+			v := uint16(value.(uint32))
+
+			return func(row RowBytes) bool {
+				if row[nilOffset]&mask > 0 {
+					return false
+				}
+				return *(*uint16)(unsafe.Pointer(&row[valueOffset])) <= v
 			}
-			return false
 		}
-	},
-	typeAndFilter{TypeInt32, FilterLessThanOrEqual}: func(nilOffset int, mask byte) filterFunc {
-		return func(row RowBytes) bool {
-			// See comparison truth table
-			if row[nilOffset]&mask > 0 {
-				return false
+	}
+	if typ == TypeUint16 && filter == FilterLessThanOrEqual && isString == false {
+		return func(value interface{}, nilOffset int, mask byte, valueOffset int) filterFunc {
+
+			v := uint16(value.(float64))
+
+			return func(row RowBytes) bool {
+				if row[nilOffset]&mask > 0 {
+					return false
+				}
+				return *(*uint16)(unsafe.Pointer(&row[valueOffset])) <= v
 			}
-			return false
 		}
-	},
-	typeAndFilter{TypeFloat32, FilterEqual}: func(nilOffset int, mask byte) filterFunc {
-		return func(row RowBytes) bool {
-			// See comparison truth table
-			if row[nilOffset]&mask > 0 {
-				return true
+	}
+	if typ == TypeInt16 && filter == FilterEqual && isString == true {
+		return func(value interface{}, nilOffset int, mask byte, valueOffset int) filterFunc {
+
+			v := int16(value.(uint32))
+
+			return func(row RowBytes) bool {
+				if row[nilOffset]&mask > 0 {
+					return false
+				}
+				return *(*int16)(unsafe.Pointer(&row[valueOffset])) == v
 			}
-			return false
 		}
-	},
-	typeAndFilter{TypeFloat32, FilterNotEqual}: func(nilOffset int, mask byte) filterFunc {
-		return func(row RowBytes) bool {
-			// See comparison truth table
-			if row[nilOffset]&mask > 0 {
-				return false
+	}
+	if typ == TypeInt16 && filter == FilterEqual && isString == false {
+		return func(value interface{}, nilOffset int, mask byte, valueOffset int) filterFunc {
+
+			v := int16(value.(float64))
+
+			return func(row RowBytes) bool {
+				if row[nilOffset]&mask > 0 {
+					return false
+				}
+				return *(*int16)(unsafe.Pointer(&row[valueOffset])) == v
 			}
-			return true
 		}
-	},
-	typeAndFilter{TypeFloat32, FilterGreaterThan}: func(nilOffset int, mask byte) filterFunc {
-		return func(row RowBytes) bool {
-			// See comparison truth table
-			if row[nilOffset]&mask > 0 {
-				return false
+	}
+	if typ == TypeInt16 && filter == FilterNotEqual && isString == true {
+		return func(value interface{}, nilOffset int, mask byte, valueOffset int) filterFunc {
+
+			v := int16(value.(uint32))
+
+			return func(row RowBytes) bool {
+				if row[nilOffset]&mask > 0 {
+					return true
+				}
+				return *(*int16)(unsafe.Pointer(&row[valueOffset])) != v
 			}
-			return false
 		}
-	},
-	typeAndFilter{TypeFloat32, FilterGreaterThenOrEqual}: func(nilOffset int, mask byte) filterFunc {
-		return func(row RowBytes) bool {
-			// See comparison truth table
-			if row[nilOffset]&mask > 0 {
-				return false
+	}
+	if typ == TypeInt16 && filter == FilterNotEqual && isString == false {
+		return func(value interface{}, nilOffset int, mask byte, valueOffset int) filterFunc {
+
+			v := int16(value.(float64))
+
+			return func(row RowBytes) bool {
+				if row[nilOffset]&mask > 0 {
+					return true
+				}
+				return *(*int16)(unsafe.Pointer(&row[valueOffset])) != v
 			}
-			return false
 		}
-	},
-	typeAndFilter{TypeFloat32, FilterLessThan}: func(nilOffset int, mask byte) filterFunc {
-		return func(row RowBytes) bool {
-			// See comparison truth table
-			if row[nilOffset]&mask > 0 {
-				return false
+	}
+	if typ == TypeInt16 && filter == FilterGreaterThan && isString == true {
+		return func(value interface{}, nilOffset int, mask byte, valueOffset int) filterFunc {
+
+			v := int16(value.(uint32))
+
+			return func(row RowBytes) bool {
+				if row[nilOffset]&mask > 0 {
+					return false
+				}
+				return *(*int16)(unsafe.Pointer(&row[valueOffset])) > v
 			}
-			return false
 		}
-	},
-	typeAndFilter{TypeFloat32, FilterLessThanOrEqual}: func(nilOffset int, mask byte) filterFunc {
-		return func(row RowBytes) bool {
-			// See comparison truth table
-			if row[nilOffset]&mask > 0 {
-				return false
+	}
+	if typ == TypeInt16 && filter == FilterGreaterThan && isString == false {
+		return func(value interface{}, nilOffset int, mask byte, valueOffset int) filterFunc {
+
+			v := int16(value.(float64))
+
+			return func(row RowBytes) bool {
+				if row[nilOffset]&mask > 0 {
+					return false
+				}
+				return *(*int16)(unsafe.Pointer(&row[valueOffset])) > v
 			}
-			return false
 		}
-	},
+	}
+	if typ == TypeInt16 && filter == FilterGreaterThenOrEqual && isString == true {
+		return func(value interface{}, nilOffset int, mask byte, valueOffset int) filterFunc {
+
+			v := int16(value.(uint32))
+
+			return func(row RowBytes) bool {
+				if row[nilOffset]&mask > 0 {
+					return false
+				}
+				return *(*int16)(unsafe.Pointer(&row[valueOffset])) >= v
+			}
+		}
+	}
+	if typ == TypeInt16 && filter == FilterGreaterThenOrEqual && isString == false {
+		return func(value interface{}, nilOffset int, mask byte, valueOffset int) filterFunc {
+
+			v := int16(value.(float64))
+
+			return func(row RowBytes) bool {
+				if row[nilOffset]&mask > 0 {
+					return false
+				}
+				return *(*int16)(unsafe.Pointer(&row[valueOffset])) >= v
+			}
+		}
+	}
+	if typ == TypeInt16 && filter == FilterLessThan && isString == true {
+		return func(value interface{}, nilOffset int, mask byte, valueOffset int) filterFunc {
+
+			v := int16(value.(uint32))
+
+			return func(row RowBytes) bool {
+				if row[nilOffset]&mask > 0 {
+					return false
+				}
+				return *(*int16)(unsafe.Pointer(&row[valueOffset])) < v
+			}
+		}
+	}
+	if typ == TypeInt16 && filter == FilterLessThan && isString == false {
+		return func(value interface{}, nilOffset int, mask byte, valueOffset int) filterFunc {
+
+			v := int16(value.(float64))
+
+			return func(row RowBytes) bool {
+				if row[nilOffset]&mask > 0 {
+					return false
+				}
+				return *(*int16)(unsafe.Pointer(&row[valueOffset])) < v
+			}
+		}
+	}
+	if typ == TypeInt16 && filter == FilterLessThanOrEqual && isString == true {
+		return func(value interface{}, nilOffset int, mask byte, valueOffset int) filterFunc {
+
+			v := int16(value.(uint32))
+
+			return func(row RowBytes) bool {
+				if row[nilOffset]&mask > 0 {
+					return false
+				}
+				return *(*int16)(unsafe.Pointer(&row[valueOffset])) <= v
+			}
+		}
+	}
+	if typ == TypeInt16 && filter == FilterLessThanOrEqual && isString == false {
+		return func(value interface{}, nilOffset int, mask byte, valueOffset int) filterFunc {
+
+			v := int16(value.(float64))
+
+			return func(row RowBytes) bool {
+				if row[nilOffset]&mask > 0 {
+					return false
+				}
+				return *(*int16)(unsafe.Pointer(&row[valueOffset])) <= v
+			}
+		}
+	}
+	if typ == TypeUint32 && filter == FilterEqual && isString == true {
+		return func(value interface{}, nilOffset int, mask byte, valueOffset int) filterFunc {
+
+			v := uint32(value.(uint32))
+
+			return func(row RowBytes) bool {
+				if row[nilOffset]&mask > 0 {
+					return false
+				}
+				return *(*uint32)(unsafe.Pointer(&row[valueOffset])) == v
+			}
+		}
+	}
+	if typ == TypeUint32 && filter == FilterEqual && isString == false {
+		return func(value interface{}, nilOffset int, mask byte, valueOffset int) filterFunc {
+
+			v := uint32(value.(float64))
+
+			return func(row RowBytes) bool {
+				if row[nilOffset]&mask > 0 {
+					return false
+				}
+				return *(*uint32)(unsafe.Pointer(&row[valueOffset])) == v
+			}
+		}
+	}
+	if typ == TypeUint32 && filter == FilterNotEqual && isString == true {
+		return func(value interface{}, nilOffset int, mask byte, valueOffset int) filterFunc {
+
+			v := uint32(value.(uint32))
+
+			return func(row RowBytes) bool {
+				if row[nilOffset]&mask > 0 {
+					return true
+				}
+				return *(*uint32)(unsafe.Pointer(&row[valueOffset])) != v
+			}
+		}
+	}
+	if typ == TypeUint32 && filter == FilterNotEqual && isString == false {
+		return func(value interface{}, nilOffset int, mask byte, valueOffset int) filterFunc {
+
+			v := uint32(value.(float64))
+
+			return func(row RowBytes) bool {
+				if row[nilOffset]&mask > 0 {
+					return true
+				}
+				return *(*uint32)(unsafe.Pointer(&row[valueOffset])) != v
+			}
+		}
+	}
+	if typ == TypeUint32 && filter == FilterGreaterThan && isString == true {
+		return func(value interface{}, nilOffset int, mask byte, valueOffset int) filterFunc {
+
+			v := uint32(value.(uint32))
+
+			return func(row RowBytes) bool {
+				if row[nilOffset]&mask > 0 {
+					return false
+				}
+				return *(*uint32)(unsafe.Pointer(&row[valueOffset])) > v
+			}
+		}
+	}
+	if typ == TypeUint32 && filter == FilterGreaterThan && isString == false {
+		return func(value interface{}, nilOffset int, mask byte, valueOffset int) filterFunc {
+
+			v := uint32(value.(float64))
+
+			return func(row RowBytes) bool {
+				if row[nilOffset]&mask > 0 {
+					return false
+				}
+				return *(*uint32)(unsafe.Pointer(&row[valueOffset])) > v
+			}
+		}
+	}
+	if typ == TypeUint32 && filter == FilterGreaterThenOrEqual && isString == true {
+		return func(value interface{}, nilOffset int, mask byte, valueOffset int) filterFunc {
+
+			v := uint32(value.(uint32))
+
+			return func(row RowBytes) bool {
+				if row[nilOffset]&mask > 0 {
+					return false
+				}
+				return *(*uint32)(unsafe.Pointer(&row[valueOffset])) >= v
+			}
+		}
+	}
+	if typ == TypeUint32 && filter == FilterGreaterThenOrEqual && isString == false {
+		return func(value interface{}, nilOffset int, mask byte, valueOffset int) filterFunc {
+
+			v := uint32(value.(float64))
+
+			return func(row RowBytes) bool {
+				if row[nilOffset]&mask > 0 {
+					return false
+				}
+				return *(*uint32)(unsafe.Pointer(&row[valueOffset])) >= v
+			}
+		}
+	}
+	if typ == TypeUint32 && filter == FilterLessThan && isString == true {
+		return func(value interface{}, nilOffset int, mask byte, valueOffset int) filterFunc {
+
+			v := uint32(value.(uint32))
+
+			return func(row RowBytes) bool {
+				if row[nilOffset]&mask > 0 {
+					return false
+				}
+				return *(*uint32)(unsafe.Pointer(&row[valueOffset])) < v
+			}
+		}
+	}
+	if typ == TypeUint32 && filter == FilterLessThan && isString == false {
+		return func(value interface{}, nilOffset int, mask byte, valueOffset int) filterFunc {
+
+			v := uint32(value.(float64))
+
+			return func(row RowBytes) bool {
+				if row[nilOffset]&mask > 0 {
+					return false
+				}
+				return *(*uint32)(unsafe.Pointer(&row[valueOffset])) < v
+			}
+		}
+	}
+	if typ == TypeUint32 && filter == FilterLessThanOrEqual && isString == true {
+		return func(value interface{}, nilOffset int, mask byte, valueOffset int) filterFunc {
+
+			v := uint32(value.(uint32))
+
+			return func(row RowBytes) bool {
+				if row[nilOffset]&mask > 0 {
+					return false
+				}
+				return *(*uint32)(unsafe.Pointer(&row[valueOffset])) <= v
+			}
+		}
+	}
+	if typ == TypeUint32 && filter == FilterLessThanOrEqual && isString == false {
+		return func(value interface{}, nilOffset int, mask byte, valueOffset int) filterFunc {
+
+			v := uint32(value.(float64))
+
+			return func(row RowBytes) bool {
+				if row[nilOffset]&mask > 0 {
+					return false
+				}
+				return *(*uint32)(unsafe.Pointer(&row[valueOffset])) <= v
+			}
+		}
+	}
+	if typ == TypeInt32 && filter == FilterEqual && isString == true {
+		return func(value interface{}, nilOffset int, mask byte, valueOffset int) filterFunc {
+
+			v := int32(value.(uint32))
+
+			return func(row RowBytes) bool {
+				if row[nilOffset]&mask > 0 {
+					return false
+				}
+				return *(*int32)(unsafe.Pointer(&row[valueOffset])) == v
+			}
+		}
+	}
+	if typ == TypeInt32 && filter == FilterEqual && isString == false {
+		return func(value interface{}, nilOffset int, mask byte, valueOffset int) filterFunc {
+
+			v := int32(value.(float64))
+
+			return func(row RowBytes) bool {
+				if row[nilOffset]&mask > 0 {
+					return false
+				}
+				return *(*int32)(unsafe.Pointer(&row[valueOffset])) == v
+			}
+		}
+	}
+	if typ == TypeInt32 && filter == FilterNotEqual && isString == true {
+		return func(value interface{}, nilOffset int, mask byte, valueOffset int) filterFunc {
+
+			v := int32(value.(uint32))
+
+			return func(row RowBytes) bool {
+				if row[nilOffset]&mask > 0 {
+					return true
+				}
+				return *(*int32)(unsafe.Pointer(&row[valueOffset])) != v
+			}
+		}
+	}
+	if typ == TypeInt32 && filter == FilterNotEqual && isString == false {
+		return func(value interface{}, nilOffset int, mask byte, valueOffset int) filterFunc {
+
+			v := int32(value.(float64))
+
+			return func(row RowBytes) bool {
+				if row[nilOffset]&mask > 0 {
+					return true
+				}
+				return *(*int32)(unsafe.Pointer(&row[valueOffset])) != v
+			}
+		}
+	}
+	if typ == TypeInt32 && filter == FilterGreaterThan && isString == true {
+		return func(value interface{}, nilOffset int, mask byte, valueOffset int) filterFunc {
+
+			v := int32(value.(uint32))
+
+			return func(row RowBytes) bool {
+				if row[nilOffset]&mask > 0 {
+					return false
+				}
+				return *(*int32)(unsafe.Pointer(&row[valueOffset])) > v
+			}
+		}
+	}
+	if typ == TypeInt32 && filter == FilterGreaterThan && isString == false {
+		return func(value interface{}, nilOffset int, mask byte, valueOffset int) filterFunc {
+
+			v := int32(value.(float64))
+
+			return func(row RowBytes) bool {
+				if row[nilOffset]&mask > 0 {
+					return false
+				}
+				return *(*int32)(unsafe.Pointer(&row[valueOffset])) > v
+			}
+		}
+	}
+	if typ == TypeInt32 && filter == FilterGreaterThenOrEqual && isString == true {
+		return func(value interface{}, nilOffset int, mask byte, valueOffset int) filterFunc {
+
+			v := int32(value.(uint32))
+
+			return func(row RowBytes) bool {
+				if row[nilOffset]&mask > 0 {
+					return false
+				}
+				return *(*int32)(unsafe.Pointer(&row[valueOffset])) >= v
+			}
+		}
+	}
+	if typ == TypeInt32 && filter == FilterGreaterThenOrEqual && isString == false {
+		return func(value interface{}, nilOffset int, mask byte, valueOffset int) filterFunc {
+
+			v := int32(value.(float64))
+
+			return func(row RowBytes) bool {
+				if row[nilOffset]&mask > 0 {
+					return false
+				}
+				return *(*int32)(unsafe.Pointer(&row[valueOffset])) >= v
+			}
+		}
+	}
+	if typ == TypeInt32 && filter == FilterLessThan && isString == true {
+		return func(value interface{}, nilOffset int, mask byte, valueOffset int) filterFunc {
+
+			v := int32(value.(uint32))
+
+			return func(row RowBytes) bool {
+				if row[nilOffset]&mask > 0 {
+					return false
+				}
+				return *(*int32)(unsafe.Pointer(&row[valueOffset])) < v
+			}
+		}
+	}
+	if typ == TypeInt32 && filter == FilterLessThan && isString == false {
+		return func(value interface{}, nilOffset int, mask byte, valueOffset int) filterFunc {
+
+			v := int32(value.(float64))
+
+			return func(row RowBytes) bool {
+				if row[nilOffset]&mask > 0 {
+					return false
+				}
+				return *(*int32)(unsafe.Pointer(&row[valueOffset])) < v
+			}
+		}
+	}
+	if typ == TypeInt32 && filter == FilterLessThanOrEqual && isString == true {
+		return func(value interface{}, nilOffset int, mask byte, valueOffset int) filterFunc {
+
+			v := int32(value.(uint32))
+
+			return func(row RowBytes) bool {
+				if row[nilOffset]&mask > 0 {
+					return false
+				}
+				return *(*int32)(unsafe.Pointer(&row[valueOffset])) <= v
+			}
+		}
+	}
+	if typ == TypeInt32 && filter == FilterLessThanOrEqual && isString == false {
+		return func(value interface{}, nilOffset int, mask byte, valueOffset int) filterFunc {
+
+			v := int32(value.(float64))
+
+			return func(row RowBytes) bool {
+				if row[nilOffset]&mask > 0 {
+					return false
+				}
+				return *(*int32)(unsafe.Pointer(&row[valueOffset])) <= v
+			}
+		}
+	}
+	if typ == TypeFloat32 && filter == FilterEqual && isString == true {
+		return func(value interface{}, nilOffset int, mask byte, valueOffset int) filterFunc {
+
+			v := float32(value.(uint32))
+
+			return func(row RowBytes) bool {
+				if row[nilOffset]&mask > 0 {
+					return false
+				}
+				return *(*float32)(unsafe.Pointer(&row[valueOffset])) == v
+			}
+		}
+	}
+	if typ == TypeFloat32 && filter == FilterEqual && isString == false {
+		return func(value interface{}, nilOffset int, mask byte, valueOffset int) filterFunc {
+
+			v := float32(value.(float64))
+
+			return func(row RowBytes) bool {
+				if row[nilOffset]&mask > 0 {
+					return false
+				}
+				return *(*float32)(unsafe.Pointer(&row[valueOffset])) == v
+			}
+		}
+	}
+	if typ == TypeFloat32 && filter == FilterNotEqual && isString == true {
+		return func(value interface{}, nilOffset int, mask byte, valueOffset int) filterFunc {
+
+			v := float32(value.(uint32))
+
+			return func(row RowBytes) bool {
+				if row[nilOffset]&mask > 0 {
+					return true
+				}
+				return *(*float32)(unsafe.Pointer(&row[valueOffset])) != v
+			}
+		}
+	}
+	if typ == TypeFloat32 && filter == FilterNotEqual && isString == false {
+		return func(value interface{}, nilOffset int, mask byte, valueOffset int) filterFunc {
+
+			v := float32(value.(float64))
+
+			return func(row RowBytes) bool {
+				if row[nilOffset]&mask > 0 {
+					return true
+				}
+				return *(*float32)(unsafe.Pointer(&row[valueOffset])) != v
+			}
+		}
+	}
+	if typ == TypeFloat32 && filter == FilterGreaterThan && isString == true {
+		return func(value interface{}, nilOffset int, mask byte, valueOffset int) filterFunc {
+
+			v := float32(value.(uint32))
+
+			return func(row RowBytes) bool {
+				if row[nilOffset]&mask > 0 {
+					return false
+				}
+				return *(*float32)(unsafe.Pointer(&row[valueOffset])) > v
+			}
+		}
+	}
+	if typ == TypeFloat32 && filter == FilterGreaterThan && isString == false {
+		return func(value interface{}, nilOffset int, mask byte, valueOffset int) filterFunc {
+
+			v := float32(value.(float64))
+
+			return func(row RowBytes) bool {
+				if row[nilOffset]&mask > 0 {
+					return false
+				}
+				return *(*float32)(unsafe.Pointer(&row[valueOffset])) > v
+			}
+		}
+	}
+	if typ == TypeFloat32 && filter == FilterGreaterThenOrEqual && isString == true {
+		return func(value interface{}, nilOffset int, mask byte, valueOffset int) filterFunc {
+
+			v := float32(value.(uint32))
+
+			return func(row RowBytes) bool {
+				if row[nilOffset]&mask > 0 {
+					return false
+				}
+				return *(*float32)(unsafe.Pointer(&row[valueOffset])) >= v
+			}
+		}
+	}
+	if typ == TypeFloat32 && filter == FilterGreaterThenOrEqual && isString == false {
+		return func(value interface{}, nilOffset int, mask byte, valueOffset int) filterFunc {
+
+			v := float32(value.(float64))
+
+			return func(row RowBytes) bool {
+				if row[nilOffset]&mask > 0 {
+					return false
+				}
+				return *(*float32)(unsafe.Pointer(&row[valueOffset])) >= v
+			}
+		}
+	}
+	if typ == TypeFloat32 && filter == FilterLessThan && isString == true {
+		return func(value interface{}, nilOffset int, mask byte, valueOffset int) filterFunc {
+
+			v := float32(value.(uint32))
+
+			return func(row RowBytes) bool {
+				if row[nilOffset]&mask > 0 {
+					return false
+				}
+				return *(*float32)(unsafe.Pointer(&row[valueOffset])) < v
+			}
+		}
+	}
+	if typ == TypeFloat32 && filter == FilterLessThan && isString == false {
+		return func(value interface{}, nilOffset int, mask byte, valueOffset int) filterFunc {
+
+			v := float32(value.(float64))
+
+			return func(row RowBytes) bool {
+				if row[nilOffset]&mask > 0 {
+					return false
+				}
+				return *(*float32)(unsafe.Pointer(&row[valueOffset])) < v
+			}
+		}
+	}
+	if typ == TypeFloat32 && filter == FilterLessThanOrEqual && isString == true {
+		return func(value interface{}, nilOffset int, mask byte, valueOffset int) filterFunc {
+
+			v := float32(value.(uint32))
+
+			return func(row RowBytes) bool {
+				if row[nilOffset]&mask > 0 {
+					return false
+				}
+				return *(*float32)(unsafe.Pointer(&row[valueOffset])) <= v
+			}
+		}
+	}
+	if typ == TypeFloat32 && filter == FilterLessThanOrEqual && isString == false {
+		return func(value interface{}, nilOffset int, mask byte, valueOffset int) filterFunc {
+
+			v := float32(value.(float64))
+
+			return func(row RowBytes) bool {
+				if row[nilOffset]&mask > 0 {
+					return false
+				}
+				return *(*float32)(unsafe.Pointer(&row[valueOffset])) <= v
+			}
+		}
+	}
+	panic("unreached")
 }
 
-var typeAndFilterToStringFilterFuncSimple = map[typeAndFilter]func(uint32, int, byte, int) filterFunc{
+func makeMetricFilterFuncIn(typ Type) func(floats []float64, offset int) filterFunc {
 
-	typeAndFilter{TypeUint8, FilterEqual}: func(index uint32, nilOffset int, mask byte, valueOffset int) filterFunc {
-		v := uint8(index)
-		return func(row RowBytes) bool {
-			if row[nilOffset]&mask > 0 {
+	if typ == TypeUint8 {
+		return func(floats []float64, offset int) filterFunc {
+			typedValues := make([]uint8, len(floats))
+			for i, f := range floats {
+				typedValues[i] = uint8(f)
+			}
+			return func(row RowBytes) bool {
+				value := *(*uint8)(unsafe.Pointer(&row[offset]))
+				for _, v := range typedValues {
+					if value == v {
+						return true
+					}
+				}
 				return false
 			}
-			return *(*uint8)(unsafe.Pointer(&row[valueOffset])) == v
 		}
-	},
-	typeAndFilter{TypeUint8, FilterNotEqual}: func(index uint32, nilOffset int, mask byte, valueOffset int) filterFunc {
-		v := uint8(index)
-		return func(row RowBytes) bool {
-			if row[nilOffset]&mask > 0 {
-				return true
+	}
+	if typ == TypeInt8 {
+		return func(floats []float64, offset int) filterFunc {
+			typedValues := make([]int8, len(floats))
+			for i, f := range floats {
+				typedValues[i] = int8(f)
 			}
-			return *(*uint8)(unsafe.Pointer(&row[valueOffset])) != v
-		}
-	},
-	typeAndFilter{TypeUint8, FilterGreaterThan}: func(index uint32, nilOffset int, mask byte, valueOffset int) filterFunc {
-		v := uint8(index)
-		return func(row RowBytes) bool {
-			if row[nilOffset]&mask > 0 {
+			return func(row RowBytes) bool {
+				value := *(*int8)(unsafe.Pointer(&row[offset]))
+				for _, v := range typedValues {
+					if value == v {
+						return true
+					}
+				}
 				return false
 			}
-			return *(*uint8)(unsafe.Pointer(&row[valueOffset])) > v
 		}
-	},
-	typeAndFilter{TypeUint8, FilterGreaterThenOrEqual}: func(index uint32, nilOffset int, mask byte, valueOffset int) filterFunc {
-		v := uint8(index)
-		return func(row RowBytes) bool {
-			if row[nilOffset]&mask > 0 {
+	}
+	if typ == TypeUint16 {
+		return func(floats []float64, offset int) filterFunc {
+			typedValues := make([]uint16, len(floats))
+			for i, f := range floats {
+				typedValues[i] = uint16(f)
+			}
+			return func(row RowBytes) bool {
+				value := *(*uint16)(unsafe.Pointer(&row[offset]))
+				for _, v := range typedValues {
+					if value == v {
+						return true
+					}
+				}
 				return false
 			}
-			return *(*uint8)(unsafe.Pointer(&row[valueOffset])) >= v
 		}
-	},
-	typeAndFilter{TypeUint8, FilterLessThan}: func(index uint32, nilOffset int, mask byte, valueOffset int) filterFunc {
-		v := uint8(index)
-		return func(row RowBytes) bool {
-			if row[nilOffset]&mask > 0 {
+	}
+	if typ == TypeInt16 {
+		return func(floats []float64, offset int) filterFunc {
+			typedValues := make([]int16, len(floats))
+			for i, f := range floats {
+				typedValues[i] = int16(f)
+			}
+			return func(row RowBytes) bool {
+				value := *(*int16)(unsafe.Pointer(&row[offset]))
+				for _, v := range typedValues {
+					if value == v {
+						return true
+					}
+				}
 				return false
 			}
-			return *(*uint8)(unsafe.Pointer(&row[valueOffset])) < v
 		}
-	},
-	typeAndFilter{TypeUint8, FilterLessThanOrEqual}: func(index uint32, nilOffset int, mask byte, valueOffset int) filterFunc {
-		v := uint8(index)
-		return func(row RowBytes) bool {
-			if row[nilOffset]&mask > 0 {
+	}
+	if typ == TypeUint32 {
+		return func(floats []float64, offset int) filterFunc {
+			typedValues := make([]uint32, len(floats))
+			for i, f := range floats {
+				typedValues[i] = uint32(f)
+			}
+			return func(row RowBytes) bool {
+				value := *(*uint32)(unsafe.Pointer(&row[offset]))
+				for _, v := range typedValues {
+					if value == v {
+						return true
+					}
+				}
 				return false
 			}
-			return *(*uint8)(unsafe.Pointer(&row[valueOffset])) <= v
 		}
-	},
-	typeAndFilter{TypeUint16, FilterEqual}: func(index uint32, nilOffset int, mask byte, valueOffset int) filterFunc {
-		v := uint16(index)
-		return func(row RowBytes) bool {
-			if row[nilOffset]&mask > 0 {
+	}
+	if typ == TypeInt32 {
+		return func(floats []float64, offset int) filterFunc {
+			typedValues := make([]int32, len(floats))
+			for i, f := range floats {
+				typedValues[i] = int32(f)
+			}
+			return func(row RowBytes) bool {
+				value := *(*int32)(unsafe.Pointer(&row[offset]))
+				for _, v := range typedValues {
+					if value == v {
+						return true
+					}
+				}
 				return false
 			}
-			return *(*uint16)(unsafe.Pointer(&row[valueOffset])) == v
 		}
-	},
-	typeAndFilter{TypeUint16, FilterNotEqual}: func(index uint32, nilOffset int, mask byte, valueOffset int) filterFunc {
-		v := uint16(index)
-		return func(row RowBytes) bool {
-			if row[nilOffset]&mask > 0 {
-				return true
+	}
+	if typ == TypeFloat32 {
+		return func(floats []float64, offset int) filterFunc {
+			typedValues := make([]float32, len(floats))
+			for i, f := range floats {
+				typedValues[i] = float32(f)
 			}
-			return *(*uint16)(unsafe.Pointer(&row[valueOffset])) != v
-		}
-	},
-	typeAndFilter{TypeUint16, FilterGreaterThan}: func(index uint32, nilOffset int, mask byte, valueOffset int) filterFunc {
-		v := uint16(index)
-		return func(row RowBytes) bool {
-			if row[nilOffset]&mask > 0 {
+			return func(row RowBytes) bool {
+				value := *(*float32)(unsafe.Pointer(&row[offset]))
+				for _, v := range typedValues {
+					if value == v {
+						return true
+					}
+				}
 				return false
 			}
-			return *(*uint16)(unsafe.Pointer(&row[valueOffset])) > v
 		}
-	},
-	typeAndFilter{TypeUint16, FilterGreaterThenOrEqual}: func(index uint32, nilOffset int, mask byte, valueOffset int) filterFunc {
-		v := uint16(index)
-		return func(row RowBytes) bool {
-			if row[nilOffset]&mask > 0 {
-				return false
-			}
-			return *(*uint16)(unsafe.Pointer(&row[valueOffset])) >= v
-		}
-	},
-	typeAndFilter{TypeUint16, FilterLessThan}: func(index uint32, nilOffset int, mask byte, valueOffset int) filterFunc {
-		v := uint16(index)
-		return func(row RowBytes) bool {
-			if row[nilOffset]&mask > 0 {
-				return false
-			}
-			return *(*uint16)(unsafe.Pointer(&row[valueOffset])) < v
-		}
-	},
-	typeAndFilter{TypeUint16, FilterLessThanOrEqual}: func(index uint32, nilOffset int, mask byte, valueOffset int) filterFunc {
-		v := uint16(index)
-		return func(row RowBytes) bool {
-			if row[nilOffset]&mask > 0 {
-				return false
-			}
-			return *(*uint16)(unsafe.Pointer(&row[valueOffset])) <= v
-		}
-	},
-	typeAndFilter{TypeUint32, FilterEqual}: func(index uint32, nilOffset int, mask byte, valueOffset int) filterFunc {
-		v := uint32(index)
-		return func(row RowBytes) bool {
-			if row[nilOffset]&mask > 0 {
-				return false
-			}
-			return *(*uint32)(unsafe.Pointer(&row[valueOffset])) == v
-		}
-	},
-	typeAndFilter{TypeUint32, FilterNotEqual}: func(index uint32, nilOffset int, mask byte, valueOffset int) filterFunc {
-		v := uint32(index)
-		return func(row RowBytes) bool {
-			if row[nilOffset]&mask > 0 {
-				return true
-			}
-			return *(*uint32)(unsafe.Pointer(&row[valueOffset])) != v
-		}
-	},
-	typeAndFilter{TypeUint32, FilterGreaterThan}: func(index uint32, nilOffset int, mask byte, valueOffset int) filterFunc {
-		v := uint32(index)
-		return func(row RowBytes) bool {
-			if row[nilOffset]&mask > 0 {
-				return false
-			}
-			return *(*uint32)(unsafe.Pointer(&row[valueOffset])) > v
-		}
-	},
-	typeAndFilter{TypeUint32, FilterGreaterThenOrEqual}: func(index uint32, nilOffset int, mask byte, valueOffset int) filterFunc {
-		v := uint32(index)
-		return func(row RowBytes) bool {
-			if row[nilOffset]&mask > 0 {
-				return false
-			}
-			return *(*uint32)(unsafe.Pointer(&row[valueOffset])) >= v
-		}
-	},
-	typeAndFilter{TypeUint32, FilterLessThan}: func(index uint32, nilOffset int, mask byte, valueOffset int) filterFunc {
-		v := uint32(index)
-		return func(row RowBytes) bool {
-			if row[nilOffset]&mask > 0 {
-				return false
-			}
-			return *(*uint32)(unsafe.Pointer(&row[valueOffset])) < v
-		}
-	},
-	typeAndFilter{TypeUint32, FilterLessThanOrEqual}: func(index uint32, nilOffset int, mask byte, valueOffset int) filterFunc {
-		v := uint32(index)
-		return func(row RowBytes) bool {
-			if row[nilOffset]&mask > 0 {
-				return false
-			}
-			return *(*uint32)(unsafe.Pointer(&row[valueOffset])) <= v
-		}
-	},
+	}
+	panic("unreached")
 }
 
-var typeAndFilterToDimensionFilterFuncSimple = map[typeAndFilter]func(float64, int, byte, int) filterFunc{
+func makeMetricFilterFuncSimple(typ Type, filter FilterType) func(value float64, offset int) filterFunc {
 
-	typeAndFilter{TypeUint8, FilterEqual}: func(value float64, nilOffset int, mask byte, valueOffset int) filterFunc {
-		v := uint8(value)
-		return func(row RowBytes) bool {
-			if row[nilOffset]&mask > 0 {
-				return false
+	if typ == TypeUint8 && filter == FilterEqual {
+		return func(value float64, offset int) filterFunc {
+			v := uint8(value)
+			return func(row RowBytes) bool {
+				return *(*uint8)(unsafe.Pointer(&row[offset])) == v
 			}
-			return *(*uint8)(unsafe.Pointer(&row[valueOffset])) == v
 		}
-	},
-	typeAndFilter{TypeUint8, FilterNotEqual}: func(value float64, nilOffset int, mask byte, valueOffset int) filterFunc {
-		v := uint8(value)
-		return func(row RowBytes) bool {
-			if row[nilOffset]&mask > 0 {
-				return true
+	}
+	if typ == TypeUint8 && filter == FilterNotEqual {
+		return func(value float64, offset int) filterFunc {
+			v := uint8(value)
+			return func(row RowBytes) bool {
+				return *(*uint8)(unsafe.Pointer(&row[offset])) != v
 			}
-			return *(*uint8)(unsafe.Pointer(&row[valueOffset])) != v
 		}
-	},
-	typeAndFilter{TypeUint8, FilterGreaterThan}: func(value float64, nilOffset int, mask byte, valueOffset int) filterFunc {
-		v := uint8(value)
-		return func(row RowBytes) bool {
-			if row[nilOffset]&mask > 0 {
-				return false
+	}
+	if typ == TypeUint8 && filter == FilterGreaterThan {
+		return func(value float64, offset int) filterFunc {
+			v := uint8(value)
+			return func(row RowBytes) bool {
+				return *(*uint8)(unsafe.Pointer(&row[offset])) > v
 			}
-			return *(*uint8)(unsafe.Pointer(&row[valueOffset])) > v
 		}
-	},
-	typeAndFilter{TypeUint8, FilterGreaterThenOrEqual}: func(value float64, nilOffset int, mask byte, valueOffset int) filterFunc {
-		v := uint8(value)
-		return func(row RowBytes) bool {
-			if row[nilOffset]&mask > 0 {
-				return false
+	}
+	if typ == TypeUint8 && filter == FilterGreaterThenOrEqual {
+		return func(value float64, offset int) filterFunc {
+			v := uint8(value)
+			return func(row RowBytes) bool {
+				return *(*uint8)(unsafe.Pointer(&row[offset])) >= v
 			}
-			return *(*uint8)(unsafe.Pointer(&row[valueOffset])) >= v
 		}
-	},
-	typeAndFilter{TypeUint8, FilterLessThan}: func(value float64, nilOffset int, mask byte, valueOffset int) filterFunc {
-		v := uint8(value)
-		return func(row RowBytes) bool {
-			if row[nilOffset]&mask > 0 {
-				return false
+	}
+	if typ == TypeUint8 && filter == FilterLessThan {
+		return func(value float64, offset int) filterFunc {
+			v := uint8(value)
+			return func(row RowBytes) bool {
+				return *(*uint8)(unsafe.Pointer(&row[offset])) < v
 			}
-			return *(*uint8)(unsafe.Pointer(&row[valueOffset])) < v
 		}
-	},
-	typeAndFilter{TypeUint8, FilterLessThanOrEqual}: func(value float64, nilOffset int, mask byte, valueOffset int) filterFunc {
-		v := uint8(value)
-		return func(row RowBytes) bool {
-			if row[nilOffset]&mask > 0 {
-				return false
+	}
+	if typ == TypeUint8 && filter == FilterLessThanOrEqual {
+		return func(value float64, offset int) filterFunc {
+			v := uint8(value)
+			return func(row RowBytes) bool {
+				return *(*uint8)(unsafe.Pointer(&row[offset])) <= v
 			}
-			return *(*uint8)(unsafe.Pointer(&row[valueOffset])) <= v
 		}
-	},
-	typeAndFilter{TypeInt8, FilterEqual}: func(value float64, nilOffset int, mask byte, valueOffset int) filterFunc {
-		v := int8(value)
-		return func(row RowBytes) bool {
-			if row[nilOffset]&mask > 0 {
-				return false
+	}
+	if typ == TypeInt8 && filter == FilterEqual {
+		return func(value float64, offset int) filterFunc {
+			v := int8(value)
+			return func(row RowBytes) bool {
+				return *(*int8)(unsafe.Pointer(&row[offset])) == v
 			}
-			return *(*int8)(unsafe.Pointer(&row[valueOffset])) == v
 		}
-	},
-	typeAndFilter{TypeInt8, FilterNotEqual}: func(value float64, nilOffset int, mask byte, valueOffset int) filterFunc {
-		v := int8(value)
-		return func(row RowBytes) bool {
-			if row[nilOffset]&mask > 0 {
-				return true
+	}
+	if typ == TypeInt8 && filter == FilterNotEqual {
+		return func(value float64, offset int) filterFunc {
+			v := int8(value)
+			return func(row RowBytes) bool {
+				return *(*int8)(unsafe.Pointer(&row[offset])) != v
 			}
-			return *(*int8)(unsafe.Pointer(&row[valueOffset])) != v
 		}
-	},
-	typeAndFilter{TypeInt8, FilterGreaterThan}: func(value float64, nilOffset int, mask byte, valueOffset int) filterFunc {
-		v := int8(value)
-		return func(row RowBytes) bool {
-			if row[nilOffset]&mask > 0 {
-				return false
+	}
+	if typ == TypeInt8 && filter == FilterGreaterThan {
+		return func(value float64, offset int) filterFunc {
+			v := int8(value)
+			return func(row RowBytes) bool {
+				return *(*int8)(unsafe.Pointer(&row[offset])) > v
 			}
-			return *(*int8)(unsafe.Pointer(&row[valueOffset])) > v
 		}
-	},
-	typeAndFilter{TypeInt8, FilterGreaterThenOrEqual}: func(value float64, nilOffset int, mask byte, valueOffset int) filterFunc {
-		v := int8(value)
-		return func(row RowBytes) bool {
-			if row[nilOffset]&mask > 0 {
-				return false
+	}
+	if typ == TypeInt8 && filter == FilterGreaterThenOrEqual {
+		return func(value float64, offset int) filterFunc {
+			v := int8(value)
+			return func(row RowBytes) bool {
+				return *(*int8)(unsafe.Pointer(&row[offset])) >= v
 			}
-			return *(*int8)(unsafe.Pointer(&row[valueOffset])) >= v
 		}
-	},
-	typeAndFilter{TypeInt8, FilterLessThan}: func(value float64, nilOffset int, mask byte, valueOffset int) filterFunc {
-		v := int8(value)
-		return func(row RowBytes) bool {
-			if row[nilOffset]&mask > 0 {
-				return false
+	}
+	if typ == TypeInt8 && filter == FilterLessThan {
+		return func(value float64, offset int) filterFunc {
+			v := int8(value)
+			return func(row RowBytes) bool {
+				return *(*int8)(unsafe.Pointer(&row[offset])) < v
 			}
-			return *(*int8)(unsafe.Pointer(&row[valueOffset])) < v
 		}
-	},
-	typeAndFilter{TypeInt8, FilterLessThanOrEqual}: func(value float64, nilOffset int, mask byte, valueOffset int) filterFunc {
-		v := int8(value)
-		return func(row RowBytes) bool {
-			if row[nilOffset]&mask > 0 {
-				return false
+	}
+	if typ == TypeInt8 && filter == FilterLessThanOrEqual {
+		return func(value float64, offset int) filterFunc {
+			v := int8(value)
+			return func(row RowBytes) bool {
+				return *(*int8)(unsafe.Pointer(&row[offset])) <= v
 			}
-			return *(*int8)(unsafe.Pointer(&row[valueOffset])) <= v
 		}
-	},
-	typeAndFilter{TypeUint16, FilterEqual}: func(value float64, nilOffset int, mask byte, valueOffset int) filterFunc {
-		v := uint16(value)
-		return func(row RowBytes) bool {
-			if row[nilOffset]&mask > 0 {
-				return false
+	}
+	if typ == TypeUint16 && filter == FilterEqual {
+		return func(value float64, offset int) filterFunc {
+			v := uint16(value)
+			return func(row RowBytes) bool {
+				return *(*uint16)(unsafe.Pointer(&row[offset])) == v
 			}
-			return *(*uint16)(unsafe.Pointer(&row[valueOffset])) == v
 		}
-	},
-	typeAndFilter{TypeUint16, FilterNotEqual}: func(value float64, nilOffset int, mask byte, valueOffset int) filterFunc {
-		v := uint16(value)
-		return func(row RowBytes) bool {
-			if row[nilOffset]&mask > 0 {
-				return true
+	}
+	if typ == TypeUint16 && filter == FilterNotEqual {
+		return func(value float64, offset int) filterFunc {
+			v := uint16(value)
+			return func(row RowBytes) bool {
+				return *(*uint16)(unsafe.Pointer(&row[offset])) != v
 			}
-			return *(*uint16)(unsafe.Pointer(&row[valueOffset])) != v
 		}
-	},
-	typeAndFilter{TypeUint16, FilterGreaterThan}: func(value float64, nilOffset int, mask byte, valueOffset int) filterFunc {
-		v := uint16(value)
-		return func(row RowBytes) bool {
-			if row[nilOffset]&mask > 0 {
-				return false
+	}
+	if typ == TypeUint16 && filter == FilterGreaterThan {
+		return func(value float64, offset int) filterFunc {
+			v := uint16(value)
+			return func(row RowBytes) bool {
+				return *(*uint16)(unsafe.Pointer(&row[offset])) > v
 			}
-			return *(*uint16)(unsafe.Pointer(&row[valueOffset])) > v
 		}
-	},
-	typeAndFilter{TypeUint16, FilterGreaterThenOrEqual}: func(value float64, nilOffset int, mask byte, valueOffset int) filterFunc {
-		v := uint16(value)
-		return func(row RowBytes) bool {
-			if row[nilOffset]&mask > 0 {
-				return false
+	}
+	if typ == TypeUint16 && filter == FilterGreaterThenOrEqual {
+		return func(value float64, offset int) filterFunc {
+			v := uint16(value)
+			return func(row RowBytes) bool {
+				return *(*uint16)(unsafe.Pointer(&row[offset])) >= v
 			}
-			return *(*uint16)(unsafe.Pointer(&row[valueOffset])) >= v
 		}
-	},
-	typeAndFilter{TypeUint16, FilterLessThan}: func(value float64, nilOffset int, mask byte, valueOffset int) filterFunc {
-		v := uint16(value)
-		return func(row RowBytes) bool {
-			if row[nilOffset]&mask > 0 {
-				return false
+	}
+	if typ == TypeUint16 && filter == FilterLessThan {
+		return func(value float64, offset int) filterFunc {
+			v := uint16(value)
+			return func(row RowBytes) bool {
+				return *(*uint16)(unsafe.Pointer(&row[offset])) < v
 			}
-			return *(*uint16)(unsafe.Pointer(&row[valueOffset])) < v
 		}
-	},
-	typeAndFilter{TypeUint16, FilterLessThanOrEqual}: func(value float64, nilOffset int, mask byte, valueOffset int) filterFunc {
-		v := uint16(value)
-		return func(row RowBytes) bool {
-			if row[nilOffset]&mask > 0 {
-				return false
+	}
+	if typ == TypeUint16 && filter == FilterLessThanOrEqual {
+		return func(value float64, offset int) filterFunc {
+			v := uint16(value)
+			return func(row RowBytes) bool {
+				return *(*uint16)(unsafe.Pointer(&row[offset])) <= v
 			}
-			return *(*uint16)(unsafe.Pointer(&row[valueOffset])) <= v
 		}
-	},
-	typeAndFilter{TypeInt16, FilterEqual}: func(value float64, nilOffset int, mask byte, valueOffset int) filterFunc {
-		v := int16(value)
-		return func(row RowBytes) bool {
-			if row[nilOffset]&mask > 0 {
-				return false
+	}
+	if typ == TypeInt16 && filter == FilterEqual {
+		return func(value float64, offset int) filterFunc {
+			v := int16(value)
+			return func(row RowBytes) bool {
+				return *(*int16)(unsafe.Pointer(&row[offset])) == v
 			}
-			return *(*int16)(unsafe.Pointer(&row[valueOffset])) == v
 		}
-	},
-	typeAndFilter{TypeInt16, FilterNotEqual}: func(value float64, nilOffset int, mask byte, valueOffset int) filterFunc {
-		v := int16(value)
-		return func(row RowBytes) bool {
-			if row[nilOffset]&mask > 0 {
-				return true
+	}
+	if typ == TypeInt16 && filter == FilterNotEqual {
+		return func(value float64, offset int) filterFunc {
+			v := int16(value)
+			return func(row RowBytes) bool {
+				return *(*int16)(unsafe.Pointer(&row[offset])) != v
 			}
-			return *(*int16)(unsafe.Pointer(&row[valueOffset])) != v
 		}
-	},
-	typeAndFilter{TypeInt16, FilterGreaterThan}: func(value float64, nilOffset int, mask byte, valueOffset int) filterFunc {
-		v := int16(value)
-		return func(row RowBytes) bool {
-			if row[nilOffset]&mask > 0 {
-				return false
+	}
+	if typ == TypeInt16 && filter == FilterGreaterThan {
+		return func(value float64, offset int) filterFunc {
+			v := int16(value)
+			return func(row RowBytes) bool {
+				return *(*int16)(unsafe.Pointer(&row[offset])) > v
 			}
-			return *(*int16)(unsafe.Pointer(&row[valueOffset])) > v
 		}
-	},
-	typeAndFilter{TypeInt16, FilterGreaterThenOrEqual}: func(value float64, nilOffset int, mask byte, valueOffset int) filterFunc {
-		v := int16(value)
-		return func(row RowBytes) bool {
-			if row[nilOffset]&mask > 0 {
-				return false
+	}
+	if typ == TypeInt16 && filter == FilterGreaterThenOrEqual {
+		return func(value float64, offset int) filterFunc {
+			v := int16(value)
+			return func(row RowBytes) bool {
+				return *(*int16)(unsafe.Pointer(&row[offset])) >= v
 			}
-			return *(*int16)(unsafe.Pointer(&row[valueOffset])) >= v
 		}
-	},
-	typeAndFilter{TypeInt16, FilterLessThan}: func(value float64, nilOffset int, mask byte, valueOffset int) filterFunc {
-		v := int16(value)
-		return func(row RowBytes) bool {
-			if row[nilOffset]&mask > 0 {
-				return false
+	}
+	if typ == TypeInt16 && filter == FilterLessThan {
+		return func(value float64, offset int) filterFunc {
+			v := int16(value)
+			return func(row RowBytes) bool {
+				return *(*int16)(unsafe.Pointer(&row[offset])) < v
 			}
-			return *(*int16)(unsafe.Pointer(&row[valueOffset])) < v
 		}
-	},
-	typeAndFilter{TypeInt16, FilterLessThanOrEqual}: func(value float64, nilOffset int, mask byte, valueOffset int) filterFunc {
-		v := int16(value)
-		return func(row RowBytes) bool {
-			if row[nilOffset]&mask > 0 {
-				return false
+	}
+	if typ == TypeInt16 && filter == FilterLessThanOrEqual {
+		return func(value float64, offset int) filterFunc {
+			v := int16(value)
+			return func(row RowBytes) bool {
+				return *(*int16)(unsafe.Pointer(&row[offset])) <= v
 			}
-			return *(*int16)(unsafe.Pointer(&row[valueOffset])) <= v
 		}
-	},
-	typeAndFilter{TypeUint32, FilterEqual}: func(value float64, nilOffset int, mask byte, valueOffset int) filterFunc {
-		v := uint32(value)
-		return func(row RowBytes) bool {
-			if row[nilOffset]&mask > 0 {
-				return false
+	}
+	if typ == TypeUint32 && filter == FilterEqual {
+		return func(value float64, offset int) filterFunc {
+			v := uint32(value)
+			return func(row RowBytes) bool {
+				return *(*uint32)(unsafe.Pointer(&row[offset])) == v
 			}
-			return *(*uint32)(unsafe.Pointer(&row[valueOffset])) == v
 		}
-	},
-	typeAndFilter{TypeUint32, FilterNotEqual}: func(value float64, nilOffset int, mask byte, valueOffset int) filterFunc {
-		v := uint32(value)
-		return func(row RowBytes) bool {
-			if row[nilOffset]&mask > 0 {
-				return true
+	}
+	if typ == TypeUint32 && filter == FilterNotEqual {
+		return func(value float64, offset int) filterFunc {
+			v := uint32(value)
+			return func(row RowBytes) bool {
+				return *(*uint32)(unsafe.Pointer(&row[offset])) != v
 			}
-			return *(*uint32)(unsafe.Pointer(&row[valueOffset])) != v
 		}
-	},
-	typeAndFilter{TypeUint32, FilterGreaterThan}: func(value float64, nilOffset int, mask byte, valueOffset int) filterFunc {
-		v := uint32(value)
-		return func(row RowBytes) bool {
-			if row[nilOffset]&mask > 0 {
-				return false
+	}
+	if typ == TypeUint32 && filter == FilterGreaterThan {
+		return func(value float64, offset int) filterFunc {
+			v := uint32(value)
+			return func(row RowBytes) bool {
+				return *(*uint32)(unsafe.Pointer(&row[offset])) > v
 			}
-			return *(*uint32)(unsafe.Pointer(&row[valueOffset])) > v
 		}
-	},
-	typeAndFilter{TypeUint32, FilterGreaterThenOrEqual}: func(value float64, nilOffset int, mask byte, valueOffset int) filterFunc {
-		v := uint32(value)
-		return func(row RowBytes) bool {
-			if row[nilOffset]&mask > 0 {
-				return false
+	}
+	if typ == TypeUint32 && filter == FilterGreaterThenOrEqual {
+		return func(value float64, offset int) filterFunc {
+			v := uint32(value)
+			return func(row RowBytes) bool {
+				return *(*uint32)(unsafe.Pointer(&row[offset])) >= v
 			}
-			return *(*uint32)(unsafe.Pointer(&row[valueOffset])) >= v
 		}
-	},
-	typeAndFilter{TypeUint32, FilterLessThan}: func(value float64, nilOffset int, mask byte, valueOffset int) filterFunc {
-		v := uint32(value)
-		return func(row RowBytes) bool {
-			if row[nilOffset]&mask > 0 {
-				return false
+	}
+	if typ == TypeUint32 && filter == FilterLessThan {
+		return func(value float64, offset int) filterFunc {
+			v := uint32(value)
+			return func(row RowBytes) bool {
+				return *(*uint32)(unsafe.Pointer(&row[offset])) < v
 			}
-			return *(*uint32)(unsafe.Pointer(&row[valueOffset])) < v
 		}
-	},
-	typeAndFilter{TypeUint32, FilterLessThanOrEqual}: func(value float64, nilOffset int, mask byte, valueOffset int) filterFunc {
-		v := uint32(value)
-		return func(row RowBytes) bool {
-			if row[nilOffset]&mask > 0 {
-				return false
+	}
+	if typ == TypeUint32 && filter == FilterLessThanOrEqual {
+		return func(value float64, offset int) filterFunc {
+			v := uint32(value)
+			return func(row RowBytes) bool {
+				return *(*uint32)(unsafe.Pointer(&row[offset])) <= v
 			}
-			return *(*uint32)(unsafe.Pointer(&row[valueOffset])) <= v
 		}
-	},
-	typeAndFilter{TypeInt32, FilterEqual}: func(value float64, nilOffset int, mask byte, valueOffset int) filterFunc {
-		v := int32(value)
-		return func(row RowBytes) bool {
-			if row[nilOffset]&mask > 0 {
-				return false
+	}
+	if typ == TypeInt32 && filter == FilterEqual {
+		return func(value float64, offset int) filterFunc {
+			v := int32(value)
+			return func(row RowBytes) bool {
+				return *(*int32)(unsafe.Pointer(&row[offset])) == v
 			}
-			return *(*int32)(unsafe.Pointer(&row[valueOffset])) == v
 		}
-	},
-	typeAndFilter{TypeInt32, FilterNotEqual}: func(value float64, nilOffset int, mask byte, valueOffset int) filterFunc {
-		v := int32(value)
-		return func(row RowBytes) bool {
-			if row[nilOffset]&mask > 0 {
-				return true
+	}
+	if typ == TypeInt32 && filter == FilterNotEqual {
+		return func(value float64, offset int) filterFunc {
+			v := int32(value)
+			return func(row RowBytes) bool {
+				return *(*int32)(unsafe.Pointer(&row[offset])) != v
 			}
-			return *(*int32)(unsafe.Pointer(&row[valueOffset])) != v
 		}
-	},
-	typeAndFilter{TypeInt32, FilterGreaterThan}: func(value float64, nilOffset int, mask byte, valueOffset int) filterFunc {
-		v := int32(value)
-		return func(row RowBytes) bool {
-			if row[nilOffset]&mask > 0 {
-				return false
+	}
+	if typ == TypeInt32 && filter == FilterGreaterThan {
+		return func(value float64, offset int) filterFunc {
+			v := int32(value)
+			return func(row RowBytes) bool {
+				return *(*int32)(unsafe.Pointer(&row[offset])) > v
 			}
-			return *(*int32)(unsafe.Pointer(&row[valueOffset])) > v
 		}
-	},
-	typeAndFilter{TypeInt32, FilterGreaterThenOrEqual}: func(value float64, nilOffset int, mask byte, valueOffset int) filterFunc {
-		v := int32(value)
-		return func(row RowBytes) bool {
-			if row[nilOffset]&mask > 0 {
-				return false
+	}
+	if typ == TypeInt32 && filter == FilterGreaterThenOrEqual {
+		return func(value float64, offset int) filterFunc {
+			v := int32(value)
+			return func(row RowBytes) bool {
+				return *(*int32)(unsafe.Pointer(&row[offset])) >= v
 			}
-			return *(*int32)(unsafe.Pointer(&row[valueOffset])) >= v
 		}
-	},
-	typeAndFilter{TypeInt32, FilterLessThan}: func(value float64, nilOffset int, mask byte, valueOffset int) filterFunc {
-		v := int32(value)
-		return func(row RowBytes) bool {
-			if row[nilOffset]&mask > 0 {
-				return false
+	}
+	if typ == TypeInt32 && filter == FilterLessThan {
+		return func(value float64, offset int) filterFunc {
+			v := int32(value)
+			return func(row RowBytes) bool {
+				return *(*int32)(unsafe.Pointer(&row[offset])) < v
 			}
-			return *(*int32)(unsafe.Pointer(&row[valueOffset])) < v
 		}
-	},
-	typeAndFilter{TypeInt32, FilterLessThanOrEqual}: func(value float64, nilOffset int, mask byte, valueOffset int) filterFunc {
-		v := int32(value)
-		return func(row RowBytes) bool {
-			if row[nilOffset]&mask > 0 {
-				return false
+	}
+	if typ == TypeInt32 && filter == FilterLessThanOrEqual {
+		return func(value float64, offset int) filterFunc {
+			v := int32(value)
+			return func(row RowBytes) bool {
+				return *(*int32)(unsafe.Pointer(&row[offset])) <= v
 			}
-			return *(*int32)(unsafe.Pointer(&row[valueOffset])) <= v
 		}
-	},
-	typeAndFilter{TypeFloat32, FilterEqual}: func(value float64, nilOffset int, mask byte, valueOffset int) filterFunc {
-		v := float32(value)
-		return func(row RowBytes) bool {
-			if row[nilOffset]&mask > 0 {
-				return false
+	}
+	if typ == TypeFloat32 && filter == FilterEqual {
+		return func(value float64, offset int) filterFunc {
+			v := float32(value)
+			return func(row RowBytes) bool {
+				return *(*float32)(unsafe.Pointer(&row[offset])) == v
 			}
-			return *(*float32)(unsafe.Pointer(&row[valueOffset])) == v
 		}
-	},
-	typeAndFilter{TypeFloat32, FilterNotEqual}: func(value float64, nilOffset int, mask byte, valueOffset int) filterFunc {
-		v := float32(value)
-		return func(row RowBytes) bool {
-			if row[nilOffset]&mask > 0 {
-				return true
+	}
+	if typ == TypeFloat32 && filter == FilterNotEqual {
+		return func(value float64, offset int) filterFunc {
+			v := float32(value)
+			return func(row RowBytes) bool {
+				return *(*float32)(unsafe.Pointer(&row[offset])) != v
 			}
-			return *(*float32)(unsafe.Pointer(&row[valueOffset])) != v
 		}
-	},
-	typeAndFilter{TypeFloat32, FilterGreaterThan}: func(value float64, nilOffset int, mask byte, valueOffset int) filterFunc {
-		v := float32(value)
-		return func(row RowBytes) bool {
-			if row[nilOffset]&mask > 0 {
-				return false
+	}
+	if typ == TypeFloat32 && filter == FilterGreaterThan {
+		return func(value float64, offset int) filterFunc {
+			v := float32(value)
+			return func(row RowBytes) bool {
+				return *(*float32)(unsafe.Pointer(&row[offset])) > v
 			}
-			return *(*float32)(unsafe.Pointer(&row[valueOffset])) > v
 		}
-	},
-	typeAndFilter{TypeFloat32, FilterGreaterThenOrEqual}: func(value float64, nilOffset int, mask byte, valueOffset int) filterFunc {
-		v := float32(value)
-		return func(row RowBytes) bool {
-			if row[nilOffset]&mask > 0 {
-				return false
+	}
+	if typ == TypeFloat32 && filter == FilterGreaterThenOrEqual {
+		return func(value float64, offset int) filterFunc {
+			v := float32(value)
+			return func(row RowBytes) bool {
+				return *(*float32)(unsafe.Pointer(&row[offset])) >= v
 			}
-			return *(*float32)(unsafe.Pointer(&row[valueOffset])) >= v
 		}
-	},
-	typeAndFilter{TypeFloat32, FilterLessThan}: func(value float64, nilOffset int, mask byte, valueOffset int) filterFunc {
-		v := float32(value)
-		return func(row RowBytes) bool {
-			if row[nilOffset]&mask > 0 {
-				return false
+	}
+	if typ == TypeFloat32 && filter == FilterLessThan {
+		return func(value float64, offset int) filterFunc {
+			v := float32(value)
+			return func(row RowBytes) bool {
+				return *(*float32)(unsafe.Pointer(&row[offset])) < v
 			}
-			return *(*float32)(unsafe.Pointer(&row[valueOffset])) < v
 		}
-	},
-	typeAndFilter{TypeFloat32, FilterLessThanOrEqual}: func(value float64, nilOffset int, mask byte, valueOffset int) filterFunc {
-		v := float32(value)
-		return func(row RowBytes) bool {
-			if row[nilOffset]&mask > 0 {
-				return false
+	}
+	if typ == TypeFloat32 && filter == FilterLessThanOrEqual {
+		return func(value float64, offset int) filterFunc {
+			v := float32(value)
+			return func(row RowBytes) bool {
+				return *(*float32)(unsafe.Pointer(&row[offset])) <= v
 			}
-			return *(*float32)(unsafe.Pointer(&row[valueOffset])) <= v
 		}
-	},
-}
-
-var typeToMetricFilterFuncIn = map[Type]func(floats []float64, offset int) filterFunc{
-
-	TypeUint8: func(floats []float64, offset int) filterFunc {
-		typedValues := make([]uint8, len(floats))
-		for i, f := range floats {
-			typedValues[i] = uint8(f)
-		}
-		return func(row RowBytes) bool {
-			value := *(*uint8)(unsafe.Pointer(&row[offset]))
-			for _, v := range typedValues {
-				if value == v {
-					return true
-				}
-			}
-			return false
-		}
-	},
-	TypeInt8: func(floats []float64, offset int) filterFunc {
-		typedValues := make([]int8, len(floats))
-		for i, f := range floats {
-			typedValues[i] = int8(f)
-		}
-		return func(row RowBytes) bool {
-			value := *(*int8)(unsafe.Pointer(&row[offset]))
-			for _, v := range typedValues {
-				if value == v {
-					return true
-				}
-			}
-			return false
-		}
-	},
-	TypeUint16: func(floats []float64, offset int) filterFunc {
-		typedValues := make([]uint16, len(floats))
-		for i, f := range floats {
-			typedValues[i] = uint16(f)
-		}
-		return func(row RowBytes) bool {
-			value := *(*uint16)(unsafe.Pointer(&row[offset]))
-			for _, v := range typedValues {
-				if value == v {
-					return true
-				}
-			}
-			return false
-		}
-	},
-	TypeInt16: func(floats []float64, offset int) filterFunc {
-		typedValues := make([]int16, len(floats))
-		for i, f := range floats {
-			typedValues[i] = int16(f)
-		}
-		return func(row RowBytes) bool {
-			value := *(*int16)(unsafe.Pointer(&row[offset]))
-			for _, v := range typedValues {
-				if value == v {
-					return true
-				}
-			}
-			return false
-		}
-	},
-	TypeUint32: func(floats []float64, offset int) filterFunc {
-		typedValues := make([]uint32, len(floats))
-		for i, f := range floats {
-			typedValues[i] = uint32(f)
-		}
-		return func(row RowBytes) bool {
-			value := *(*uint32)(unsafe.Pointer(&row[offset]))
-			for _, v := range typedValues {
-				if value == v {
-					return true
-				}
-			}
-			return false
-		}
-	},
-	TypeInt32: func(floats []float64, offset int) filterFunc {
-		typedValues := make([]int32, len(floats))
-		for i, f := range floats {
-			typedValues[i] = int32(f)
-		}
-		return func(row RowBytes) bool {
-			value := *(*int32)(unsafe.Pointer(&row[offset]))
-			for _, v := range typedValues {
-				if value == v {
-					return true
-				}
-			}
-			return false
-		}
-	},
-	TypeFloat32: func(floats []float64, offset int) filterFunc {
-		typedValues := make([]float32, len(floats))
-		for i, f := range floats {
-			typedValues[i] = float32(f)
-		}
-		return func(row RowBytes) bool {
-			value := *(*float32)(unsafe.Pointer(&row[offset]))
-			for _, v := range typedValues {
-				if value == v {
-					return true
-				}
-			}
-			return false
-		}
-	},
-}
-
-var typeAndFilterToMetricFilterFuncSimple = map[typeAndFilter]func(value float64, offset int) filterFunc{
-
-	typeAndFilter{TypeUint8, FilterEqual}: func(value float64, offset int) filterFunc {
-		v := uint8(value)
-		return func(row RowBytes) bool {
-			return *(*uint8)(unsafe.Pointer(&row[offset])) == v
-		}
-	},
-	typeAndFilter{TypeUint8, FilterNotEqual}: func(value float64, offset int) filterFunc {
-		v := uint8(value)
-		return func(row RowBytes) bool {
-			return *(*uint8)(unsafe.Pointer(&row[offset])) != v
-		}
-	},
-	typeAndFilter{TypeUint8, FilterGreaterThan}: func(value float64, offset int) filterFunc {
-		v := uint8(value)
-		return func(row RowBytes) bool {
-			return *(*uint8)(unsafe.Pointer(&row[offset])) > v
-		}
-	},
-	typeAndFilter{TypeUint8, FilterGreaterThenOrEqual}: func(value float64, offset int) filterFunc {
-		v := uint8(value)
-		return func(row RowBytes) bool {
-			return *(*uint8)(unsafe.Pointer(&row[offset])) >= v
-		}
-	},
-	typeAndFilter{TypeUint8, FilterLessThan}: func(value float64, offset int) filterFunc {
-		v := uint8(value)
-		return func(row RowBytes) bool {
-			return *(*uint8)(unsafe.Pointer(&row[offset])) < v
-		}
-	},
-	typeAndFilter{TypeUint8, FilterLessThanOrEqual}: func(value float64, offset int) filterFunc {
-		v := uint8(value)
-		return func(row RowBytes) bool {
-			return *(*uint8)(unsafe.Pointer(&row[offset])) <= v
-		}
-	},
-	typeAndFilter{TypeInt8, FilterEqual}: func(value float64, offset int) filterFunc {
-		v := int8(value)
-		return func(row RowBytes) bool {
-			return *(*int8)(unsafe.Pointer(&row[offset])) == v
-		}
-	},
-	typeAndFilter{TypeInt8, FilterNotEqual}: func(value float64, offset int) filterFunc {
-		v := int8(value)
-		return func(row RowBytes) bool {
-			return *(*int8)(unsafe.Pointer(&row[offset])) != v
-		}
-	},
-	typeAndFilter{TypeInt8, FilterGreaterThan}: func(value float64, offset int) filterFunc {
-		v := int8(value)
-		return func(row RowBytes) bool {
-			return *(*int8)(unsafe.Pointer(&row[offset])) > v
-		}
-	},
-	typeAndFilter{TypeInt8, FilterGreaterThenOrEqual}: func(value float64, offset int) filterFunc {
-		v := int8(value)
-		return func(row RowBytes) bool {
-			return *(*int8)(unsafe.Pointer(&row[offset])) >= v
-		}
-	},
-	typeAndFilter{TypeInt8, FilterLessThan}: func(value float64, offset int) filterFunc {
-		v := int8(value)
-		return func(row RowBytes) bool {
-			return *(*int8)(unsafe.Pointer(&row[offset])) < v
-		}
-	},
-	typeAndFilter{TypeInt8, FilterLessThanOrEqual}: func(value float64, offset int) filterFunc {
-		v := int8(value)
-		return func(row RowBytes) bool {
-			return *(*int8)(unsafe.Pointer(&row[offset])) <= v
-		}
-	},
-	typeAndFilter{TypeUint16, FilterEqual}: func(value float64, offset int) filterFunc {
-		v := uint16(value)
-		return func(row RowBytes) bool {
-			return *(*uint16)(unsafe.Pointer(&row[offset])) == v
-		}
-	},
-	typeAndFilter{TypeUint16, FilterNotEqual}: func(value float64, offset int) filterFunc {
-		v := uint16(value)
-		return func(row RowBytes) bool {
-			return *(*uint16)(unsafe.Pointer(&row[offset])) != v
-		}
-	},
-	typeAndFilter{TypeUint16, FilterGreaterThan}: func(value float64, offset int) filterFunc {
-		v := uint16(value)
-		return func(row RowBytes) bool {
-			return *(*uint16)(unsafe.Pointer(&row[offset])) > v
-		}
-	},
-	typeAndFilter{TypeUint16, FilterGreaterThenOrEqual}: func(value float64, offset int) filterFunc {
-		v := uint16(value)
-		return func(row RowBytes) bool {
-			return *(*uint16)(unsafe.Pointer(&row[offset])) >= v
-		}
-	},
-	typeAndFilter{TypeUint16, FilterLessThan}: func(value float64, offset int) filterFunc {
-		v := uint16(value)
-		return func(row RowBytes) bool {
-			return *(*uint16)(unsafe.Pointer(&row[offset])) < v
-		}
-	},
-	typeAndFilter{TypeUint16, FilterLessThanOrEqual}: func(value float64, offset int) filterFunc {
-		v := uint16(value)
-		return func(row RowBytes) bool {
-			return *(*uint16)(unsafe.Pointer(&row[offset])) <= v
-		}
-	},
-	typeAndFilter{TypeInt16, FilterEqual}: func(value float64, offset int) filterFunc {
-		v := int16(value)
-		return func(row RowBytes) bool {
-			return *(*int16)(unsafe.Pointer(&row[offset])) == v
-		}
-	},
-	typeAndFilter{TypeInt16, FilterNotEqual}: func(value float64, offset int) filterFunc {
-		v := int16(value)
-		return func(row RowBytes) bool {
-			return *(*int16)(unsafe.Pointer(&row[offset])) != v
-		}
-	},
-	typeAndFilter{TypeInt16, FilterGreaterThan}: func(value float64, offset int) filterFunc {
-		v := int16(value)
-		return func(row RowBytes) bool {
-			return *(*int16)(unsafe.Pointer(&row[offset])) > v
-		}
-	},
-	typeAndFilter{TypeInt16, FilterGreaterThenOrEqual}: func(value float64, offset int) filterFunc {
-		v := int16(value)
-		return func(row RowBytes) bool {
-			return *(*int16)(unsafe.Pointer(&row[offset])) >= v
-		}
-	},
-	typeAndFilter{TypeInt16, FilterLessThan}: func(value float64, offset int) filterFunc {
-		v := int16(value)
-		return func(row RowBytes) bool {
-			return *(*int16)(unsafe.Pointer(&row[offset])) < v
-		}
-	},
-	typeAndFilter{TypeInt16, FilterLessThanOrEqual}: func(value float64, offset int) filterFunc {
-		v := int16(value)
-		return func(row RowBytes) bool {
-			return *(*int16)(unsafe.Pointer(&row[offset])) <= v
-		}
-	},
-	typeAndFilter{TypeUint32, FilterEqual}: func(value float64, offset int) filterFunc {
-		v := uint32(value)
-		return func(row RowBytes) bool {
-			return *(*uint32)(unsafe.Pointer(&row[offset])) == v
-		}
-	},
-	typeAndFilter{TypeUint32, FilterNotEqual}: func(value float64, offset int) filterFunc {
-		v := uint32(value)
-		return func(row RowBytes) bool {
-			return *(*uint32)(unsafe.Pointer(&row[offset])) != v
-		}
-	},
-	typeAndFilter{TypeUint32, FilterGreaterThan}: func(value float64, offset int) filterFunc {
-		v := uint32(value)
-		return func(row RowBytes) bool {
-			return *(*uint32)(unsafe.Pointer(&row[offset])) > v
-		}
-	},
-	typeAndFilter{TypeUint32, FilterGreaterThenOrEqual}: func(value float64, offset int) filterFunc {
-		v := uint32(value)
-		return func(row RowBytes) bool {
-			return *(*uint32)(unsafe.Pointer(&row[offset])) >= v
-		}
-	},
-	typeAndFilter{TypeUint32, FilterLessThan}: func(value float64, offset int) filterFunc {
-		v := uint32(value)
-		return func(row RowBytes) bool {
-			return *(*uint32)(unsafe.Pointer(&row[offset])) < v
-		}
-	},
-	typeAndFilter{TypeUint32, FilterLessThanOrEqual}: func(value float64, offset int) filterFunc {
-		v := uint32(value)
-		return func(row RowBytes) bool {
-			return *(*uint32)(unsafe.Pointer(&row[offset])) <= v
-		}
-	},
-	typeAndFilter{TypeInt32, FilterEqual}: func(value float64, offset int) filterFunc {
-		v := int32(value)
-		return func(row RowBytes) bool {
-			return *(*int32)(unsafe.Pointer(&row[offset])) == v
-		}
-	},
-	typeAndFilter{TypeInt32, FilterNotEqual}: func(value float64, offset int) filterFunc {
-		v := int32(value)
-		return func(row RowBytes) bool {
-			return *(*int32)(unsafe.Pointer(&row[offset])) != v
-		}
-	},
-	typeAndFilter{TypeInt32, FilterGreaterThan}: func(value float64, offset int) filterFunc {
-		v := int32(value)
-		return func(row RowBytes) bool {
-			return *(*int32)(unsafe.Pointer(&row[offset])) > v
-		}
-	},
-	typeAndFilter{TypeInt32, FilterGreaterThenOrEqual}: func(value float64, offset int) filterFunc {
-		v := int32(value)
-		return func(row RowBytes) bool {
-			return *(*int32)(unsafe.Pointer(&row[offset])) >= v
-		}
-	},
-	typeAndFilter{TypeInt32, FilterLessThan}: func(value float64, offset int) filterFunc {
-		v := int32(value)
-		return func(row RowBytes) bool {
-			return *(*int32)(unsafe.Pointer(&row[offset])) < v
-		}
-	},
-	typeAndFilter{TypeInt32, FilterLessThanOrEqual}: func(value float64, offset int) filterFunc {
-		v := int32(value)
-		return func(row RowBytes) bool {
-			return *(*int32)(unsafe.Pointer(&row[offset])) <= v
-		}
-	},
-	typeAndFilter{TypeFloat32, FilterEqual}: func(value float64, offset int) filterFunc {
-		v := float32(value)
-		return func(row RowBytes) bool {
-			return *(*float32)(unsafe.Pointer(&row[offset])) == v
-		}
-	},
-	typeAndFilter{TypeFloat32, FilterNotEqual}: func(value float64, offset int) filterFunc {
-		v := float32(value)
-		return func(row RowBytes) bool {
-			return *(*float32)(unsafe.Pointer(&row[offset])) != v
-		}
-	},
-	typeAndFilter{TypeFloat32, FilterGreaterThan}: func(value float64, offset int) filterFunc {
-		v := float32(value)
-		return func(row RowBytes) bool {
-			return *(*float32)(unsafe.Pointer(&row[offset])) > v
-		}
-	},
-	typeAndFilter{TypeFloat32, FilterGreaterThenOrEqual}: func(value float64, offset int) filterFunc {
-		v := float32(value)
-		return func(row RowBytes) bool {
-			return *(*float32)(unsafe.Pointer(&row[offset])) >= v
-		}
-	},
-	typeAndFilter{TypeFloat32, FilterLessThan}: func(value float64, offset int) filterFunc {
-		v := float32(value)
-		return func(row RowBytes) bool {
-			return *(*float32)(unsafe.Pointer(&row[offset])) < v
-		}
-	},
-	typeAndFilter{TypeFloat32, FilterLessThanOrEqual}: func(value float64, offset int) filterFunc {
-		v := float32(value)
-		return func(row RowBytes) bool {
-			return *(*float32)(unsafe.Pointer(&row[offset])) <= v
-		}
-	},
+	}
+	panic("unreached")
 }

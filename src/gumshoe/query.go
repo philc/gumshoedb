@@ -381,7 +381,7 @@ func (s *State) postProcessScanRows(aggregates []*rowAggregate, query *Query,
 func (s *State) makeSumFunc(aggregate QueryAggregate, index int) sumFunc {
 	col := s.MetricColumns[index]
 	offset := s.MetricOffsets[index]
-	return typeToSumFunc[col.Type](offset)
+	return makeSumFunc(col.Type)(offset)
 }
 
 // makeTimeTruncationFunc returns a function which, given a cell, performs a date truncation transformation.
@@ -415,15 +415,13 @@ func (s *State) makeTimestampFilterFunc(filter QueryFilter) (timestampFilterFunc
 
 func (s *State) makeDimensionFilterFunc(filter QueryFilter, index int) (filterFunc, error) {
 	if filter.Type == FilterIn {
-		panic("unimplemented")
+		return s.makeDimensionFilterFuncIn(filter, index)
 	}
 
 	col := s.DimensionColumns[index]
-
 	mask := byte(1) << byte(index%8)
 	nilOffset := s.DimensionStartOffset + index/8
 	valueOffset := s.DimensionStartOffset + s.DimensionOffsets[index]
-	filterGenFuncKey := typeAndFilter{col.Type, filter.Type}
 
 	// Comparison table: (x is some not-nil value, OP is some operator that is not '=' or '!=')
 	// nil	=		x		false
@@ -434,9 +432,13 @@ func (s *State) makeDimensionFilterFunc(filter QueryFilter, index int) (filterFu
 	// nil	OP	nil	false
 
 	if filter.Value == nil {
-		filterGenFunc := typeAndFilterToNilFilterFuncSimple[filterGenFuncKey]
-		return filterGenFunc(nilOffset, mask), nil
+		return makeNilFilterFuncSimple(col.Type, filter.Type)(nilOffset, mask), nil
 	}
+
+	// For string columns, value will be a precise uint32 dimension table index; otherwise it will be a float as
+	// usual for numeric types we get from JSON.
+	var value interface{}
+	isString := false
 
 	if col.String {
 		str, ok := filter.Value.(string)
@@ -447,16 +449,21 @@ func (s *State) makeDimensionFilterFunc(filter QueryFilter, index int) (filterFu
 		if !ok {
 			return falseFilterFunc, nil
 		}
-		filterGenFunc := typeAndFilterToStringFilterFuncSimple[filterGenFuncKey]
-		return filterGenFunc(dimIndex, nilOffset, mask, valueOffset), nil
+		value = dimIndex
+		isString = true
+	} else {
+		float, ok := filter.Value.(float64)
+		if !ok {
+			return nil, fmt.Errorf("need a numeric value to filter column %q; got %v", col.Name, filter.Value)
+		}
+		value = float
 	}
+	filterGenFunc := makeDimensionFilterFuncSimple(col.Type, filter.Type, isString)
+	return filterGenFunc(value, nilOffset, mask, valueOffset), nil
+}
 
-	float, ok := filter.Value.(float64)
-	if !ok {
-		return nil, fmt.Errorf("need a numeric value to filter column %q; got %v", col.Name, filter.Value)
-	}
-	filterGenFunc := typeAndFilterToDimensionFilterFuncSimple[filterGenFuncKey]
-	return filterGenFunc(float, nilOffset, mask, valueOffset), nil
+func (s *State) makeDimensionFilterFuncIn(filter QueryFilter, index int) (filterFunc, error) {
+	panic("unimplemented")
 }
 
 func (s *State) makeMetricFilterFunc(filter QueryFilter, index int) (filterFunc, error) {
@@ -470,8 +477,7 @@ func (s *State) makeMetricFilterFunc(filter QueryFilter, index int) (filterFunc,
 	}
 	col := s.MetricColumns[index]
 	offset := s.MetricStartOffset + s.MetricOffsets[index]
-	filterGenFunc := typeAndFilterToMetricFilterFuncSimple[typeAndFilter{col.Type, filter.Type}]
-	return filterGenFunc(float, offset), nil
+	return makeMetricFilterFuncSimple(col.Type, filter.Type)(float, offset), nil
 }
 
 func (s *State) makeMetricFilterFuncIn(filter QueryFilter, index int) (filterFunc, error) {
@@ -494,6 +500,5 @@ func (s *State) makeMetricFilterFuncIn(filter QueryFilter, index int) (filterFun
 	offset := s.MetricStartOffset + s.MetricOffsets[index]
 	// TODO(philc): A hash table may be more efficient for longer lists. We should determine what that list
 	// size is and use a hash table in that case.
-	filterGenFunc := typeToMetricFilterFuncIn[col.Type]
-	return filterGenFunc(floats, offset), nil
+	return makeMetricFilterFuncIn(col.Type)(floats, offset), nil
 }
