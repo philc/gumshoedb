@@ -2,7 +2,9 @@ package gumshoe
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
+	"sort"
 	"sync"
 	"time"
 
@@ -122,4 +124,36 @@ func (s *State) compressionRatio() float64 {
 		}
 	}
 	return float64(logicalRows) / float64(physicalRows)
+}
+
+type byTime []time.Time
+
+func (t byTime) Len() int           { return len(t) }
+func (t byTime) Less(i, j int) bool { return t[i].Before(t[j]) }
+func (t byTime) Swap(i, j int)      { t[i], t[j] = t[j], t[i] }
+
+func (s *State) debugPrint() {
+	fmt.Println("STATE DEBUG ----------------------------------")
+	var times []time.Time
+	for t := range s.Intervals {
+		times = append(times, t)
+	}
+	sort.Sort(byTime(times))
+
+	for _, t := range times {
+		interval := s.Intervals[t]
+		fmt.Printf("Interval [t = %s]\n\n", t)
+		for i, segment := range interval.Segments {
+			fmt.Printf("  Segment %d\n", i)
+			for j := 0; j < len(segment.Bytes); j += s.RowSize {
+				fmt.Printf("  % x", segment.Bytes[j:j+countColumnWidth])
+				dimColumnStartOffset := j + s.DimensionStartOffset + s.NilBytes
+				fmt.Printf(" ][ % x", segment.Bytes[j+s.DimensionStartOffset:dimColumnStartOffset])
+				fmt.Printf(" | % x", segment.Bytes[dimColumnStartOffset:j+s.MetricStartOffset])
+				fmt.Printf(" ][ % x\n", segment.Bytes[j+s.MetricStartOffset:j+s.RowSize])
+			}
+			fmt.Println()
+		}
+	}
+	fmt.Println("----------------------------------------------")
 }

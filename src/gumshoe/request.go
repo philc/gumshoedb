@@ -22,6 +22,13 @@ func (db *DB) makeRequest() *Response {
 	return <-respCh
 }
 
+func (db *DB) GetDebugPrint() {
+	resp := db.makeRequest()
+	defer resp.Done()
+
+	resp.State.debugPrint()
+}
+
 func (db *DB) GetNumRows() int {
 	resp := db.makeRequest()
 	defer resp.Done()
