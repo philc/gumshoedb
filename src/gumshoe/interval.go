@@ -296,26 +296,26 @@ func (s *Schema) WriteCombinedInterval(memInterval *MemInterval, stateInterval *
 
 	if moreMemKeys {
 		for {
-			key, val, err := memCursor.Next()
+			if err = interval.appendRow(s, memKey, memVal.Metric, memVal.Count); err != nil {
+				return nil, err
+			}
+			memKey, memVal, err = memCursor.Next()
 			if err != nil {
 				if err != io.EOF {
 					return nil, err
 				}
 				break
 			}
-			if err := interval.appendRow(s, key, val.Metric, val.Count); err != nil {
-				return nil, err
-			}
 		}
 	}
 	if moreStateKeys {
 		for {
-			key, val, count, ok := stateCursor.Next()
+			if err := interval.appendRow(s, stateKey, stateVal, stateCount); err != nil {
+				return nil, err
+			}
+			stateKey, stateVal, stateCount, ok = stateCursor.Next()
 			if !ok {
 				break
-			}
-			if err := interval.appendRow(s, key, val, count); err != nil {
-				return nil, err
 			}
 		}
 	}

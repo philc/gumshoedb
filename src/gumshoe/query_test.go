@@ -147,11 +147,11 @@ func TestGroupingWithATimeTransformFunctionWorks(t *testing.T) {
 	db := testDB()
 	defer db.Close()
 	// at is truncated by day, so these points are from day 0, 2, 2.
-	const twoDays = 2 * 24 * 60 * 60
+	twoDays := 2.0 * 24 * 60 * 60
 	insertRows(db, []RowMap{
 		{"at": 0.0, "dim1": "", "metric1": 0.0},
-		{"at": float64(twoDays), "dim1": "", "metric1": 10.0},
-		{"at": twoDays + 100.0, "dim1": "", "metric1": 12.0},
+		{"at": twoDays, "dim1": "", "metric1": 10.0},
+		{"at": twoDays + 100, "dim1": "", "metric1": 12.0},
 	})
 
 	result := runWithGroupBy(db, QueryGrouping{TimeTruncationDay, "at", "groupbykey"})

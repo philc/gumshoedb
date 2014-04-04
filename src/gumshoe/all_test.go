@@ -9,6 +9,7 @@ var schemaFixture = &Schema{
 	SegmentSize:      1 << 10,
 	Dir:              "",
 	FlushDuration:    time.Minute,
+	IntervalDuration: time.Hour,
 }
 
 func testDB() *DB {
@@ -27,6 +28,10 @@ func insertRows(db *DB, rows []RowMap) {
 }
 
 func insertRow(db *DB, row RowMap) { insertRows(db, []RowMap{row}) }
+
+// hour returns the offset in seconds for the given number of hours. This is used to succinctly express rows
+// which should fall within different time intervals.
+func hour(n int) float64 { return float64(n * 60 * 60) }
 
 // TODO(caleb): Delete below functions if unused
 
@@ -50,6 +55,3 @@ func makeDimensionColumn(name, typeString string, isString bool) DimensionColumn
 	return d
 }
 
-// hour returns the offset in seconds for the given number of hours. This is used to succinctly express rows
-// which should fall within different time intervals.
-func hour(n int) int { return n * 60 * 60 }
