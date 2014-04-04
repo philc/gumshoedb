@@ -5,6 +5,7 @@ package gumshoe
 import (
 	"errors"
 	"fmt"
+	"time"
 	"unsafe"
 )
 
@@ -15,7 +16,7 @@ type UntypedBytes []byte
 func (u UntypedBytes) Pointer() unsafe.Pointer { return unsafe.Pointer(&u[0]) }
 
 type rowAggregate struct {
-	GroupByValue UntypedBytes
+	GroupByValue Untyped
 	Sums         []UntypedBytes // Corresponds to query.Aggregates
 	Count        uint32
 }
@@ -33,12 +34,10 @@ type groupingParams struct {
 	OnTimestampColumn bool
 	ColumnIndex       int
 	TransformFunc     transformFunc
-	KnownCardinality  bool
-	Cardinality       int
 }
 
 type (
-	transformFunc       func(cell unsafe.Pointer, isNil bool) Untyped
+	transformFunc       func(cell unsafe.Pointer) Untyped
 	filterFunc          func(row RowBytes) bool
 	timestampFilterFunc func(timestamp uint32) bool
 	sumFunc             func(sum UntypedBytes, metrics MetricBytes)
@@ -46,6 +45,16 @@ type (
 
 // TODO(caleb): Wherever we use falseFilterFunc, we can optimize by immediately returning an empty result.
 var falseFilterFunc = func(RowBytes) bool { return false }
+
+func (p *scanParams) AllTimestampFilterFuncsMatch(intervalTimestamp time.Time) bool {
+	timestamp := uint32(intervalTimestamp.Unix())
+	for _, f := range p.TimestampFilterFuncs {
+		if !f(timestamp) {
+			return false
+		}
+	}
+	return true
+}
 
 // InvokeQuery runs query on a State. It returns a slice of aggregated row results.
 func (s *State) InvokeQuery(query *Query) ([]RowMap, error) {
@@ -83,14 +92,6 @@ func (s *State) InvokeQuery(query *Query) ([]RowMap, error) {
 			}
 			grouping.ColumnIndex = index
 			groupingColumn = s.DimensionColumns[index].Column
-		}
-
-		// Only support computing the max value of 8 and 16 bit unsigned types, since that set of values
-		// can efficiently be mapped to slice indices for the purposes of groupingOptions.
-		switch width := groupingColumn.Width; width {
-		case 1, 2:
-			grouping.KnownCardinality = true
-			grouping.Cardinality = 1 << uint(8*width)
 		}
 
 		if groupingOptions.TimeTransform != TimeTruncationNone {
@@ -157,12 +158,8 @@ func (s *State) scan(params *scanParams) *rowAggregate {
 
 intervalLoop:
 	for timestamp, interval := range s.Intervals {
-
-		// We can apply the timestamp filters at this point.
-		for _, filter := range params.TimestampFilterFuncs {
-			if !filter(uint32(timestamp.Unix())) {
-				continue intervalLoop
-			}
+		if !params.AllTimestampFilterFuncsMatch(timestamp) {
+			continue intervalLoop
 		}
 
 		for _, segment := range interval.Segments {
@@ -191,154 +188,154 @@ intervalLoop:
 }
 
 func (s *State) scanWithGrouping(params *scanParams) []*rowAggregate {
-	panic("unimplemented")
+	// Only support computing the max value of 8 and 16 bit unsigned types, since that set of values can
+	// efficiently be mapped to slice indices for the purposes of groupingOptions.
+	var sliceGroups []*rowAggregate
+	var nilGroup *rowAggregate // used with sliceGroups
+	var mapGroups map[Untyped]*rowAggregate
+
+	var groupingColumn Column
+	if params.Grouping.OnTimestampColumn {
+		groupingColumn = s.TimestampColumn
+	} else {
+		groupingColumn = s.DimensionColumns[params.Grouping.ColumnIndex].Column
+	}
+
+	var nilOffset, valueOffset int
+	var nilMask byte
+	groupOnTimestampColumn := params.Grouping.OnTimestampColumn
+	transformFunc := params.Grouping.TransformFunc
+	if !groupOnTimestampColumn {
+		i := params.Grouping.ColumnIndex
+		nilOffset = s.DimensionStartOffset + i/8
+		nilMask = byte(1) << byte(i%8)
+		valueOffset = s.DimensionStartOffset + s.DimensionOffsets[i]
+	}
+	getDimensionValueFunc := makeGetDimensionValueFuncGen(groupingColumn.Type)
+	getDimensionValueAsIntFunc := makeGetDimensionValueAsIntFuncGen(groupingColumn.Type)
+
+	useSlice := false
+	width := groupingColumn.Width
+	if width <= 2 && transformFunc == nil {
+		useSlice = true
+		sliceGroups = make([]*rowAggregate, 1<<uint(8*width))
+	} else {
+		mapGroups = make(map[Untyped]*rowAggregate)
+	}
+
+	// A quick sanity check -- this should never be the case as long as timestamps are uint32.
+	if groupOnTimestampColumn && useSlice {
+		panic("using slices for timestamp column group is unhandled")
+	}
+
+intervalLoop:
+	for timestamp, interval := range s.Intervals {
+		if !params.AllTimestampFilterFuncsMatch(timestamp) {
+			continue intervalLoop
+		}
+		var groupMapKey Untyped
+		var aggregate *rowAggregate // Corresponding to groupValue
+		if groupOnTimestampColumn {
+			groupTimestamp := uint32(timestamp.Unix())
+			if transformFunc == nil {
+				groupMapKey = groupTimestamp
+			} else {
+				groupMapKey = transformFunc(unsafe.Pointer(&groupTimestamp))
+			}
+		}
+		// TODO(caleb): We can hoist the computation of the group row aggregate for timestamp groupings out to
+		// this level as well, but it causes code duplication without a huge amount of gain so I'm leaving it
+		// alone for now.
+
+		for _, segment := range interval.Segments {
+		rowLoop:
+			for i := 0; i < len(segment.Bytes); i += s.RowSize {
+				row := RowBytes(segment.Bytes[i : i+s.RowSize])
+
+				// Run each filter to see if we should skip this row.
+				for _, filter := range params.FilterFuncs {
+					if !filter(row) {
+						continue rowLoop
+					}
+				}
+
+				// Perform grouping.
+				if useSlice {
+					if row[nilOffset]&nilMask > 0 {
+						aggregate = nilGroup
+						if aggregate == nil {
+							aggregate = makeRowAggregate(nil, params)
+							nilGroup = aggregate
+						}
+					} else {
+						cell := unsafe.Pointer(&row[valueOffset])
+						index := getDimensionValueAsIntFunc(cell)
+						aggregate = sliceGroups[index]
+						if aggregate == nil {
+							aggregate = makeRowAggregate(index, params)
+							sliceGroups[index] = aggregate
+						}
+					}
+				} else {
+					if !groupOnTimestampColumn {
+						if row[nilOffset]&nilMask > 0 {
+							groupMapKey = nil // just to be explicit about things
+						} else {
+							cell := unsafe.Pointer(&row[valueOffset])
+							if transformFunc != nil {
+								groupMapKey = transformFunc(cell)
+							} else {
+								groupMapKey = getDimensionValueFunc(cell)
+							}
+						}
+					}
+					// Now we've set groupMapKey in both cases (whether or not we're grouping on the timestamp column).
+					aggregate = mapGroups[groupMapKey]
+					if aggregate == nil {
+						aggregate = makeRowAggregate(groupMapKey, params)
+						mapGroups[groupMapKey] = aggregate
+					}
+				}
+
+				// Sum each aggregate metric.
+				metrics := MetricBytes(row[s.MetricStartOffset:])
+				for i, sumFn := range params.SumFuncs {
+					sumFn(aggregate.Sums[i], metrics)
+				}
+
+				aggregate.Count += row.count(s.Schema)
+			}
+		}
+	}
+
+	var results []*rowAggregate
+	if useSlice {
+		if nilGroup != nil {
+			results = append(results, nilGroup)
+		}
+		// Prune the grouping slice
+		for _, aggregate := range sliceGroups {
+			if aggregate != nil {
+				results = append(results, aggregate)
+			}
+		}
+	} else {
+		for _, aggregate := range mapGroups {
+			results = append(results, aggregate)
+		}
+	}
+	return results
 }
 
-// Scans all rows in the table, aggregates columns, filters and groups rows. This code is performance
-// critical.
-//func (table *FactTable) scan(filters []FactTableFilterFunc, columnIndices []int,
-//groupingParams GroupingParams) []RowAggregate {
-//var (
-//useGrouping                bool
-//groupedAggregatesMap       map[float64]*RowAggregate
-//groupedAggregatesSlice     []RowAggregate
-//groupByColumnOffset        uintptr
-//groupByColumnType          int
-//groupByColumnIndex         int
-//groupByColumnTransformFunc func(float64) float64
-//useSliceForGrouping        bool
-//)
-
-//if useGrouping = groupingParams.UseGrouping; useGrouping {
-//if groupingParams.KnownCardinality {
-//useSliceForGrouping = true
-//groupedAggregatesSlice = make([]RowAggregate, groupingParams.Cardinality)
-//} else {
-//groupedAggregatesMap = make(map[float64]*RowAggregate)
-//}
-//groupByColumnIndex = groupingParams.ColumnIndex
-//groupByColumnOffset = table.ColumnIndexToOffset[groupingParams.ColumnIndex]
-//groupByColumnType = table.ColumnIndexToType[groupingParams.ColumnIndex]
-//groupByColumnTransformFunc = groupingParams.TransformFunc
-//}
-
-//// This maps the values of the group-by column => RowAggregate.
-//// Due to laziness, only one level of grouping is currently supported.
-//// When the query has no group-by clause, we accumulate results into a single RowAggregate.
-//rowAggregate := new(RowAggregate)
-//rowAggregate.Sums = make([]float64, table.ColumnCount)
-//columnCountInQuery := len(columnIndices)
-//filterCount := len(filters)
-//rowSize := uintptr(table.RowSize)
-//columnIndexToOffset := table.ColumnIndexToOffset
-//columnIndexToType := table.ColumnIndexToType
-
-//for _, interval := range table.Intervals {
-//for si, segment := range interval.Segments {
-//rowPtr := uintptr(unsafe.Pointer(&segment[0]))
-//var rowCount int
-//if si == len(interval.Segments)-1 {
-//rowCount = interval.NextInsertOffset / table.RowSize
-//} else {
-//rowCount = len(segment) / table.RowSize
-//}
-
-//outerLoop:
-//for i := 0; i < rowCount; i++ {
-//for filterIndex := 0; filterIndex < filterCount; filterIndex++ {
-//if !filters[filterIndex](rowPtr) {
-//rowPtr += rowSize
-//continue outerLoop
-//}
-//}
-
-//if useGrouping {
-//// NOTE(dmac): For now, nil values aren't included when grouping on a column.
-//if table.columnIsNil(rowPtr, groupByColumnIndex) {
-//rowPtr += rowSize
-//continue
-//}
-//// TODO(philc): Use a type switch here.
-//groupByValue := getColumnValueAsFloat64(rowPtr, groupByColumnOffset, groupByColumnType)
-//if groupByColumnTransformFunc != nil {
-//groupByValue = groupByColumnTransformFunc(groupByValue)
-//}
-//if useSliceForGrouping {
-//rowAggregate = &groupedAggregatesSlice[int(groupByValue)]
-//// If the RowAggregate has never been initialized, initialize it.
-//if len(rowAggregate.Sums) == 0 {
-//*(&rowAggregate.Sums) = make([]float64, table.ColumnCount)
-//rowAggregate.GroupByValue = groupByValue
-//}
-//} else {
-//var ok bool
-//rowAggregate, ok = groupedAggregatesMap[groupByValue]
-//if !ok {
-//rowAggregate = new(RowAggregate)
-//rowAggregate.Sums = make([]float64, table.ColumnCount)
-//(*rowAggregate).GroupByValue = groupByValue
-//groupedAggregatesMap[groupByValue] = rowAggregate
-//}
-//}
-//}
-
-//for j := 0; j < columnCountInQuery; j++ {
-//columnIndex := columnIndices[j]
-//columnOffset := columnIndexToOffset[columnIndex]
-//columnPtr := unsafe.Pointer(rowPtr + columnOffset)
-
-//if table.columnIsNil(rowPtr, columnIndex) {
-//continue
-//}
-
-//var columnValue float64
-//columnType := columnIndexToType[columnIndex]
-//switch columnType {
-//case TypeUint8:
-//columnValue = float64(*(*uint8)(columnPtr))
-//case TypeInt8:
-//columnValue = float64(*(*int8)(columnPtr))
-//case TypeUint16:
-//columnValue = float64(*(*uint16)(columnPtr))
-//case TypeInt16:
-//columnValue = float64(*(*int16)(columnPtr))
-//case TypeUint32:
-//columnValue = float64(*(*uint32)(columnPtr))
-//case TypeInt32:
-//columnValue = float64(*(*int32)(columnPtr))
-//case TypeFloat32:
-//columnValue = float64(*(*float32)(columnPtr))
-//}
-//(*rowAggregate).Sums[columnIndex] += columnValue
-//}
-
-//// The first byte is the count of how many rows have been collapsible into this one row.
-//rowCount := *((*uint8)(unsafe.Pointer(rowPtr)))
-//(*rowAggregate).Count += int(rowCount)
-//rowPtr += rowSize
-//}
-//}
-//}
-
-//results := []RowAggregate{}
-//if useGrouping {
-//if useSliceForGrouping {
-//// Remove empty, unused rows from the grouping vector.
-//for _, value := range groupedAggregatesSlice {
-//if value.Count > 0 {
-//results = append(results, value)
-//}
-//}
-//} else {
-//for _, value := range groupedAggregatesMap {
-//results = append(results, *value)
-//}
-//}
-//} else {
-//results = append(results, *rowAggregate)
-//}
-//return results
-//}
+func makeRowAggregate(groupByValue Untyped, params *scanParams) *rowAggregate {
+	aggregate := new(rowAggregate)
+	aggregate.GroupByValue = groupByValue
+	aggregate.Sums = make([]UntypedBytes, len(params.SumColumns))
+	for i, col := range params.SumColumns {
+		aggregate.Sums[i] = make(UntypedBytes, col.Width)
+	}
+	return aggregate
+}
 
 func (s *State) postProcessScanRows(aggregates []*rowAggregate, query *Query,
 	grouping *groupingParams) []RowMap {
@@ -358,16 +355,12 @@ func (s *State) postProcessScanRows(aggregates []*rowAggregate, query *Query,
 		}
 		if grouping != nil {
 			var value Untyped
-			switch {
-			case grouping.OnTimestampColumn:
-				value = s.numericCellValue(aggregate.GroupByValue.Pointer(), s.TimestampColumn.Type)
-			case aggregate.GroupByValue == nil:
-				value = nil
-			default:
-				column := s.DimensionColumns[grouping.ColumnIndex]
-				value = s.numericCellValue(aggregate.GroupByValue.Pointer(), column.Type)
-				if column.String {
-					value = s.DimensionTables[grouping.ColumnIndex].Values[UntypedToInt(value)]
+			if aggregate.GroupByValue != nil {
+				if grouping.OnTimestampColumn {
+					value = aggregate.GroupByValue
+				} else {
+					dimensionIndex := UntypedToInt(aggregate.GroupByValue)
+					value = s.DimensionTables[grouping.ColumnIndex].Values[dimensionIndex]
 				}
 			}
 			row[query.Groupings[0].Name] = value
@@ -381,7 +374,7 @@ func (s *State) postProcessScanRows(aggregates []*rowAggregate, query *Query,
 func (s *State) makeSumFunc(aggregate QueryAggregate, index int) sumFunc {
 	col := s.MetricColumns[index]
 	offset := s.MetricOffsets[index]
-	return makeSumFunc(col.Type)(offset)
+	return makeSumFuncGen(col.Type)(offset)
 }
 
 // makeTimeTruncationFunc returns a function which, given a cell, performs a date truncation transformation.
@@ -400,17 +393,46 @@ func (s *State) makeTimeTruncationFunc(truncationType TimeTruncationType,
 	case TimeTruncationDay:
 		divisor = 60 * 60 * 24
 	}
-	return func(cell unsafe.Pointer, isNil bool) Untyped {
-		if isNil {
-			return nil
-		}
+	return func(cell unsafe.Pointer) Untyped {
 		value := int(*(*uint32)(cell))
 		return value - (value % divisor)
 	}, nil
 }
 
 func (s *State) makeTimestampFilterFunc(filter QueryFilter) (timestampFilterFunc, error) {
-	panic("unimplemented")
+	if filter.Type == FilterIn {
+		return s.makeTimestampFilterFuncIn(filter)
+	}
+
+	value, ok := filter.Value.(float64)
+	if !ok {
+		return nil, fmt.Errorf("timestamp column filters must be numeric; got %v", filter.Value)
+	}
+	timestamp := uint32(value)
+	return makeTimestampFilterFuncSimpleGen(filter.Type)(timestamp), nil
+}
+
+func (s *State) makeTimestampFilterFuncIn(filter QueryFilter) (timestampFilterFunc, error) {
+	values, ok := filter.Value.([]interface{})
+	if !ok {
+		return nil, fmt.Errorf("timestamp column 'in' filter must be given an array; got %v", filter.Value)
+	}
+	timestamps := make([]uint32, len(values))
+	for i, v := range values {
+		float, ok := v.(float64)
+		if !ok {
+			return nil, fmt.Errorf("timestamp column 'in' filter list must include numeric values; got %v", v)
+		}
+		timestamps[i] = uint32(float)
+	}
+	return func(timestamp uint32) bool {
+		for _, t := range timestamps {
+			if t == timestamp {
+				return true
+			}
+		}
+		return false
+	}, nil
 }
 
 func (s *State) makeDimensionFilterFunc(filter QueryFilter, index int) (filterFunc, error) {
@@ -432,7 +454,7 @@ func (s *State) makeDimensionFilterFunc(filter QueryFilter, index int) (filterFu
 	// nil	OP	nil	false
 
 	if filter.Value == nil {
-		return makeNilFilterFuncSimple(col.Type, filter.Type)(nilOffset, mask), nil
+		return makeNilFilterFuncSimpleGen(col.Type, filter.Type)(nilOffset, mask), nil
 	}
 
 	// For string columns, value will be a precise uint32 dimension table index; otherwise it will be a float as
@@ -458,7 +480,7 @@ func (s *State) makeDimensionFilterFunc(filter QueryFilter, index int) (filterFu
 		}
 		value = float
 	}
-	filterGenFunc := makeDimensionFilterFuncSimple(col.Type, filter.Type, isString)
+	filterGenFunc := makeDimensionFilterFuncSimpleGen(col.Type, filter.Type, isString)
 	return filterGenFunc(value, nilOffset, mask, valueOffset), nil
 }
 
@@ -517,7 +539,7 @@ func (s *State) makeDimensionFilterFuncIn(filter QueryFilter, index int) (filter
 		values = floats
 	}
 
-	filterGenFunc := makeDimensionFilterFuncIn(col.Type, isString)
+	filterGenFunc := makeDimensionFilterFuncInGen(col.Type, isString)
 	return filterGenFunc(values, acceptNil, nilOffset, mask, valueOffset), nil
 }
 
@@ -532,7 +554,7 @@ func (s *State) makeMetricFilterFunc(filter QueryFilter, index int) (filterFunc,
 	}
 	col := s.MetricColumns[index]
 	offset := s.MetricStartOffset + s.MetricOffsets[index]
-	return makeMetricFilterFuncSimple(col.Type, filter.Type)(float, offset), nil
+	return makeMetricFilterFuncSimpleGen(col.Type, filter.Type)(float, offset), nil
 }
 
 func (s *State) makeMetricFilterFuncIn(filter QueryFilter, index int) (filterFunc, error) {
@@ -555,5 +577,5 @@ func (s *State) makeMetricFilterFuncIn(filter QueryFilter, index int) (filterFun
 	offset := s.MetricStartOffset + s.MetricOffsets[index]
 	// TODO(philc): A hash table may be more efficient for longer lists. We should determine what that list
 	// size is and use a hash table in that case.
-	return makeMetricFilterFuncIn(col.Type)(floats, offset), nil
+	return makeMetricFilterFuncInGen(col.Type)(floats, offset), nil
 }

@@ -202,33 +202,33 @@ var filterNameToType = map[string]FilterType{
 	"in": FilterIn,
 }
 
-func makeSumFunc(typ Type) func(offset int) sumFunc {
+func makeSumFuncGen(typ Type) func(offset int) sumFunc {
 
 	if typ == TypeUint8 {
 		return func(offset int) sumFunc {
 			return func(sum UntypedBytes, metrics MetricBytes) {
-				*(*uint32)(unsafe.Pointer(&sum[0])) += *(*uint32)(unsafe.Pointer(&metrics[offset]))
+				*(*uint8)(unsafe.Pointer(&sum[0])) += *(*uint8)(unsafe.Pointer(&metrics[offset]))
 			}
 		}
 	}
 	if typ == TypeInt8 {
 		return func(offset int) sumFunc {
 			return func(sum UntypedBytes, metrics MetricBytes) {
-				*(*uint32)(unsafe.Pointer(&sum[0])) += *(*uint32)(unsafe.Pointer(&metrics[offset]))
+				*(*int8)(unsafe.Pointer(&sum[0])) += *(*int8)(unsafe.Pointer(&metrics[offset]))
 			}
 		}
 	}
 	if typ == TypeUint16 {
 		return func(offset int) sumFunc {
 			return func(sum UntypedBytes, metrics MetricBytes) {
-				*(*uint32)(unsafe.Pointer(&sum[0])) += *(*uint32)(unsafe.Pointer(&metrics[offset]))
+				*(*uint16)(unsafe.Pointer(&sum[0])) += *(*uint16)(unsafe.Pointer(&metrics[offset]))
 			}
 		}
 	}
 	if typ == TypeInt16 {
 		return func(offset int) sumFunc {
 			return func(sum UntypedBytes, metrics MetricBytes) {
-				*(*uint32)(unsafe.Pointer(&sum[0])) += *(*uint32)(unsafe.Pointer(&metrics[offset]))
+				*(*int16)(unsafe.Pointer(&sum[0])) += *(*int16)(unsafe.Pointer(&metrics[offset]))
 			}
 		}
 	}
@@ -242,21 +242,108 @@ func makeSumFunc(typ Type) func(offset int) sumFunc {
 	if typ == TypeInt32 {
 		return func(offset int) sumFunc {
 			return func(sum UntypedBytes, metrics MetricBytes) {
-				*(*uint32)(unsafe.Pointer(&sum[0])) += *(*uint32)(unsafe.Pointer(&metrics[offset]))
+				*(*int32)(unsafe.Pointer(&sum[0])) += *(*int32)(unsafe.Pointer(&metrics[offset]))
 			}
 		}
 	}
 	if typ == TypeFloat32 {
 		return func(offset int) sumFunc {
 			return func(sum UntypedBytes, metrics MetricBytes) {
-				*(*uint32)(unsafe.Pointer(&sum[0])) += *(*uint32)(unsafe.Pointer(&metrics[offset]))
+				*(*float32)(unsafe.Pointer(&sum[0])) += *(*float32)(unsafe.Pointer(&metrics[offset]))
 			}
 		}
 	}
 	panic("unreached")
 }
 
-func makeNilFilterFuncSimple(typ Type, filter FilterType) func(nilOffset int, mask byte) filterFunc {
+func makeGetDimensionValueFuncGen(typ Type) func(cell unsafe.Pointer) Untyped {
+
+	if typ == TypeUint8 {
+		return func(cell unsafe.Pointer) Untyped { return *(*uint8)(cell) }
+	}
+	if typ == TypeInt8 {
+		return func(cell unsafe.Pointer) Untyped { return *(*int8)(cell) }
+	}
+	if typ == TypeUint16 {
+		return func(cell unsafe.Pointer) Untyped { return *(*uint16)(cell) }
+	}
+	if typ == TypeInt16 {
+		return func(cell unsafe.Pointer) Untyped { return *(*int16)(cell) }
+	}
+	if typ == TypeUint32 {
+		return func(cell unsafe.Pointer) Untyped { return *(*uint32)(cell) }
+	}
+	if typ == TypeInt32 {
+		return func(cell unsafe.Pointer) Untyped { return *(*int32)(cell) }
+	}
+	if typ == TypeFloat32 {
+		return func(cell unsafe.Pointer) Untyped { return *(*float32)(cell) }
+	}
+	panic("unreached")
+}
+
+func makeGetDimensionValueAsIntFuncGen(typ Type) func(cell unsafe.Pointer) int {
+
+	if typ == TypeUint8 {
+		return func(cell unsafe.Pointer) int { return int(*(*uint8)(cell)) }
+	}
+	if typ == TypeInt8 {
+		return func(cell unsafe.Pointer) int { return int(*(*int8)(cell)) }
+	}
+	if typ == TypeUint16 {
+		return func(cell unsafe.Pointer) int { return int(*(*uint16)(cell)) }
+	}
+	if typ == TypeInt16 {
+		return func(cell unsafe.Pointer) int { return int(*(*int16)(cell)) }
+	}
+	if typ == TypeUint32 {
+		return func(cell unsafe.Pointer) int { return int(*(*uint32)(cell)) }
+	}
+	if typ == TypeInt32 {
+		return func(cell unsafe.Pointer) int { return int(*(*int32)(cell)) }
+	}
+	if typ == TypeFloat32 {
+		return func(cell unsafe.Pointer) int { return int(*(*float32)(cell)) }
+	}
+	panic("unreached")
+}
+
+func makeTimestampFilterFuncSimpleGen(filter FilterType) func(timestamp uint32) timestampFilterFunc {
+
+	if filter == FilterEqual {
+		return func(timestamp uint32) timestampFilterFunc {
+			return func(t uint32) bool { return t == timestamp }
+		}
+	}
+	if filter == FilterNotEqual {
+		return func(timestamp uint32) timestampFilterFunc {
+			return func(t uint32) bool { return t != timestamp }
+		}
+	}
+	if filter == FilterGreaterThan {
+		return func(timestamp uint32) timestampFilterFunc {
+			return func(t uint32) bool { return t > timestamp }
+		}
+	}
+	if filter == FilterGreaterThenOrEqual {
+		return func(timestamp uint32) timestampFilterFunc {
+			return func(t uint32) bool { return t >= timestamp }
+		}
+	}
+	if filter == FilterLessThan {
+		return func(timestamp uint32) timestampFilterFunc {
+			return func(t uint32) bool { return t < timestamp }
+		}
+	}
+	if filter == FilterLessThanOrEqual {
+		return func(timestamp uint32) timestampFilterFunc {
+			return func(t uint32) bool { return t <= timestamp }
+		}
+	}
+	panic("unreached")
+}
+
+func makeNilFilterFuncSimpleGen(typ Type, filter FilterType) func(nilOffset int, mask byte) filterFunc {
 
 	if typ == TypeUint8 && filter == FilterEqual {
 		return func(nilOffset int, mask byte) filterFunc {
@@ -723,7 +810,7 @@ func makeNilFilterFuncSimple(typ Type, filter FilterType) func(nilOffset int, ma
 	panic("unreached")
 }
 
-func makeDimensionFilterFuncSimple(typ Type, filter FilterType, isString bool) func(interface{}, int, byte, int) filterFunc {
+func makeDimensionFilterFuncSimpleGen(typ Type, filter FilterType, isString bool) func(interface{}, int, byte, int) filterFunc {
 
 	if typ == TypeUint8 && filter == FilterEqual && isString == true {
 		return func(value interface{}, nilOffset int, mask byte, valueOffset int) filterFunc {
@@ -1820,7 +1907,7 @@ func makeDimensionFilterFuncSimple(typ Type, filter FilterType, isString bool) f
 	panic("unreached")
 }
 
-func makeDimensionFilterFuncIn(typ Type, isString bool) func(interface{}, bool, int, byte, int) filterFunc {
+func makeDimensionFilterFuncInGen(typ Type, isString bool) func(interface{}, bool, int, byte, int) filterFunc {
 
 	if typ == TypeUint8 && isString == true {
 		return func(values interface{}, acceptNil bool, nilOffset int, mask byte, valueOffset int) filterFunc {
@@ -2133,7 +2220,7 @@ func makeDimensionFilterFuncIn(typ Type, isString bool) func(interface{}, bool, 
 	panic("unreached")
 }
 
-func makeMetricFilterFuncSimple(typ Type, filter FilterType) func(value float64, offset int) filterFunc {
+func makeMetricFilterFuncSimpleGen(typ Type, filter FilterType) func(value float64, offset int) filterFunc {
 
 	if typ == TypeUint8 && filter == FilterEqual {
 		return func(value float64, offset int) filterFunc {
@@ -2474,7 +2561,7 @@ func makeMetricFilterFuncSimple(typ Type, filter FilterType) func(value float64,
 	panic("unreached")
 }
 
-func makeMetricFilterFuncIn(typ Type) func(floats []float64, offset int) filterFunc {
+func makeMetricFilterFuncInGen(typ Type) func(floats []float64, offset int) filterFunc {
 
 	if typ == TypeUint8 {
 		return func(floats []float64, offset int) filterFunc {

@@ -193,19 +193,45 @@ var filterNameToType = map[string]FilterType{ {{range .FilterTypes}}
 "{{.Symbol}}": {{.GumshoeTypeName}},{{end}}
 }
 
-func makeSumFunc(typ Type) func(offset int) sumFunc {
+func makeSumFuncGen(typ Type) func(offset int) sumFunc {
 	{{range .Types}}
 	if typ == {{.GumshoeTypeName}} {
 		return func(offset int) sumFunc {
 			return func(sum UntypedBytes, metrics MetricBytes) {
-				*(*uint32)(unsafe.Pointer(&sum[0])) += *(*uint32)(unsafe.Pointer(&metrics[offset]))
+				*(*{{.GoName}})(unsafe.Pointer(&sum[0])) += *(*{{.GoName}})(unsafe.Pointer(&metrics[offset]))
 			}
 		}
 	}{{end}}
 	panic("unreached")
 }
 
-func makeNilFilterFuncSimple(typ Type, filter FilterType) func(nilOffset int, mask byte) filterFunc {
+func makeGetDimensionValueFuncGen(typ Type) func(cell unsafe.Pointer) Untyped {
+	{{range .Types}}
+	if typ == {{.GumshoeTypeName}} {
+		return func(cell unsafe.Pointer) Untyped { return *(*{{.GoName}})(cell) }
+	}{{end}}
+	panic("unreached")
+}
+
+func makeGetDimensionValueAsIntFuncGen(typ Type) func(cell unsafe.Pointer) int {
+	{{range .Types}}
+	if typ == {{.GumshoeTypeName}} {
+		return func(cell unsafe.Pointer) int { return int(*(*{{.GoName}})(cell)) }
+	}{{end}}
+	panic("unreached")
+}
+
+func makeTimestampFilterFuncSimpleGen(filter FilterType) func(timestamp uint32) timestampFilterFunc {
+	{{range $.SimpleFilterTypes}}
+	if filter == {{.GumshoeTypeName}} {
+		return func(timestamp uint32) timestampFilterFunc {
+			return func(t uint32) bool { return t {{.GoOperator}} timestamp }
+		}
+	}{{end}}
+	panic("unreached")
+}
+
+func makeNilFilterFuncSimpleGen(typ Type, filter FilterType) func(nilOffset int, mask byte) filterFunc {
 	{{range $type := .Types}}{{range $filter := $.SimpleFilterTypes}}
 	if typ == {{$type.GumshoeTypeName}} && filter == {{$filter.GumshoeTypeName}} {
 		return func(nilOffset int, mask byte) filterFunc {
@@ -221,7 +247,7 @@ func makeNilFilterFuncSimple(typ Type, filter FilterType) func(nilOffset int, ma
 	panic("unreached")
 }
 
-func makeDimensionFilterFuncSimple(typ Type, filter FilterType, isString bool) func(interface{}, int, byte, int) filterFunc {
+func makeDimensionFilterFuncSimpleGen(typ Type, filter FilterType, isString bool) func(interface{}, int, byte, int) filterFunc {
 	{{range $type := .Types}}{{range $filter := $.SimpleFilterTypes}}{{range $str := $.Bools}}
 	if typ == {{$type.GumshoeTypeName}} && filter == {{$filter.GumshoeTypeName}} && isString == {{$str}} {
 		return func(value interface{}, nilOffset int, mask byte, valueOffset int) filterFunc {
@@ -241,7 +267,7 @@ func makeDimensionFilterFuncSimple(typ Type, filter FilterType, isString bool) f
 	panic("unreached")
 }
 
-func makeDimensionFilterFuncIn(typ Type, isString bool) func(interface{}, bool, int, byte, int) filterFunc {
+func makeDimensionFilterFuncInGen(typ Type, isString bool) func(interface{}, bool, int, byte, int) filterFunc {
 	{{range $type := .Types}}{{range $str := $.Bools}}
 	if typ == {{$type.GumshoeTypeName}} && isString == {{$str}} {
 		return func(values interface{}, acceptNil bool, nilOffset int, mask byte, valueOffset int) filterFunc {
@@ -270,7 +296,7 @@ func makeDimensionFilterFuncIn(typ Type, isString bool) func(interface{}, bool, 
 	panic("unreached")
 }
 
-func makeMetricFilterFuncSimple(typ Type, filter FilterType) func(value float64, offset int) filterFunc {
+func makeMetricFilterFuncSimpleGen(typ Type, filter FilterType) func(value float64, offset int) filterFunc {
 	{{range $type := .Types}}{{range $filter := $.SimpleFilterTypes}}
 	if typ == {{$type.GumshoeTypeName}} && filter == {{$filter.GumshoeTypeName}} {
 		return func(value float64, offset int) filterFunc {
@@ -283,7 +309,7 @@ func makeMetricFilterFuncSimple(typ Type, filter FilterType) func(value float64,
 	panic("unreached")
 }
 
-func makeMetricFilterFuncIn(typ Type) func(floats []float64, offset int) filterFunc {
+func makeMetricFilterFuncInGen(typ Type) func(floats []float64, offset int) filterFunc {
 	{{range .Types}}
 	if typ == {{.GumshoeTypeName}} {
 		return func(floats []float64, offset int) filterFunc {
