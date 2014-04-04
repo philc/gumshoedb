@@ -43,7 +43,7 @@ type Schema struct {
 	TimestampColumn  Column
 	DimensionColumns []DimensionColumn
 	MetricColumns    []MetricColumn
-	SegmentSize      int // A soft limit (segments are truncated after they exceed this size)
+	SegmentSize      int
 	IntervalDuration time.Duration
 
 	Dir           string        `json:"-"` // Path to persist a DB

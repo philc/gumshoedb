@@ -111,10 +111,11 @@ func (iv *writeOnlyInterval) writeKeyValCount(key, val []byte, count uint32) err
 // represent directly). Rows must be inserted in increasing key (dimension) order, with one call for each row
 // of a given key.
 func (iv *writeOnlyInterval) appendRow(s *Schema, dimensions, metrics []byte, count int) error {
-	if iv.CurSegmentSize > s.SegmentSize {
+	if iv.CurSegmentSize+s.RowSize > s.SegmentSize {
 		if err := iv.closeCurrentSegment(); err != nil {
 			return err
 		}
+		iv.CurSegmentSize = 0
 		iv.CurSegment = nil
 	}
 
@@ -126,6 +127,7 @@ func (iv *writeOnlyInterval) appendRow(s *Schema, dimensions, metrics []byte, co
 	if count > math.MaxUint32 {
 		panic("count greater than MaxUint32 is unrepresentable with uint32 for column count")
 	}
+	iv.CurSegmentSize += s.RowSize
 	return iv.writeKeyValCount(dimensions, metrics, uint32(count))
 }
 

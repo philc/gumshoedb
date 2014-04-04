@@ -45,3 +45,7 @@ func makeDimensionColumn(name, typeString string, isString bool) DimensionColumn
 	}
 	return d
 }
+
+// hour returns the offset in seconds for the given number of hours. This is used to succinctly express rows
+// which should fall within different time intervals.
+func hour(n int) int { return n * 60 * 60 }

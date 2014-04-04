@@ -28,25 +28,6 @@ func insertRow(table *FactTable, at int, dimensionValue Untyped, metricValue Unt
 	table.InsertRowMaps([]RowMap{{"at": at, "dim1": dimensionValue, "metric1": metricValue}})
 }
 
-func TestConvertRowMapToRowSliceThrowsErrorForUnrecognizedColumn(t *testing.T) {
-	_, err := tableFixture().convertRowMapToRowSlice(
-		RowMap{"at": 0, "dim1": "string1", "unknownColumn": 10})
-	Assert(t, err, NotNil)
-}
-
-func TestNewIntervalsAreAllocatedAsNeeded(t *testing.T) {
-	table := tableFixture()
-	table.SegmentSizeInBytes = 16
-	Assert(t, len(table.Intervals), Equals, 0)
-	// This require cause a new Interval and two new segments to be allocated.
-	err := table.InsertRowMaps([]RowMap{
-		{"at": 0, "dim1": "a", "metric1": 1.0},
-		{"at": 0, "dim1": "b", "metric1": 2.0}})
-	Assert(t, err, IsNil)
-	Assert(t, len(table.Intervals), Equals, 1)
-	Assert(t, len(table.Intervals[0].Segments), Equals, 2)
-}
-
 func TestNilMetricColumnsAreRejected(t *testing.T) {
 	table := tableFixture()
 	err := table.InsertRowMaps([]RowMap{{"at": 0, "dim1": "string1", "metric1": nil}})
