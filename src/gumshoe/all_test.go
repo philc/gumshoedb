@@ -2,19 +2,17 @@ package gumshoe
 
 import "time"
 
-func schemaFixture() *Schema {
-	return &Schema{
-		TimestampColumn:  makeColumn("at", "uint32"),
-		DimensionColumns: []DimensionColumn{makeDimensionColumn("dim1", "uint32", true)},
-		MetricColumns:    []MetricColumn{makeMetricColumn("metric1", "uint32")},
-		SegmentSize:      1 << 10,
-		Dir:              "",
-		FlushDuration:    time.Minute,
-	}
+var schemaFixture = &Schema{
+	TimestampColumn:  makeColumn("at", "uint32"),
+	DimensionColumns: []DimensionColumn{makeDimensionColumn("dim1", "uint32", true)},
+	MetricColumns:    []MetricColumn{makeMetricColumn("metric1", "uint32")},
+	SegmentSize:      1 << 10,
+	Dir:              "",
+	FlushDuration:    time.Minute,
 }
 
 func testDB() *DB {
-	db, err := Open(schemaFixture())
+	db, err := Open(schemaFixture)
 	if err != nil {
 		panic(err)
 	}

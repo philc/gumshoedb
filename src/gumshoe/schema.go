@@ -7,9 +7,9 @@ import (
 )
 
 type Column struct {
-	Type  Type
-	Name  string
-	Width int
+	Type   Type
+	Name   string
+	Width  int
 	String bool
 }
 
@@ -71,19 +71,20 @@ func (s *Schema) initialize() {
 	// We need enough nil bytes to accomodate one bit per dimension column.
 	s.NilBytes = (len(s.DimensionColumns)-1)/8 + 1
 	s.DimensionStartOffset = countColumnWidth
-
-	offset := s.NilBytes
 	s.DimensionOffsets = make([]int, len(s.DimensionColumns))
 	s.DimensionWidth = s.NilBytes
+	offset := s.NilBytes
 	for i, col := range s.DimensionColumns {
 		s.DimensionNameToIndex[col.Name] = i
 		s.DimensionOffsets[i] = offset
 		s.DimensionWidth += col.Width
 		offset += col.Width
 	}
+
 	s.MetricStartOffset = s.DimensionStartOffset + offset
-	offset = 0
 	s.MetricOffsets = make([]int, len(s.MetricColumns))
+	s.MetricWidth = 0
+	offset = 0
 	for i, col := range s.MetricColumns {
 		s.MetricNameToIndex[col.Name] = i
 		s.MetricOffsets[i] = offset
