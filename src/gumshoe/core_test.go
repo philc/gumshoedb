@@ -28,12 +28,6 @@ func insertRow(table *FactTable, at int, dimensionValue Untyped, metricValue Unt
 	table.InsertRowMaps([]RowMap{{"at": at, "dim1": dimensionValue, "metric1": metricValue}})
 }
 
-func TestNilMetricColumnsAreRejected(t *testing.T) {
-	table := tableFixture()
-	err := table.InsertRowMaps([]RowMap{{"at": 0, "dim1": "string1", "metric1": nil}})
-	Assert(t, strings.Contains(err.Error(), "Metric columns cannot be nil"), IsTrue)
-}
-
 func TestRowsGetCollapsedUponInsertion(t *testing.T) {
 	t.Skip()
 	table := tableFixture()

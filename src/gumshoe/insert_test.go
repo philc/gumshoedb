@@ -11,13 +11,11 @@ func TestExpectedNumberOfSegmentsAreAllocated(t *testing.T) {
 	defer db.Close()
 	db.Schema.SegmentSize = 32 // Rows are 13 bytes apiece
 
-	err := db.Insert([]RowMap{
+	insertRows(db, []RowMap{
 		{"at": 0.0, "dim1": "a", "metric1": 1.0},
 		{"at": 0.0, "dim1": "b", "metric1": 1.0},
 		{"at": 0.0, "dim1": "c", "metric1": 1.0},
 	})
-	Assert(t, err, IsNil)
-	db.Flush()
 
 	resp := db.makeRequest()
 	defer resp.Done()
@@ -28,4 +26,14 @@ func TestExpectedNumberOfSegmentsAreAllocated(t *testing.T) {
 		numSegments += interval.NumSegments
 	}
 	Assert(t, numSegments, Equals, 2)
+}
+
+func physicalRows(db *DB) int {
+	resp := db.makeRequest()
+	defer resp.Done()
+	rows := 0
+	for _, interval := range resp.State.Intervals {
+		rows += interval.NumRows
+	}
+	return rows
 }

@@ -18,18 +18,20 @@ func createQuery() *Query {
 
 func createTestDBForFilterTests() *DB {
 	db := testDB()
-	insertRow(db, 0.0, "string1", 1.0)
-	insertRow(db, 0.0, "string2", 2.0)
-	db.flush()
+	insertRows(db, []RowMap{
+		{"at": 0.0, "dim1": "string1", "metric1": 1.0},
+		{"at": 0.0, "dim1": "string2", "metric1": 2.0},
+	})
 	return db
 }
 
 func createTestDBForNilQueryTests() *DB {
 	db := testDB()
-	insertRow(db, 0.0, "a", 1.0)
-	insertRow(db, 0.0, "b", 2.0)
-	insertRow(db, 0.0, nil, 4.0)
-	db.flush()
+	insertRows(db, []RowMap{
+		{"at": 0.0, "dim1": "a", "metric1": 1.0},
+		{"at": 0.0, "dim1": "b", "metric1": 2.0},
+		{"at": 0.0, "dim1": nil, "metric1": 4.0},
+	})
 	return db
 }
 
@@ -130,10 +132,11 @@ func TestInvokeQueryFiltersRowsUsingIn(t *testing.T) {
 func TestInvokeQueryWorksWhenGroupingByAStringColumn(t *testing.T) {
 	db := testDB()
 	defer db.Close()
-	insertRow(db, 0.0, "string1", 1.0)
-	insertRow(db, 0.0, "string1", 2.0)
-	insertRow(db, 0.0, "string2", 5.0)
-	db.Flush()
+	insertRows(db, []RowMap{
+		{"at": 0.0, "dim1": "string1", "metric1": 1.0},
+		{"at": 0.0, "dim1": "string1", "metric1": 2.0},
+		{"at": 0.0, "dim1": "string2", "metric1": 5.0},
+	})
 
 	result := runWithGroupBy(db, QueryGrouping{TimeTruncationNone, "dim1", "groupbykey"})
 	Assert(t, result[0], utils.HasEqualJSON, RowMap{"groupbykey": "string1", "rowCount": 2, "metric1": 3})
@@ -145,10 +148,11 @@ func TestGroupingWithATimeTransformFunctionWorks(t *testing.T) {
 	defer db.Close()
 	// at is truncated by day, so these points are from day 0, 2, 2.
 	const twoDays = 2 * 24 * 60 * 60
-	insertRow(db, 0.0, "", 0.0)
-	insertRow(db, float64(twoDays), "", 10.0)
-	insertRow(db, twoDays+100.0, "", 12.0)
-	db.Flush()
+	insertRows(db, []RowMap{
+		{"at": 0.0, "dim1": "", "metric1": 0.0},
+		{"at": float64(twoDays), "dim1": "", "metric1": 10.0},
+		{"at": twoDays + 100.0, "dim1": "", "metric1": 12.0},
+	})
 
 	result := runWithGroupBy(db, QueryGrouping{TimeTruncationDay, "at", "groupbykey"})
 	Assert(t, result[0], utils.HasEqualJSON, RowMap{"groupbykey": 0, "rowCount": 1, "metric1": 0})
@@ -159,7 +163,7 @@ func TestAggregateQueryWithNilValues(t *testing.T) {
 	db := createTestDBForNilQueryTests()
 	defer db.Close()
 	results := runQuery(db, createQuery())
-	Assert(t, results[0], utils.HasEqualJSON, map[string]Untyped{"metric1": 7, "rowCount": 3})
+	Assert(t, results[0], utils.HasEqualJSON, RowMap{"metric1": 7, "rowCount": 3})
 }
 
 func TestFilterQueryWithNilValues(t *testing.T) {
@@ -167,16 +171,16 @@ func TestFilterQueryWithNilValues(t *testing.T) {
 	defer db.Close()
 
 	results := runWithFilter(db, QueryFilter{FilterEqual, "dim1", "a"})
-	Assert(t, results[0], utils.HasEqualJSON, map[string]Untyped{"metric1": 1, "rowCount": 1})
+	Assert(t, results[0], utils.HasEqualJSON, RowMap{"metric1": 1, "rowCount": 1})
 
 	results = runWithFilter(db, QueryFilter{FilterEqual, "dim1", nil})
-	Assert(t, results[0], utils.HasEqualJSON, map[string]Untyped{"metric1": 4, "rowCount": 1})
+	Assert(t, results[0], utils.HasEqualJSON, RowMap{"metric1": 4, "rowCount": 1})
 }
 
 func TestFilterQueryUsingInWithNilValues(t *testing.T) {
 	db := createTestDBForNilQueryTests()
 	results := runWithFilter(db, QueryFilter{FilterIn, "dim1", inList("b", nil)})
-	Assert(t, results[0], utils.HasEqualJSON, map[string]Untyped{"metric1": 6, "rowCount": 2})
+	Assert(t, results[0], utils.HasEqualJSON, RowMap{"metric1": 6, "rowCount": 2})
 }
 
 func TestGroupByQueryWithNilValues(t *testing.T) {

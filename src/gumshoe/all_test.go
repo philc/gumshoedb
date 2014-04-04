@@ -19,12 +19,16 @@ func testDB() *DB {
 	return db
 }
 
-func insertRow(db *DB, at float64, dimensionValue, metricValue Untyped) {
-	row := RowMap{"at": at, "dim1": dimensionValue, "metric1": metricValue}
-	if err := db.Insert([]RowMap{row}); err != nil {
+func insertRows(db *DB, rows []RowMap) {
+	if err := db.Insert(rows); err != nil {
 		panic(err)
 	}
+	db.Flush()
 }
+
+func insertRow(db *DB, row RowMap) { insertRows(db, []RowMap{row}) }
+
+// TODO(caleb): Delete below functions if unused
 
 func makeColumn(name, typeString string) Column {
 	return Column(makeMetricColumn(name, typeString))
