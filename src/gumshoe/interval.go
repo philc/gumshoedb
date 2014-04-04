@@ -13,9 +13,6 @@ import (
 	mmap "github.com/edsrzf/mmap-go"
 )
 
-// TODO(caleb): Move this constant to a logical location
-const intervalDuration = time.Hour
-
 // A Segment is an immutable chunk of memory that is part of the data in an interval. It may be backed by a
 // memory-mapped file.
 type Segment struct {

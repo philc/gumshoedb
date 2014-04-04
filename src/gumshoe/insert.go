@@ -50,12 +50,12 @@ func (db *DB) insertRow(rowMap RowMap) error {
 	if err != nil {
 		return err
 	}
-	timestamp := row.Timestamp.Truncate(intervalDuration)
+	timestamp := row.Timestamp.Truncate(db.IntervalDuration)
 	interval, ok := db.memTable.Intervals[timestamp]
 	if !ok {
 		interval = &MemInterval{
 			Start: timestamp,
-			End:   timestamp.Add(intervalDuration),
+			End:   timestamp.Add(db.IntervalDuration),
 			// Make a B+tree with bytes.Compare (lexicographical) as the key comparison function.
 			Tree: b.TreeNew(bytes.Compare),
 		}

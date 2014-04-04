@@ -13,6 +13,7 @@ type Config struct {
 	ListenAddr       string      `toml:"listen_addr"`
 	DatabaseDir      string      `toml:"database_dir"`
 	FlushDuration    Duration    `toml:"flush_duration"`
+	IntervalDuration Duration    `toml:"interval_duration"`
 	TimestampColumn  [2]string   `toml:"timestamp_column"`
 	DimensionColumns [][2]string `toml:"dimension_columns"`
 	MetricColumns    [][2]string `toml:"metric_columns"`
@@ -86,11 +87,20 @@ func (c *Config) ToSchema() (*gumshoe.Schema, error) {
 		names[col.Name] = true
 	}
 
+	// Check durations for sanity
+	if c.FlushDuration.Duration < 10*time.Second {
+		return nil, fmt.Errorf("flush duration is too short: %s", c.FlushDuration)
+	}
+	if c.IntervalDuration.Duration < time.Minute {
+		return nil, fmt.Errorf("interval duration is too short: %s", c.IntervalDuration)
+	}
+
 	return &gumshoe.Schema{
 		TimestampColumn:  timestampColumn.Column,
 		DimensionColumns: dimensions,
 		MetricColumns:    metrics,
 		SegmentSize:      1e6,
+		IntervalDuration: c.IntervalDuration.Duration,
 		Dir:              c.DatabaseDir,
 		FlushDuration:    c.FlushDuration.Duration,
 	}, nil

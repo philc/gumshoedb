@@ -44,6 +44,7 @@ type Schema struct {
 	DimensionColumns []DimensionColumn
 	MetricColumns    []MetricColumn
 	SegmentSize      int // A soft limit (segments are truncated after they exceed this size)
+	IntervalDuration time.Duration
 
 	Dir           string        `json:"-"` // Path to persist a DB
 	FlushDuration time.Duration `json:"-"` // How frequently to flush the memtable

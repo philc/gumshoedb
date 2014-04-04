@@ -4,6 +4,7 @@ database_dir = "MEMORY"
 
 # The maximum amount of time between saves to disk.
 flush_duration = "3m"
+interval_duration = "1h"
 
 # Every row must have a timestamp column.
 timestamp_column = ["at", "uint32"]
