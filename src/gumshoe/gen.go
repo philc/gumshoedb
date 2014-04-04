@@ -148,7 +148,6 @@ func setRowValue(pos unsafe.Pointer, typ Type, value float64) {
 	}
 }
 
-
 // numericCellValue decodes a numeric value from cell based on typ. It does not look into any dimension
 // tables.
 func (s *State) numericCellValue(cell unsafe.Pointer, typ Type) Untyped {
@@ -157,24 +156,6 @@ func (s *State) numericCellValue(cell unsafe.Pointer, typ Type) Untyped {
 		return *(*{{.GoName}})(cell){{end}}
 	}
 	panic("unexpected type")
-}
-
-// UntypedToFloat64 converts u to a float, if it is some int or float type. Otherwise, it panics.
-func UntypedToFloat64(u Untyped) float64 {
-	switch n := u.(type) { {{range .Types}}
-	case {{.GoName}}:
-		return float64(n){{end}}
-	}
-	panic("unexpected type")
-}
-
-// UntypedToInt converts u to an int, if it is some integer type. Otherwise, it panics.
-func UntypedToInt(u Untyped) int {
-	switch n := u.(type) { {{range .IntTypes}}
-	case {{.GoName}}:
-		return int(n){{end}}
-	}
-	panic("not an integer type")
 }
 
 // Query helper functions

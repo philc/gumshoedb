@@ -128,46 +128,6 @@ func (s *State) numericCellValue(cell unsafe.Pointer, typ Type) Untyped {
 	panic("unexpected type")
 }
 
-// UntypedToFloat64 converts u to a float, if it is some int or float type. Otherwise, it panics.
-func UntypedToFloat64(u Untyped) float64 {
-	switch n := u.(type) {
-	case uint8:
-		return float64(n)
-	case int8:
-		return float64(n)
-	case uint16:
-		return float64(n)
-	case int16:
-		return float64(n)
-	case uint32:
-		return float64(n)
-	case int32:
-		return float64(n)
-	case float32:
-		return float64(n)
-	}
-	panic("unexpected type")
-}
-
-// UntypedToInt converts u to an int, if it is some integer type. Otherwise, it panics.
-func UntypedToInt(u Untyped) int {
-	switch n := u.(type) {
-	case uint8:
-		return int(n)
-	case int8:
-		return int(n)
-	case uint16:
-		return int(n)
-	case int16:
-		return int(n)
-	case uint32:
-		return int(n)
-	case int32:
-		return int(n)
-	}
-	panic("not an integer type")
-}
-
 // Query helper functions
 
 type FilterType int

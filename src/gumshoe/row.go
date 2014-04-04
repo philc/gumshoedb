@@ -5,11 +5,24 @@ package gumshoe
 import (
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"time"
 	"unsafe"
 )
 
 type Untyped interface{}
+
+// UntypedToFloat64 converts u to a float, if it is some numeric type. Otherwise, it panics. This function
+// should not be called in critical code paths.
+func UntypedToFloat64(u Untyped) float64 {
+	return reflect.ValueOf(u).Convert(reflect.TypeOf(float64(0))).Float()
+}
+
+// UntypedToInt converts u to an int, if it is some numeric type. Otherwise, it panics. This function should
+// not be called in critical code paths.
+func UntypedToInt(u Untyped) int {
+	return int(reflect.ValueOf(u).Convert(reflect.TypeOf(int(0))).Int())
+}
 
 func (t Type) MarshalJSON() ([]byte, error) { return []byte(fmt.Sprintf("%q", typeNames[t])), nil }
 
