@@ -3,8 +3,10 @@ package gumshoe
 import (
 	"io/ioutil"
 	"os"
+	"path/filepath"
 	"strconv"
 	"testing"
+	"time"
 
 	"utils"
 
@@ -63,6 +65,37 @@ func TestRowsGetCollapsedUponInsertion(t *testing.T) {
 	Assert(t, physicalRows(db), Equals, 3)
 }
 
+func TestMemAndStateIntervalsAreCombined(t *testing.T) {
+	db := makeTestDB()
+	defer db.Close()
+
+	startTime, err := time.Parse("January 2, 2006", "April 1, 2014")
+	if err != nil {
+		panic(err)
+	}
+
+	insertRows(db, []RowMap{
+		{"at": float64(startTime.Unix()), "dim1": "string1", "metric1": 1.0},
+		{"at": float64(startTime.Add(time.Hour).Unix()), "dim1": "string1", "metric1": 1.0},
+	})
+	db.Flush()
+	Assert(t, len(db.State.Intervals), Equals, 2)
+
+	insertRows(db, []RowMap{
+		{"at": float64(startTime.Add(time.Hour).Unix()), "dim1": "string1", "metric1": 1.0},
+		{"at": float64(startTime.Add(2 * time.Hour).Unix()), "dim1": "string1", "metric1": 1.0},
+	})
+	db.Flush()
+	Assert(t, len(db.State.Intervals), Equals, 3)
+
+	results := runWithGroupBy(db, QueryGrouping{TimeTruncationNone, "at", "at"})
+	Assert(t, results, utils.HasEqualJSON, []RowMap{
+		{"at": float64(startTime.Unix()), "metric1": 1.0, "rowCount": 1.0},
+		{"at": float64(startTime.Add(time.Hour).Unix()), "metric1": 2.0, "rowCount": 2.0},
+		{"at": float64(startTime.Add(2 * time.Hour).Unix()), "metric1": 1.0, "rowCount": 1.0},
+	})
+}
+
 func TestInsertAndReadNilValues(t *testing.T) {
 	db := makeTestDB()
 	insertRows(db, []RowMap{
@@ -76,20 +109,23 @@ func TestInsertAndReadNilValues(t *testing.T) {
 	})
 }
 
-func TestPersistenceEndToEnd(t *testing.T) {
+func makeTestPersistentDB() *DB {
 	tempDir, err := ioutil.TempDir("", "gumshoe-persistence-test")
 	if err != nil {
-		t.Fatal(err)
+		panic(err)
 	}
-	defer os.RemoveAll(tempDir)
-
 	schema := schemaFixture()
 	schema.Dir = tempDir
-	schema.SegmentSize = 100
 	db, err := Open(schema)
 	if err != nil {
-		t.Fatal(err)
+		panic(err)
 	}
+	return db
+}
+
+func TestPersistenceEndToEnd(t *testing.T) {
+	db := makeTestPersistentDB()
+	defer os.RemoveAll(db.Dir)
 
 	// Insert a bunch of data
 	var rows []RowMap
@@ -109,7 +145,7 @@ func TestPersistenceEndToEnd(t *testing.T) {
 
 	// Reopen the DB and try again
 	db.Close()
-	db, err = Open(schema)
+	db, err := Open(db.Schema)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -117,4 +153,27 @@ func TestPersistenceEndToEnd(t *testing.T) {
 	Assert(t, physicalRows(db), Equals, 100)
 	result = runQuery(db, createQuery())
 	Assert(t, result[0]["metric1"], Equals, uint32(10000))
+}
+
+func TestOldIntervalsAreDeleted(t *testing.T) {
+	db := makeTestPersistentDB()
+	defer os.RemoveAll(db.Dir)
+
+	insertRow(db, RowMap{"at": 0.0, "dim1": "string1", "metric1": 1.0})
+	db.Flush()
+
+	firstGenSegmentFilename := filepath.Join(db.Dir, "interval.0.generation0000.segment0000")
+	if _, err := os.Stat(firstGenSegmentFilename); err != nil {
+		t.Fatalf("expected segment file at %s to exist", firstGenSegmentFilename)
+	}
+
+	insertRow(db, RowMap{"at": 0.0, "dim1": "string1", "metric1": 1.0})
+	db.Flush()
+	if _, err := os.Stat(firstGenSegmentFilename); !os.IsNotExist(err) {
+		t.Fatalf("expected segment file at %s to have been deleted", firstGenSegmentFilename)
+	}
+	secondGenSegmentFilename := filepath.Join(db.Dir, "interval.0.generation0001.segment0000")
+	if _, err := os.Stat(secondGenSegmentFilename); err != nil {
+		t.Fatalf("expected segment file at %s to exist", secondGenSegmentFilename)
+	}
 }
