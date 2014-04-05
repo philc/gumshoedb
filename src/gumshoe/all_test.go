@@ -14,7 +14,7 @@ func schemaFixture() *Schema {
 	}
 }
 
-func testDB() *DB {
+func makeTestDB() *DB {
 	db, err := Open(schemaFixture())
 	if err != nil {
 		panic(err)

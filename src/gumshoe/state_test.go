@@ -7,7 +7,7 @@ import (
 )
 
 func TestCompressionFactorWorks(t *testing.T) {
-	db := testDB()
+	db := makeTestDB()
 	for i := 0; i < 4; i++ {
 		insertRow(db, RowMap{"at": 0.0, "dim1": "string1", "metric1": 1.0})
 	}

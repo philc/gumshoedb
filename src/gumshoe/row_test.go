@@ -7,7 +7,7 @@ import (
 )
 
 func TestSerializeRowMapReturnsErrorForBadRows(t *testing.T) {
-	db := testDB()
+	db := makeTestDB()
 	defer db.Close()
 
 	badRows := []RowMap{

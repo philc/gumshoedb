@@ -17,7 +17,7 @@ func createQuery() *Query {
 }
 
 func createTestDBForFilterTests() *DB {
-	db := testDB()
+	db := makeTestDB()
 	insertRows(db, []RowMap{
 		{"at": 0.0, "dim1": "string1", "metric1": 1.0},
 		{"at": 0.0, "dim1": "string2", "metric1": 2.0},
@@ -26,7 +26,7 @@ func createTestDBForFilterTests() *DB {
 }
 
 func createTestDBForNilQueryTests() *DB {
-	db := testDB()
+	db := makeTestDB()
 	insertRows(db, []RowMap{
 		{"at": 0.0, "dim1": "a", "metric1": 1.0},
 		{"at": 0.0, "dim1": "b", "metric1": 2.0},
@@ -130,7 +130,7 @@ func TestInvokeQueryFiltersRowsUsingIn(t *testing.T) {
 }
 
 func TestInvokeQueryWorksWhenGroupingByAStringColumn(t *testing.T) {
-	db := testDB()
+	db := makeTestDB()
 	defer db.Close()
 	insertRows(db, []RowMap{
 		{"at": 0.0, "dim1": "string1", "metric1": 1.0},
@@ -144,7 +144,7 @@ func TestInvokeQueryWorksWhenGroupingByAStringColumn(t *testing.T) {
 }
 
 func TestGroupingWithATimeTransformFunctionWorks(t *testing.T) {
-	db := testDB()
+	db := makeTestDB()
 	defer db.Close()
 	// at is truncated by day, so these points are from day 0, 2, 2.
 	twoDays := 2.0 * 24 * 60 * 60

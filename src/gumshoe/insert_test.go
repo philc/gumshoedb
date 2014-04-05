@@ -12,7 +12,7 @@ import (
 )
 
 func TestExpectedNumberOfSegmentsAreAllocated(t *testing.T) {
-	db := testDB()
+	db := makeTestDB()
 	defer db.Close()
 	db.Schema.SegmentSize = 32 // Rows are 13 bytes apiece
 
@@ -44,7 +44,7 @@ func physicalRows(db *DB) int {
 }
 
 func TestRowsGetCollapsedUponInsertion(t *testing.T) {
-	db := testDB()
+	db := makeTestDB()
 	defer db.Close()
 
 	// These two rows should be collapsed
@@ -64,7 +64,7 @@ func TestRowsGetCollapsedUponInsertion(t *testing.T) {
 }
 
 func TestInsertAndReadNilValues(t *testing.T) {
-	db := testDB()
+	db := makeTestDB()
 	insertRows(db, []RowMap{
 		{"at": hour(0), "dim1": "a", "metric1": 0.0},
 		{"at": hour(1), "dim1": nil, "metric1": 1.0},
