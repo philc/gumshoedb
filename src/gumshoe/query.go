@@ -342,10 +342,10 @@ func (s *State) postProcessScanRows(aggregates []*rowAggregate, query *Query,
 	rows := make([]RowMap, len(aggregates))
 	for i, aggregate := range aggregates {
 		row := make(RowMap)
-		for _, queryAggregate := range query.Aggregates {
+		for i, queryAggregate := range query.Aggregates {
 			index := s.MetricNameToIndex[queryAggregate.Column]
 			column := s.MetricColumns[index]
-			sum := s.numericCellValue(aggregate.Sums[index].Pointer(), column.Type)
+			sum := s.numericCellValue(aggregate.Sums[i].Pointer(), column.Type)
 			switch queryAggregate.Type {
 			case AggregateSum:
 				row[queryAggregate.Name] = sum
