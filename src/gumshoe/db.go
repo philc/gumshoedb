@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"time"
 )
 
 const dbMetadataFilename = "db.json"
@@ -88,19 +87,6 @@ func (db *DB) initialize() {
 
 	go db.HandleRequests()
 	go db.HandleInserts()
-	go func() {
-		// Not using a ticker because I want a fixed break between flushes even if they take a long time.
-		timer := time.NewTimer(db.Schema.FlushDuration)
-		for {
-			select {
-			case <-db.shutdown:
-				return
-			case <-timer.C:
-				db.flushSignals <- nil
-				timer.Reset(db.Schema.FlushDuration)
-			}
-		}
-	}()
 }
 
 // Flush triggers a DB flush and waits for it to complete.

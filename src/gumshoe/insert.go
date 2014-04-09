@@ -35,11 +35,7 @@ func (db *DB) HandleInserts() {
 			}
 			insert.Err <- err
 		case errCh := <-db.flushSignals:
-			err := db.flush()
-			if errCh != nil {
-				errCh <- err
-			}
-			// TODO(caleb): If errCh is nil, log (and crash?)
+			errCh <- db.flush()
 		}
 	}
 }
@@ -85,7 +81,13 @@ func (t times) Swap(i, j int)      { t[i], t[j] = t[j], t[i] }
 
 // flush saves the current memTable to disk by combining with overlapping state intervals to create a new
 // state. This should only be called by the insertion goroutine.
-// TODO(caleb): Figure out and document what happens when the error is not nil (and do cleanup?)
+//
+// If the result error is not nil, the state of database may not be well-defined and a user should clean up
+// any extraneous segment files not referenced by the metadata. (Note the new metadata is written at the end,
+// atomically, so it should be used as the source of truth for which segments should be used and which
+// discarded.)
+//
+// TODO(caleb): Automatic cleanup
 func (db *DB) flush() error {
 	// Collect the interval keys in the state and in the memTable
 	stateKeys := make([]time.Time, 0, len(db.State.Intervals))

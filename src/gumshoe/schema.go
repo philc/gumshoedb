@@ -67,7 +67,6 @@ type Schema struct {
 }
 
 type RunConfig struct {
-	FlushDuration time.Duration // How frequently to flush the memtable
 }
 
 // initialize fills in the derived fields of s.
@@ -114,9 +113,6 @@ func (s *Schema) initialize() {
 // fillDefaults sets fields of c to reasonable default values if they are currently set to the zero value for
 // the type.
 func (c *RunConfig) fillDefaults() {
-	if c.FlushDuration == 0 {
-		c.FlushDuration = time.Minute
-	}
 }
 
 // Equivalent returns an error describing a difference between the json-public fields of s and other or nil if
