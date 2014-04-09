@@ -9,25 +9,32 @@ import (
 	"gumshoe"
 )
 
-type Config struct {
-	ListenAddr       string      `toml:"listen_addr"`
-	DatabaseDir      string      `toml:"database_dir"`
-	FlushDuration    Duration    `toml:"flush_duration"`
+type Schema struct {
 	IntervalDuration Duration    `toml:"interval_duration"`
 	TimestampColumn  [2]string   `toml:"timestamp_column"`
 	DimensionColumns [][2]string `toml:"dimension_columns"`
 	MetricColumns    [][2]string `toml:"metric_columns"`
 }
 
-// Produces a Schema based on the config file's values.
+type Config struct {
+	ListenAddr    string   `toml:"listen_addr"`
+	DatabaseDir   string   `toml:"database_dir"`
+	FlushDuration Duration `toml:"flush_duration"`
+	Schema        Schema   `toml:"schema"`
+}
+
+// Produces a gumshoe Schema based on a Config's values.
 func (c *Config) ToSchema() (*gumshoe.Schema, error) {
+	dir := ""
+	diskBacked := true
 	switch c.DatabaseDir {
 	case "":
 		return nil, errors.New("database directory must be provided. Use 'MEMORY' to specify an in-memory DB.")
 	case "MEMORY":
-		c.DatabaseDir = ""
+		diskBacked = false
 	}
-	name, typ, isString := parseColumn(c.TimestampColumn)
+
+	name, typ, isString := parseColumn(c.Schema.TimestampColumn)
 	if typ != "uint32" {
 		return nil, fmt.Errorf("timestamp column (%q) must be uint32", name)
 	}
@@ -39,8 +46,8 @@ func (c *Config) ToSchema() (*gumshoe.Schema, error) {
 		return nil, err
 	}
 
-	dimensions := make([]gumshoe.DimensionColumn, len(c.DimensionColumns))
-	for i, colPair := range c.DimensionColumns {
+	dimensions := make([]gumshoe.DimensionColumn, len(c.Schema.DimensionColumns))
+	for i, colPair := range c.Schema.DimensionColumns {
 		name, typ, isString := parseColumn(colPair)
 		if isString {
 			switch typ {
@@ -56,11 +63,11 @@ func (c *Config) ToSchema() (*gumshoe.Schema, error) {
 		dimensions[i] = col
 	}
 
-	if len(c.MetricColumns) == 0 {
+	if len(c.Schema.MetricColumns) == 0 {
 		return nil, fmt.Errorf("schema must include at least one metric column")
 	}
-	metrics := make([]gumshoe.MetricColumn, len(c.MetricColumns))
-	for i, colPair := range c.MetricColumns {
+	metrics := make([]gumshoe.MetricColumn, len(c.Schema.MetricColumns))
+	for i, colPair := range c.Schema.MetricColumns {
 		name, typ, isString := parseColumn(colPair)
 		if isString {
 			return nil, fmt.Errorf("metric column (%q) has string type; not allowed for metric columns", name)
@@ -87,12 +94,9 @@ func (c *Config) ToSchema() (*gumshoe.Schema, error) {
 		names[col.Name] = true
 	}
 
-	// Check durations for sanity
-	if c.FlushDuration.Duration < 10*time.Second {
-		return nil, fmt.Errorf("flush duration is too short: %s", c.FlushDuration)
-	}
-	if c.IntervalDuration.Duration < time.Minute {
-		return nil, fmt.Errorf("interval duration is too short: %s", c.IntervalDuration)
+	// Check duration for sanity
+	if c.Schema.IntervalDuration.Duration < time.Minute {
+		return nil, fmt.Errorf("interval duration is too short: %s", c.Schema.IntervalDuration)
 	}
 
 	return &gumshoe.Schema{
@@ -100,11 +104,9 @@ func (c *Config) ToSchema() (*gumshoe.Schema, error) {
 		DimensionColumns: dimensions,
 		MetricColumns:    metrics,
 		SegmentSize:      1e6,
-		IntervalDuration: c.IntervalDuration.Duration,
-		Dir:              c.DatabaseDir,
-		RunConfig: gumshoe.RunConfig{
-			FlushDuration: c.FlushDuration.Duration,
-		},
+		IntervalDuration: c.Schema.IntervalDuration.Duration,
+		DiskBacked:       diskBacked,
+		Dir:              dir,
 	}, nil
 }
 

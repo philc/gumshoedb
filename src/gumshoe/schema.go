@@ -45,7 +45,8 @@ type Schema struct {
 	SegmentSize      int
 	IntervalDuration time.Duration
 
-	Dir string `json:"-"` // Path to persist a DB
+	DiskBacked bool   `json:"-"`
+	Dir        string `json:"-"` // Path to persist a DB
 
 	// NOTE(caleb) the runtime configuration options are technically not part of the "schema" but we'll keep
 	// them here for convenience.

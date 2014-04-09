@@ -113,6 +113,7 @@ func makeTestPersistentDB() *DB {
 		panic(err)
 	}
 	schema := schemaFixture()
+	schema.DiskBacked = true
 	schema.Dir = tempDir
 	db, err := Open(schema)
 	if err != nil {

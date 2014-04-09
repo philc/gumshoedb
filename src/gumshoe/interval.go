@@ -193,8 +193,7 @@ func (s *Schema) WriteMemInterval(memInterval *MemInterval) (*Interval, error) {
 	if err != nil {
 		return nil, err
 	}
-	diskBacked := s.Dir != ""
-	interval := newWriteOnlyInterval(diskBacked, 0, memInterval.Start, memInterval.End)
+	interval := newWriteOnlyInterval(s.DiskBacked, 0, memInterval.Start, memInterval.End)
 	for {
 		key, val, err := cursor.Next()
 		if err != nil {
@@ -223,8 +222,8 @@ func (s *Schema) WriteCombinedInterval(memInterval *MemInterval, stateInterval *
 		return nil, err
 	}
 	stateCursor := stateInterval.cursor(s)
-	diskBacked := s.Dir != ""
-	interval := newWriteOnlyInterval(diskBacked, stateInterval.Generation+1, memInterval.Start, memInterval.End)
+	interval := newWriteOnlyInterval(s.DiskBacked, stateInterval.Generation+1,
+		memInterval.Start, memInterval.End)
 
 	// Do an initial read from both mem and state, then loop and compare, advancing one or both (a classic
 	// merge).

@@ -164,7 +164,7 @@ func (db *DB) flush() error {
 	// Wait for all requests on the old state to be done.
 	<-allRequestsFinished
 
-	if db.Dir != "" {
+	if db.DiskBacked {
 		// Write out the metadata
 		if err := db.writeMetadataFile(); err != nil {
 			return err

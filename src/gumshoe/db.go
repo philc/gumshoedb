@@ -25,12 +25,11 @@ type DB struct {
 }
 
 // Open loads an existing DB or else makes a new one.
-// - If schema.Dir is "", then the DB will be in-memory only.
-// - If schema.Dir doesn't exist, then a fresh, disk-backed DB will be created.
+// - If schema.DiskBacked is false, then the DB will be in-memory only.
+// - If schema.DiskBacked is true and schema.Dir doesn't exist, then a fresh, disk-backed DB will be created.
 // - Otherwise, Open loads an existing DB from schema.Dir after sanity checking against the given schema.
 func Open(schema *Schema) (*DB, error) {
-	if schema.Dir == "" {
-		// Memory-only
+	if !schema.DiskBacked {
 		db := &DB{
 			Schema: schema,
 			State:  NewState(schema),
