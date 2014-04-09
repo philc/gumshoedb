@@ -89,7 +89,7 @@ func TestMemAndStateIntervalsAreCombined(t *testing.T) {
 	Assert(t, len(db.State.Intervals), Equals, 3)
 
 	results := runWithGroupBy(db, QueryGrouping{TimeTruncationNone, "at", "at"})
-	Assert(t, results, utils.DeepEqualUnordered, []RowMap{
+	Assert(t, results, utils.DeepEqualsUnordered, []RowMap{
 		{"at": float64(startTime.Unix()), "metric1": 1.0, "rowCount": 1.0},
 		{"at": float64(startTime.Add(time.Hour).Unix()), "metric1": 2.0, "rowCount": 2.0},
 		{"at": float64(startTime.Add(2 * time.Hour).Unix()), "metric1": 1.0, "rowCount": 1.0},
@@ -103,7 +103,7 @@ func TestInsertAndReadNilValues(t *testing.T) {
 		{"at": hour(1), "dim1": nil, "metric1": 1.0},
 	})
 	results := runWithGroupBy(db, QueryGrouping{TimeTruncationNone, "dim1", "dim1"})
-	Assert(t, results, utils.DeepEqualUnordered, []RowMap{
+	Assert(t, results, utils.DeepEqualsUnordered, []RowMap{
 		{"dim1": "a", "metric1": 0.0, "rowCount": 1.0},
 		{"dim1": nil, "metric1": 1.0, "rowCount": 1.0},
 	})

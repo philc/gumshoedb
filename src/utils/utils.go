@@ -27,26 +27,26 @@ func HasEqualJSON(args ...interface{}) (ok bool, message string) {
 	return DeepEquals(o1, o2)
 }
 
-// DeepConvertibleEqual is a checker like DeepEqual which converts all numeric types to float64 before comparing.
-// DeepConvertibleEqual only handles simple types, slices, and maps (but it is recursive).
+// DeepConvertibleEquals is a checker like DeepEqual which converts all numeric types to float64 before comparing.
+// DeepConvertibleEquals only handles simple types, slices, and maps (but it is recursive).
 // NOTE(caleb): Add more types as needed.
-func DeepConvertibleEqual(args ...interface{}) (ok bool, message string) {
+func DeepConvertibleEquals(args ...interface{}) (ok bool, message string) {
 	params, message, err := ExpectNArgs(2, args)
 	if err != nil {
 		return false, err.Error()
 	}
-	if !deepValueConvertibleEqual(reflect.ValueOf(params[0]), reflect.ValueOf(params[1])) {
+	if !deepValueConvertibleEquals(reflect.ValueOf(params[0]), reflect.ValueOf(params[1])) {
 		if message != "" {
 			return false, message
 		}
-		return false, fmt.Sprintf("deep equal: %#v does not equal %#v", params[0], params[1])
+		return false, fmt.Sprintf("deep equal: %+v does not equal %+v", params[0], params[1])
 	}
 	return true, ""
 }
 
-// DeepEqualUnordered is a checker similar to DeepConvertibleEqual but expects two top-level slices, and does
+// DeepEqualsUnordered is a checker similar to DeepConvertibleEquals but expects two top-level slices, and does
 // order-independent comparisons (for the top level only).
-func DeepEqualUnordered(args ...interface{}) (ok bool, message string) {
+func DeepEqualsUnordered(args ...interface{}) (ok bool, message string) {
 	params, message, err := ExpectNArgs(2, args)
 	if err != nil {
 		return false, err.Error()
@@ -70,17 +70,17 @@ outer:
 				continue
 			}
 			item2 := v2.Index(j)
-			if deepValueConvertibleEqual(item1, item2) {
+			if deepValueConvertibleEquals(item1, item2) {
 				found[j] = true
 				continue outer
 			}
 		}
-		return false, fmt.Sprintf("element %#v found in first slice but not second", item1.Interface())
+		return false, fmt.Sprintf("element %+v found in first slice but not second", item1.Interface())
 	}
 	return true, ""
 }
 
-func deepValueConvertibleEqual(v1, v2 reflect.Value) bool {
+func deepValueConvertibleEquals(v1, v2 reflect.Value) bool {
 	if !v1.Type().ConvertibleTo(v2.Type()) {
 		return false
 	}
@@ -100,7 +100,7 @@ func deepValueConvertibleEqual(v1, v2 reflect.Value) bool {
 			return false
 		}
 		for i := 0; i < v1.Len(); i++ {
-			if !deepValueConvertibleEqual(v1.Index(i), v2.Index(i)) {
+			if !deepValueConvertibleEquals(v1.Index(i), v2.Index(i)) {
 				return false
 			}
 		}
@@ -113,7 +113,7 @@ func deepValueConvertibleEqual(v1, v2 reflect.Value) bool {
 			return false
 		}
 		for _, k := range v1.MapKeys() {
-			if !deepValueConvertibleEqual(v1.MapIndex(k), v2.MapIndex(k)) {
+			if !deepValueConvertibleEquals(v1.MapIndex(k), v2.MapIndex(k)) {
 				return false
 			}
 		}
@@ -122,14 +122,21 @@ func deepValueConvertibleEqual(v1, v2 reflect.Value) bool {
 		if v1.IsNil() || v2.IsNil() {
 			return v1.IsNil() == v2.IsNil()
 		}
-		return deepValueConvertibleEqual(v1.Elem(), v2.Elem())
+		return deepValueConvertibleEquals(v1.Elem(), v2.Elem())
 	case reflect.String:
 		return v1.String() == v2.String()
 	case reflect.Bool:
 		return v1.Bool() == v2.Bool()
 	case reflect.Float32, reflect.Float64:
 		// Ignore small rounding errors
-		return v1.Float()-v2.Float() < 0.00001
+		f1, f2 := v1.Float(), v2.Float()
+		if f1 > f2 {
+			f1, f2 = f2, f1
+		}
+		if f2 == 0 {
+			return f1 == 0
+		}
+		return (f2-f1)/f2 < 0.001
 	case reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uint:
 		return v1.Uint() == v2.Uint()
 	case reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64, reflect.Int:
