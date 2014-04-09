@@ -3,11 +3,16 @@ package config
 import (
 	"errors"
 	"fmt"
+	"io"
 	"strings"
 	"time"
 
 	"gumshoe"
+
+	"github.com/BurntSushi/toml"
 )
+
+// All struct fields with a toml tag are required (see checkUndefinedFields).
 
 type Schema struct {
 	IntervalDuration Duration    `toml:"interval_duration"`
@@ -17,14 +22,13 @@ type Schema struct {
 }
 
 type Config struct {
-	ListenAddr    string   `toml:"listen_addr"`
-	DatabaseDir   string   `toml:"database_dir"`
-	FlushDuration Duration `toml:"flush_duration"`
-	Schema        Schema   `toml:"schema"`
+	ListenAddr  string `toml:"listen_addr"`
+	DatabaseDir string `toml:"database_dir"`
+	Schema      Schema `toml:"schema"`
 }
 
 // Produces a gumshoe Schema based on a Config's values.
-func (c *Config) ToSchema() (*gumshoe.Schema, error) {
+func (c *Config) makeSchema() (*gumshoe.Schema, error) {
 	dir := ""
 	diskBacked := true
 	switch c.DatabaseDir {
@@ -128,4 +132,20 @@ func (d *Duration) UnmarshalText(text []byte) error {
 	var err error
 	d.Duration, err = time.ParseDuration(string(text))
 	return err
+}
+
+func LoadTOMLConfig(r io.Reader) (*Config, *gumshoe.Schema, error) {
+	config := new(Config)
+	meta, err := toml.DecodeReader(r, config)
+	if err != nil {
+		return nil, nil, err
+	}
+	if err := checkUndefinedFields(meta, config); err != nil {
+		return nil, nil, err
+	}
+	schema, err := config.makeSchema()
+	if err != nil {
+		return nil, nil, err
+	}
+	return config, schema, nil
 }
