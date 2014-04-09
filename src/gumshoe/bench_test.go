@@ -66,7 +66,7 @@ func BenchmarkFilterQuery(b *testing.B) {
 // aggregates.
 func BenchmarkGroupByQuery(b *testing.B) {
 	setup(b)
-	query := createBenchmarkQuery([]QueryGrouping{{TimeTruncationNone, "dim2", "dim2"}}, nil)
+	query := createBenchmarkQuery([]QueryGrouping{{TimeTruncationNone, "dim3", "dim3"}}, nil)
 	b.ResetTimer()
 	var results []RowMap
 	for i := 0; i < b.N; i++ {
@@ -77,7 +77,7 @@ func BenchmarkGroupByQuery(b *testing.B) {
 	expectedResult := make([]RowMap, groupCount)
 	for i := range expectedResult {
 		expectedResult[i] = RowMap{
-			"metric001": BenchmarkRows / groupCount, "dim2": i, "rowCount": BenchmarkRows / groupCount,
+			"metric001": BenchmarkRows / groupCount, "dim3": i, "rowCount": BenchmarkRows / groupCount,
 		}
 	}
 	Assert(b, results, utils.DeepConvertibleEquals, expectedResult)
@@ -111,10 +111,12 @@ func createBenchmarkQueryAggregates(columns []string) []QueryAggregate {
 
 // setUpDB creates a test DB to represent a realistic schema.
 func setUpDB() *DB {
-	dimensions := make([]DimensionColumn, 2)
-	dimensions[0] = makeDimensionColumn("dim1", "uint32", false)
-	dimensions[1] = makeDimensionColumn("dim2", "uint32", false)
-	numMetrics := BenchmarkColumns - 2
+	dimensions := []DimensionColumn{
+		makeDimensionColumn("dim1", "uint32", false),
+		makeDimensionColumn("dim2", "uint32", false),
+		makeDimensionColumn("dim3", "uint16", false),
+	}
+	numMetrics := BenchmarkColumns - len(dimensions)
 	metrics := make([]MetricColumn, numMetrics)
 	for i := range metrics {
 		metrics[i] = makeMetricColumn(fmt.Sprintf("metric%03d", i), "int32")
@@ -148,6 +150,7 @@ func populateBenchmarkDB(db *DB) {
 		}
 		row["dim1"] = float64(i)     // Since this is unique per row, it prevents row collapsing.
 		row["dim2"] = float64(i % 2) // We use this for grouping operations.
+		row["dim3"] = float64(i % 2) // We use this for grouping operations.
 		row["at"] = float64(0)
 		rows[i] = row
 	}
