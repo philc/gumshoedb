@@ -45,8 +45,11 @@ type Schema struct {
 	SegmentSize      int
 	IntervalDuration time.Duration
 
-	Dir           string        `json:"-"` // Path to persist a DB
-	FlushDuration time.Duration `json:"-"` // How frequently to flush the memtable
+	Dir string `json:"-"` // Path to persist a DB
+
+	// NOTE(caleb) the runtime configuration options are technically not part of the "schema" but we'll keep
+	// them here for convenience.
+	RunConfig `json:"-"`
 
 	// All other fields are reconstructed from persisted fields
 	DimensionNameToIndex map[string]int
@@ -63,8 +66,14 @@ type Schema struct {
 	RowSize              int   `json:"-"`
 }
 
+type RunConfig struct {
+	FlushDuration time.Duration // How frequently to flush the memtable
+}
+
 // initialize fills in the derived fields of s.
 func (s *Schema) initialize() {
+	s.RunConfig.fillDefaults()
+
 	s.DimensionNameToIndex = make(map[string]int)
 	s.MetricNameToIndex = make(map[string]int)
 
@@ -99,6 +108,14 @@ func (s *Schema) initialize() {
 	}
 	for _, col := range s.MetricColumns {
 		s.RowSize += col.Width
+	}
+}
+
+// fillDefaults sets fields of c to reasonable default values if they are currently set to the zero value for
+// the type.
+func (c *RunConfig) fillDefaults() {
+	if c.FlushDuration == 0 {
+		c.FlushDuration = time.Minute
 	}
 }
 

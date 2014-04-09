@@ -6,7 +6,6 @@ package gumshoe
 import (
 	"fmt"
 	"testing"
-	"time"
 	"utils"
 
 	. "github.com/cespare/a"
@@ -127,7 +126,6 @@ func setUpDB() *DB {
 	schema.MetricColumns = metrics
 	schema.TimestampColumn = makeColumn("at", "uint32")
 	schema.SegmentSize = 1 << 24
-	schema.FlushDuration = time.Hour // No flushing!
 
 	db, err := Open(schema)
 	if err != nil {

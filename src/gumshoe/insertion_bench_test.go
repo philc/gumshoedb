@@ -53,7 +53,6 @@ func BenchmarkInsertion(b *testing.B) {
 		SegmentSize:      5e5, // 500KB
 		IntervalDuration: time.Hour,
 		Dir:              tempDirName,
-		FlushDuration:    time.Hour,
 	}
 	defer os.RemoveAll(tempDirName)
 

@@ -102,7 +102,9 @@ func (c *Config) ToSchema() (*gumshoe.Schema, error) {
 		SegmentSize:      1e6,
 		IntervalDuration: c.IntervalDuration.Duration,
 		Dir:              c.DatabaseDir,
-		FlushDuration:    c.FlushDuration.Duration,
+		RunConfig: gumshoe.RunConfig{
+			FlushDuration: c.FlushDuration.Duration,
+		},
 	}, nil
 }
 

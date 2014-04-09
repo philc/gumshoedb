@@ -9,7 +9,6 @@ func schemaFixture() *Schema {
 		MetricColumns:    []MetricColumn{makeMetricColumn("metric1", "uint32")},
 		SegmentSize:      1 << 10,
 		Dir:              "",
-		FlushDuration:    time.Minute,
 		IntervalDuration: time.Hour,
 	}
 }
