@@ -18,7 +18,7 @@ type DB struct {
 
 	// The inserter reads from these two chans
 	inserts      chan *InsertRequest
-	flushSignals chan chan struct{}
+	flushSignals chan chan error
 
 	// The request goroutine reads from these two chans
 	requests chan *Request
@@ -82,7 +82,7 @@ func (db *DB) initialize() {
 	db.memTable = NewMemTable(db.Schema)
 	db.shutdown = make(chan struct{})
 	db.inserts = make(chan *InsertRequest)
-	db.flushSignals = make(chan chan struct{})
+	db.flushSignals = make(chan chan error)
 	db.requests = make(chan *Request)
 	db.flushes = make(chan *FlushInfo)
 
@@ -104,10 +104,10 @@ func (db *DB) initialize() {
 }
 
 // Flush triggers a DB flush and waits for it to complete.
-func (db *DB) Flush() {
-	done := make(chan struct{})
-	db.flushSignals <- done
-	<-done
+func (db *DB) Flush() error {
+	errCh := make(chan error)
+	db.flushSignals <- errCh
+	return <-errCh
 }
 
 // Close triggers a flush, waits for it to complete, and then shuts down the DB's goroutines. The DB may not

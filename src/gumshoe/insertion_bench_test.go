@@ -81,10 +81,14 @@ func BenchmarkInsertion(b *testing.B) {
 			b.Fatal(err)
 		}
 		if i%50000 == 0 {
-			db.Flush()
+			if err := db.Flush(); err != nil {
+				b.Fatal(err)
+			}
 		}
 	}
-	db.Flush()
+	if err := db.Flush(); err != nil {
+		b.Fatal(err)
+	}
 }
 
 func dimColumn(i int) string    { return fmt.Sprintf("dim%02d", i) }

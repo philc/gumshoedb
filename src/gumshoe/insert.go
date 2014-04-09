@@ -34,11 +34,12 @@ func (db *DB) HandleInserts() {
 				}
 			}
 			insert.Err <- err
-		case done := <-db.flushSignals:
-			db.flush()
-			if done != nil {
-				done <- struct{}{}
+		case errCh := <-db.flushSignals:
+			err := db.flush()
+			if errCh != nil {
+				errCh <- err
 			}
+			// TODO(caleb): If errCh is nil, log (and crash?)
 		}
 	}
 }
@@ -84,7 +85,8 @@ func (t times) Swap(i, j int)      { t[i], t[j] = t[j], t[i] }
 
 // flush saves the current memTable to disk by combining with overlapping state intervals to create a new
 // state. This should only be called by the insertion goroutine.
-func (db *DB) flush() {
+// TODO(caleb): Figure out and document what happens when the error is not nil (and do cleanup?)
+func (db *DB) flush() error {
 	// Collect the interval keys in the state and in the memTable
 	stateKeys := make([]time.Time, 0, len(db.State.Intervals))
 	for t := range db.State.Intervals {
@@ -111,8 +113,7 @@ func (db *DB) flush() {
 		case memKey.Before(stateKey):
 			iv, err := db.WriteMemInterval(db.memTable.Intervals[memKey])
 			if err != nil {
-				// TODO(caleb): handle
-				panic("uh-oh")
+				return err
 			}
 			intervals[memKey] = iv
 			memKeys = memKeys[1:]
@@ -121,8 +122,7 @@ func (db *DB) flush() {
 			memInterval := db.memTable.Intervals[memKey]
 			iv, err := db.WriteCombinedInterval(memInterval, stateInterval)
 			if err != nil {
-				// TODO(caleb): handle
-				panic("uh-oh")
+				return err
 			}
 			intervals[stateKey] = iv
 			stateKeys = stateKeys[1:]
@@ -136,8 +136,7 @@ func (db *DB) flush() {
 	for _, memKey := range memKeys {
 		iv, err := db.WriteMemInterval(db.memTable.Intervals[memKey])
 		if err != nil {
-			// TODO(caleb): handle
-			panic("uh-oh")
+			return err
 		}
 		intervals[memKey] = iv
 	}
@@ -166,8 +165,7 @@ func (db *DB) flush() {
 	if db.Dir != "" {
 		// Write out the metadata
 		if err := db.writeMetadataFile(); err != nil {
-			// TODO(caleb): Handle
-			panic(err)
+			return err
 		}
 
 		// Clean up any now-unused intervals (only associated with previous state).
@@ -176,6 +174,7 @@ func (db *DB) flush() {
 
 	// Replace the MemTable with a fresh, empty one.
 	db.memTable = NewMemTable(db.Schema)
+	return nil
 }
 
 func (db *DB) combineDimensionTables() []*DimensionTable {

@@ -25,7 +25,9 @@ func insertRows(db *DB, rows []RowMap) {
 	if err := db.Insert(rows); err != nil {
 		panic(err)
 	}
-	db.Flush()
+	if err := db.Flush(); err != nil {
+		panic(err)
+	}
 }
 
 func insertRow(db *DB, row RowMap) { insertRows(db, []RowMap{row}) }

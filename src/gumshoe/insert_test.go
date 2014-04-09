@@ -78,14 +78,12 @@ func TestMemAndStateIntervalsAreCombined(t *testing.T) {
 		{"at": float64(startTime.Unix()), "dim1": "string1", "metric1": 1.0},
 		{"at": float64(startTime.Add(time.Hour).Unix()), "dim1": "string1", "metric1": 1.0},
 	})
-	db.Flush()
 	Assert(t, len(db.State.Intervals), Equals, 2)
 
 	insertRows(db, []RowMap{
 		{"at": float64(startTime.Add(time.Hour).Unix()), "dim1": "string1", "metric1": 1.0},
 		{"at": float64(startTime.Add(2 * time.Hour).Unix()), "dim1": "string1", "metric1": 1.0},
 	})
-	db.Flush()
 	Assert(t, len(db.State.Intervals), Equals, 3)
 
 	results := runWithGroupBy(db, QueryGrouping{TimeTruncationNone, "at", "at"})
@@ -133,10 +131,7 @@ func TestPersistenceEndToEnd(t *testing.T) {
 		// Generate 100 unique rows.
 		rows = append(rows, RowMap{"at": 0.0, "dim1": strconv.Itoa(i % 100), "metric1": 1.0})
 	}
-	if err := db.Insert(rows); err != nil {
-		t.Fatal(err)
-	}
-	db.Flush()
+	insertRows(db, rows)
 
 	// Query the data
 	Assert(t, physicalRows(db), Equals, 100)
@@ -160,7 +155,6 @@ func TestOldIntervalsAreDeleted(t *testing.T) {
 	defer os.RemoveAll(db.Dir)
 
 	insertRow(db, RowMap{"at": 0.0, "dim1": "string1", "metric1": 1.0})
-	db.Flush()
 
 	firstGenSegmentFilename := filepath.Join(db.Dir, "interval.0.generation0000.segment0000")
 	if _, err := os.Stat(firstGenSegmentFilename); err != nil {
@@ -168,7 +162,6 @@ func TestOldIntervalsAreDeleted(t *testing.T) {
 	}
 
 	insertRow(db, RowMap{"at": 0.0, "dim1": "string1", "metric1": 1.0})
-	db.Flush()
 	if _, err := os.Stat(firstGenSegmentFilename); !os.IsNotExist(err) {
 		t.Fatalf("expected segment file at %s to have been deleted", firstGenSegmentFilename)
 	}

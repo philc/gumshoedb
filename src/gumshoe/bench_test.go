@@ -132,7 +132,6 @@ func setUpDB() *DB {
 		panic(err)
 	}
 	populateBenchmarkDB(db)
-	db.Flush()
 	return db
 }
 
@@ -153,7 +152,5 @@ func populateBenchmarkDB(db *DB) {
 		rows[i] = row
 	}
 
-	if err := db.Insert(rows); err != nil {
-		panic(err)
-	}
+	insertRows(db, rows)
 }
