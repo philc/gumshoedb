@@ -49,9 +49,9 @@ func (iv *Interval) cursor(s *Schema) *intervalCursor {
 
 // Next reads forward throught the Interval and returns the next key/val pair with count. ok indicates whether
 // iteration should stop.
-func (ic *intervalCursor) Next() (key, val []byte, count int, ok bool) {
+func (ic *intervalCursor) Next() (key, val []byte, count int, more bool) {
 	if ic.SegmentIndex >= len(ic.Interval.Segments) {
-		return
+		return nil, nil, 0, false
 	}
 	segment := ic.Interval.Segments[ic.SegmentIndex]
 	if ic.Offset >= len(segment.Bytes) {
@@ -69,25 +69,23 @@ func (ic *intervalCursor) Next() (key, val []byte, count int, ok bool) {
 
 // A writeOnlyInterval is a fresh interval corresponding with write-only segment files which is being filled
 // in. After it has been fully written it may be converted to an immutable read-only Interval by calling
-// ToInterval.
+// freeze.
 type writeOnlyInterval struct {
+	Interval
 	DiskBacked     bool
-	Generation     int
-	Start          time.Time
-	End            time.Time
-	Segments       int
 	CurSegment     io.Writer
 	CurSegmentSize int
-	NumRows        int
 	buffers        []*bytes.Buffer // Used if !DiskBacked
 }
 
 func newWriteOnlyInterval(diskBacked bool, generation int, start, end time.Time) *writeOnlyInterval {
 	return &writeOnlyInterval{
+		Interval: Interval{
+			Generation: generation,
+			Start:      start,
+			End:        end,
+		},
 		DiskBacked: diskBacked,
-		Generation: generation,
-		Start:      start,
-		End:        end,
 	}
 }
 
@@ -131,15 +129,17 @@ func (iv *writeOnlyInterval) appendRow(s *Schema, dimensions, metrics []byte, co
 	return iv.writeKeyValCount(dimensions, metrics, uint32(count))
 }
 
+// freeze opens segment files as readonly mmaps and returns an immutable *Interval. iv should not be used
+// after calling freeze.
 func (iv *writeOnlyInterval) freeze(s *Schema) (*Interval, error) {
 	if err := iv.closeCurrentSegment(); err != nil {
 		return nil, err
 	}
 
-	segments := make([]*Segment, iv.Segments)
-	for i := 0; i < iv.Segments; i++ {
+	iv.Segments = make([]*Segment, iv.NumSegments)
+	for i := 0; i < iv.NumSegments; i++ {
 		if !iv.DiskBacked {
-			segments[i] = &Segment{Bytes: iv.buffers[i].Bytes()}
+			iv.Segments[i] = &Segment{Bytes: iv.buffers[i].Bytes()}
 			continue
 		}
 		filename := s.SegmentFilename(iv.Start, iv.Generation, i)
@@ -151,27 +151,20 @@ func (iv *writeOnlyInterval) freeze(s *Schema) (*Interval, error) {
 		if err != nil {
 			return nil, err
 		}
-		segments[i] = &Segment{File: f, Bytes: mapped}
+		iv.Segments[i] = &Segment{File: f, Bytes: mapped}
 	}
-	return &Interval{
-		Generation:  iv.Generation,
-		Start:       iv.Start,
-		End:         iv.End,
-		Segments:    segments,
-		NumSegments: len(segments),
-		NumRows:     iv.NumRows,
-	}, nil
+	return &iv.Interval, nil
 }
 
 func (iv *writeOnlyInterval) openFreshSegment(s *Schema) error {
-	defer func() { iv.Segments++ }()
+	defer func() { iv.NumSegments++ }()
 
 	if !iv.DiskBacked {
 		iv.CurSegment = new(bytes.Buffer)
 		return nil
 	}
 
-	filename := s.SegmentFilename(iv.Start, iv.Generation, iv.Segments)
+	filename := s.SegmentFilename(iv.Start, iv.Generation, iv.NumSegments)
 	f, err := os.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0666)
 	if err != nil {
 		return err
@@ -244,8 +237,8 @@ func (s *Schema) WriteCombinedInterval(memInterval *MemInterval, stateInterval *
 		}
 		moreMemKeys = false
 	}
-	stateKey, stateVal, stateCount, ok := stateCursor.Next()
-	if !ok {
+	stateKey, stateVal, stateCount, more := stateCursor.Next()
+	if !more {
 		moreStateKeys = false
 	}
 
@@ -285,8 +278,8 @@ func (s *Schema) WriteCombinedInterval(memInterval *MemInterval, stateInterval *
 			}
 		}
 		if advanceState {
-			stateKey, stateVal, stateCount, ok = stateCursor.Next()
-			if !ok {
+			stateKey, stateVal, stateCount, more = stateCursor.Next()
+			if !more {
 				moreStateKeys = false
 			}
 		}
@@ -313,8 +306,8 @@ func (s *Schema) WriteCombinedInterval(memInterval *MemInterval, stateInterval *
 			if err := interval.appendRow(s, stateKey, stateVal, stateCount); err != nil {
 				return nil, err
 			}
-			stateKey, stateVal, stateCount, ok = stateCursor.Next()
-			if !ok {
+			stateKey, stateVal, stateCount, more = stateCursor.Next()
+			if !more {
 				break
 			}
 		}
