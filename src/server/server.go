@@ -171,12 +171,16 @@ func (s *Server) loadFactTable() {
 	table, err := gumshoe.LoadFactTableFromDisk(s.Config.TableFilePath)
 	if err != nil {
 		if !os.IsNotExist(err) {
-			// TODO(caleb): handle
-			panic(err)
+			log.Fatal(err)
 		}
 		log.Printf(`Table "%s" does not exist, creating... `, s.Config.TableFilePath)
-		table = gumshoe.NewFactTable(s.Config.TableFilePath, s.Config.ToSchema())
-		table.SaveToDisk()
+		table, err = gumshoe.NewFactTable(s.Config.TableFilePath, s.Config.ToSchema())
+		if err != nil {
+			log.Fatal(err)
+		}
+		if err := table.SaveToDisk(); err != nil {
+			log.Fatal(err)
+		}
 		log.Print("done.")
 	} else {
 		log.Printf("loaded %d rows.", table.Count)
@@ -187,7 +191,9 @@ func (s *Server) loadFactTable() {
 func (s *Server) RunBackgroundSaves() {
 	for _ = range time.Tick(s.Config.SaveDuration.Duration) {
 		log.Println("Saving to disk...")
-		s.Table.SaveToDisk()
+		if err := s.Table.SaveToDisk(); err != nil {
+			log.Fatal(err)
+		}
 		log.Println("...done saving to disk")
 	}
 }
