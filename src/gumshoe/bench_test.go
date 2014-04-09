@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 	"utils"
+
+	. "github.com/cespare/a"
 )
 
 const (
@@ -23,15 +25,6 @@ func setup(b *testing.B) {
 		benchmarkDB = setUpDB()
 	}
 	b.SetBytes(int64(BenchmarkRows * benchmarkDB.RowSize))
-}
-
-// TODO(caleb): Change a to accept a testing.TB rather than a *testing.T so that we can use Assert instead of
-// this function (and throughout benchmarks generally).
-func checkResult(b *testing.B, actual, expected interface{}) {
-	ok, message := utils.HasEqualJSON(actual, expected)
-	if !ok {
-		b.Fatalf(message)
-	}
 }
 
 func mustGetBenchmarkQueryResult(query *Query) []RowMap {
@@ -51,7 +44,9 @@ func BenchmarkAggregateQuery(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		results = mustGetBenchmarkQueryResult(query)
 	}
-	checkResult(b, results, []RowMap{{"metric001": BenchmarkRows, "rowCount": BenchmarkRows}})
+
+	Assert(b, results[0], utils.DeepConvertibleEquals,
+		RowMap{"metric001": BenchmarkRows, "rowCount": BenchmarkRows})
 }
 
 // A query which filters rows by a single, simple filter function.
@@ -64,7 +59,8 @@ func BenchmarkFilterQuery(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		results = mustGetBenchmarkQueryResult(query)
 	}
-	checkResult(b, results, []RowMap{{"metric001": BenchmarkRows / 2, "rowCount": BenchmarkRows / 2}})
+	Assert(b, results[0], utils.DeepConvertibleEquals,
+		RowMap{"metric001": BenchmarkRows / 2, "rowCount": BenchmarkRows / 2})
 }
 
 //// A query which groups by a column. Each column has 10 possible values, so the result set will contain 10 row
