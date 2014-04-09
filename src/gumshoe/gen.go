@@ -52,7 +52,6 @@ func main() {
 	elements := struct {
 		Types             []Type
 		IntTypes          []Type
-		UintTypes         []Type // TODO(caleb): unneeded?
 		FloatTypes        []Type
 		FilterTypes       []FilterType
 		SimpleFilterTypes []FilterType // Binary op filters
@@ -70,9 +69,6 @@ func main() {
 		}
 		if strings.HasPrefix(name, "int") || strings.HasPrefix(name, "uint") {
 			elements.IntTypes = append(elements.IntTypes, typ)
-		}
-		if strings.HasPrefix(name, "uint") {
-			elements.UintTypes = append(elements.UintTypes, typ)
 		}
 		if strings.HasPrefix(name, "float") {
 			elements.FloatTypes = append(elements.FloatTypes, typ)
