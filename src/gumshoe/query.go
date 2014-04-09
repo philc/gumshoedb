@@ -354,11 +354,10 @@ func (s *State) postProcessScanRows(aggregates []*rowAggregate, query *Query,
 			}
 		}
 		if grouping != nil {
-			var value Untyped
-			if aggregate.GroupByValue != nil {
-				if grouping.OnTimestampColumn {
-					value = aggregate.GroupByValue
-				} else {
+			var value Untyped = aggregate.GroupByValue
+			if aggregate.GroupByValue != nil && !grouping.OnTimestampColumn {
+				col := s.DimensionColumns[grouping.ColumnIndex]
+				if col.String {
 					dimensionIndex := UntypedToInt(aggregate.GroupByValue)
 					value = s.DimensionTables[grouping.ColumnIndex].Values[dimensionIndex]
 				}

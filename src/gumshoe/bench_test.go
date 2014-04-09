@@ -15,7 +15,6 @@ import (
 const (
 	BenchmarkRows    = 100000 // The row count to use in these benchmarks.
 	BenchmarkColumns = 42
-	//tempDir          = "/tmp/gumshoe_benchmark"
 )
 
 var benchmarkDB *DB
@@ -63,42 +62,36 @@ func BenchmarkFilterQuery(b *testing.B) {
 		RowMap{"metric001": BenchmarkRows / 2, "rowCount": BenchmarkRows / 2})
 }
 
-//// A query which groups by a column. Each column has 10 possible values, so the result set will contain 10 row
-//// aggregates.
-//func BenchmarkGroupByQuery(b *testing.B) {
-//setup(b)
-//groupCount := 2
-//query := createQuery([]gumshoe.QueryGrouping{{"", "dim2", "dim2"}}, nil)
-//if err := gumshoe.ValidateQuery(factTable, query); err != nil {
-//panic(err)
-//}
-//b.ResetTimer()
-//var result map[string]gumshoe.Untyped
-//for i := 0; i < b.N; i++ {
-//result = factTable.InvokeQuery(query)
-//}
-//expectedResult := make([]map[string]gumshoe.Untyped, groupCount)
-//for i := range expectedResult {
-//expectedResult[i] = map[string]gumshoe.Untyped{
-//"metric001": BenchmarkRows / groupCount, "dim2": i, "rowCount": BenchmarkRows / groupCount}
-//}
-//checkResult(b, result["results"], expectedResult)
-//setBytes(b)
-//}
+// A query which groups by a column. Each column has 10 possible values, so the result set will contain 10 row
+// aggregates.
+func BenchmarkGroupByQuery(b *testing.B) {
+	setup(b)
+	query := createBenchmarkQuery([]QueryGrouping{{TimeTruncationNone, "dim2", "dim2"}}, nil)
+	b.ResetTimer()
+	var results []RowMap
+	for i := 0; i < b.N; i++ {
+		results = mustGetBenchmarkQueryResult(query)
+	}
+	b.StopTimer()
+	groupCount := 2
+	expectedResult := make([]RowMap, groupCount)
+	for i := range expectedResult {
+		expectedResult[i] = RowMap{
+			"metric001": BenchmarkRows / groupCount, "dim2": i, "rowCount": BenchmarkRows / groupCount,
+		}
+	}
+	Assert(b, results, utils.DeepConvertibleEquals, expectedResult)
+}
 
-//// A query which groups by a column that is transformed using a time transform function.
-//func BenchmarkGroupByWithTimeTransformQuery(b *testing.B) {
-//setup(b)
-//query := createQuery([]gumshoe.QueryGrouping{{"hour", "dim2", "dim2"}}, nil)
-//if err := gumshoe.ValidateQuery(factTable, query); err != nil {
-//panic(err)
-//}
-//b.ResetTimer()
-//for i := 0; i < b.N; i++ {
-//factTable.InvokeQuery(query)
-//}
-//setBytes(b)
-//}
+// A query which groups by a column that is transformed using a time transform function.
+func BenchmarkGroupByWithTimeTransformQuery(b *testing.B) {
+	setup(b)
+	query := createBenchmarkQuery([]QueryGrouping{{TimeTruncationHour, "dim2", "dim2"}}, nil)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		mustGetBenchmarkQueryResult(query)
+	}
+}
 
 func createBenchmarkQuery(groupings []QueryGrouping, filters []QueryFilter) *Query {
 	return &Query{
@@ -119,10 +112,8 @@ func createBenchmarkQueryAggregates(columns []string) []QueryAggregate {
 // setUpDB creates a test DB to represent a realistic schema.
 func setUpDB() *DB {
 	dimensions := make([]DimensionColumn, 2)
-	// TODO(caleb): Had to change this from int16 to int32 for apples-to-apples comparison. New gumshoedb
-	// doesn't accept oversized values :)
-	dimensions[0] = makeDimensionColumn("dim1", "int32", false)
-	dimensions[1] = makeDimensionColumn("dim2", "int16", false)
+	dimensions[0] = makeDimensionColumn("dim1", "uint32", false)
+	dimensions[1] = makeDimensionColumn("dim2", "uint32", false)
 	numMetrics := BenchmarkColumns - 2
 	metrics := make([]MetricColumn, numMetrics)
 	for i := range metrics {
