@@ -60,6 +60,11 @@ func Open(schema *Schema) (*DB, error) {
 		}
 		db.Schema = schema
 	case os.IsNotExist(err):
+		if err := os.Mkdir(schema.Dir, 0755); err != nil {
+			if !os.IsExist(err) {
+				return nil, err
+			}
+		}
 		db = &DB{
 			Schema: schema,
 			State:  NewState(schema),

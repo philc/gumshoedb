@@ -7,10 +7,9 @@ import (
 )
 
 type Column struct {
-	Type   Type
-	Name   string
-	Width  int
-	String bool
+	Type  Type
+	Name  string
+	Width int
 }
 
 type MetricColumn Column
