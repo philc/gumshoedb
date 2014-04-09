@@ -15,7 +15,7 @@ import (
 
 func TestExpectedNumberOfSegmentsAreAllocated(t *testing.T) {
 	db := makeTestDB()
-	defer db.Close()
+	defer closeTestDB(db)
 	db.Schema.SegmentSize = 32 // Rows are 13 bytes apiece
 
 	insertRows(db, []RowMap{
@@ -47,7 +47,7 @@ func physicalRows(db *DB) int {
 
 func TestRowsGetCollapsedUponInsertion(t *testing.T) {
 	db := makeTestDB()
-	defer db.Close()
+	defer closeTestDB(db)
 
 	// These two rows should be collapsed
 	insertRows(db, []RowMap{
@@ -67,7 +67,7 @@ func TestRowsGetCollapsedUponInsertion(t *testing.T) {
 
 func TestMemAndStateIntervalsAreCombined(t *testing.T) {
 	db := makeTestDB()
-	defer db.Close()
+	defer closeTestDB(db)
 
 	startTime, err := time.Parse("January 2, 2006", "April 1, 2014")
 	if err != nil {
@@ -144,7 +144,7 @@ func TestPersistenceEndToEnd(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer closeTestDB(db)
 	Assert(t, physicalRows(db), Equals, 100)
 	result = runQuery(db, createQuery())
 	Assert(t, result[0]["metric1"], Equals, uint32(10000))

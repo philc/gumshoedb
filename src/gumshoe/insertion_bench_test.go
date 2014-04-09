@@ -60,7 +60,11 @@ func BenchmarkInsertion(b *testing.B) {
 	if err != nil {
 		b.Fatal(err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			b.Fatal(err)
+		}
+	}()
 
 	// Generate the fixed rows the table will start with
 	if err := db.Insert(nRandomRows(numInsertRows)); err != nil {

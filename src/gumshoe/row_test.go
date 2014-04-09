@@ -8,7 +8,7 @@ import (
 
 func TestSerializeRowMapReturnsErrorForBadRows(t *testing.T) {
 	db := makeTestDB()
-	defer db.Close()
+	defer closeTestDB(db)
 
 	badRows := []RowMap{
 		{"at": "three", "dim1": "string1", "metric1": 1.2},                  // bad type

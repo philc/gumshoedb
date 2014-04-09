@@ -57,7 +57,7 @@ func runWithGroupBy(db *DB, grouping QueryGrouping) []RowMap {
 
 func TestInvokeQueryFiltersRowsUsingEqualsFilter(t *testing.T) {
 	db := createTestDBForFilterTests()
-	defer db.Close()
+	defer closeTestDB(db)
 
 	results := runWithFilter(db, QueryFilter{FilterEqual, "metric1", 2.0})
 	Assert(t, results[0]["metric1"], Equals, uint32(2))
@@ -81,7 +81,7 @@ func TestInvokeQueryFiltersRowsUsingEqualsFilter(t *testing.T) {
 
 func TestInvokeQueryFiltersRowsUsingLessThan(t *testing.T) {
 	db := createTestDBForFilterTests()
-	defer db.Close()
+	defer closeTestDB(db)
 
 	results := runWithFilter(db, QueryFilter{FilterLessThan, "metric1", 2.0})
 	Assert(t, results[0]["metric1"], Equals, uint32(1))
@@ -131,7 +131,7 @@ func TestInvokeQueryFiltersRowsUsingIn(t *testing.T) {
 
 func TestInvokeQueryWorksWhenGroupingByAStringColumn(t *testing.T) {
 	db := makeTestDB()
-	defer db.Close()
+	defer closeTestDB(db)
 	insertRows(db, []RowMap{
 		{"at": 0.0, "dim1": "string1", "metric1": 1.0},
 		{"at": 0.0, "dim1": "string1", "metric1": 2.0},
@@ -147,7 +147,7 @@ func TestInvokeQueryWorksWhenGroupingByAStringColumn(t *testing.T) {
 
 func TestGroupingWithATimeTransformFunctionWorks(t *testing.T) {
 	db := makeTestDB()
-	defer db.Close()
+	defer closeTestDB(db)
 	// at is truncated by day, so these points are from day 0, 2, 2.
 	twoDays := 2.0 * 24 * 60 * 60
 	insertRows(db, []RowMap{
@@ -165,14 +165,14 @@ func TestGroupingWithATimeTransformFunctionWorks(t *testing.T) {
 
 func TestAggregateQueryWithNilValues(t *testing.T) {
 	db := createTestDBForNilQueryTests()
-	defer db.Close()
+	defer closeTestDB(db)
 	results := runQuery(db, createQuery())
 	Assert(t, results[0], utils.DeepConvertibleEquals, RowMap{"metric1": 7, "rowCount": 3})
 }
 
 func TestFilterQueryWithNilValues(t *testing.T) {
 	db := createTestDBForNilQueryTests()
-	defer db.Close()
+	defer closeTestDB(db)
 
 	results := runWithFilter(db, QueryFilter{FilterEqual, "dim1", "a"})
 	Assert(t, results[0], utils.DeepConvertibleEquals, RowMap{"metric1": 1, "rowCount": 1})
@@ -189,7 +189,7 @@ func TestFilterQueryUsingInWithNilValues(t *testing.T) {
 
 func TestGroupByQueryWithNilValues(t *testing.T) {
 	db := createTestDBForNilQueryTests()
-	defer db.Close()
+	defer closeTestDB(db)
 	results := runWithGroupBy(db, QueryGrouping{TimeTruncationNone, "dim1", "groupbykey"})
 	Assert(t, results, utils.DeepEqualsUnordered, []RowMap{
 		{"metric1": 1, "groupbykey": "a", "rowCount": 1},

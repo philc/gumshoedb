@@ -21,6 +21,12 @@ func makeTestDB() *DB {
 	return db
 }
 
+func closeTestDB(db *DB) {
+	if err := db.Close(); err != nil {
+		panic(err)
+	}
+}
+
 func insertRows(db *DB, rows []RowMap) {
 	if err := db.Insert(rows); err != nil {
 		panic(err)

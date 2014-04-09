@@ -98,9 +98,12 @@ func (db *DB) Flush() error {
 
 // Close triggers a flush, waits for it to complete, and then shuts down the DB's goroutines. The DB may not
 // be used again after calling Close.
-func (db *DB) Close() {
-	db.Flush()
+func (db *DB) Close() error {
+	if err := db.Flush(); err != nil {
+		return err
+	}
 	close(db.shutdown)
+	return nil
 }
 
 type InsertRequest struct {
