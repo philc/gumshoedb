@@ -132,15 +132,19 @@ func (t byTime) Len() int           { return len(t) }
 func (t byTime) Less(i, j int) bool { return t[i].Before(t[j]) }
 func (t byTime) Swap(i, j int)      { t[i], t[j] = t[j], t[i] }
 
-func (s *State) debugPrint() {
-	fmt.Println("STATE DEBUG ----------------------------------")
+func (s *State) sortedIntervalTimes() []time.Time {
 	var times []time.Time
 	for t := range s.Intervals {
 		times = append(times, t)
 	}
 	sort.Sort(byTime(times))
+	return times
+}
 
-	for _, t := range times {
+
+func (s *State) debugPrint() {
+	fmt.Println("STATE DEBUG ----------------------------------")
+	for _, t := range s.sortedIntervalTimes() {
 		interval := s.Intervals[t]
 		fmt.Printf("Interval [t = %s]\n\n", t)
 		for i, segment := range interval.Segments {

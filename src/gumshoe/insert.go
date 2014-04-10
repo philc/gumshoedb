@@ -12,9 +12,6 @@ import (
 	"b"
 )
 
-// A RowMap is the unpacked form of a gumshoeDB row.
-type RowMap map[string]Untyped
-
 type insertionRow struct {
 	Timestamp  time.Time
 	Dimensions DimensionBytes

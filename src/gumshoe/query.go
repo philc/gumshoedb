@@ -208,7 +208,7 @@ func (s *State) scanWithGrouping(params *scanParams) []*rowAggregate {
 	if !groupOnTimestampColumn {
 		i := params.Grouping.ColumnIndex
 		nilOffset = s.DimensionStartOffset + i/8
-		nilMask = byte(1) << byte(i%8)
+		nilMask = 1 << byte(i%8)
 		valueOffset = s.DimensionStartOffset + s.DimensionOffsets[i]
 	}
 	getDimensionValueFunc := makeGetDimensionValueFuncGen(groupingColumn.Type)
@@ -345,7 +345,7 @@ func (s *State) postProcessScanRows(aggregates []*rowAggregate, query *Query,
 		for i, queryAggregate := range query.Aggregates {
 			index := s.MetricNameToIndex[queryAggregate.Column]
 			column := s.MetricColumns[index]
-			sum := s.numericCellValue(aggregate.Sums[i].Pointer(), column.Type)
+			sum := numericCellValue(aggregate.Sums[i].Pointer(), column.Type)
 			switch queryAggregate.Type {
 			case AggregateSum:
 				row[queryAggregate.Name] = sum

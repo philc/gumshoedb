@@ -10,15 +10,19 @@ import (
 	"unsafe"
 )
 
+// Untyped is some gumshoeDB value (numeric or string).
 type Untyped interface{}
 
-// UntypedToFloat64 converts u to a float, if it is some numeric type. Otherwise, it panics. This function
+// A RowMap is the unpacked form of a gumshoeDB row with an implicit count of 1.
+type RowMap map[string]Untyped
+
+// UntypedToFloat64 converts u to a float, if it has some numeric type. Otherwise, it panics. This function
 // should not be called in critical code paths.
 func UntypedToFloat64(u Untyped) float64 {
 	return reflect.ValueOf(u).Convert(reflect.TypeOf(float64(0))).Float()
 }
 
-// UntypedToInt converts u to an int, if it is some numeric type. Otherwise, it panics. This function should
+// UntypedToInt converts u to an int, if it has some numeric type. Otherwise, it panics. This function should
 // not be called in critical code paths.
 func UntypedToInt(u Untyped) int {
 	return int(reflect.ValueOf(u).Convert(reflect.TypeOf(int(0))).Int())
@@ -50,7 +54,8 @@ type DimensionBytes []byte
 // MetricBytes is the serialized form of the metrics of a single GumshoeDB row.
 type MetricBytes []byte
 
-func (d DimensionBytes) setNil(index int) { d[index/8] |= 1 << byte(index%8) }
+func (d DimensionBytes) setNil(index int)     { d[index/8] |= 1 << byte(index%8) }
+func (d DimensionBytes) isNil(index int) bool { return d[index/8]&(1<<byte(index%8)) > 0 }
 
 // count retrieves a row's count (the number of collapsed logical rows).
 func (r RowBytes) count(s *Schema) uint32 { return *(*uint32)(unsafe.Pointer(&r[0])) }
@@ -151,4 +156,42 @@ func (db *DB) serializeRowMap(rowMap RowMap) (*insertionRow, error) {
 		Metrics:    metrics,
 	}
 	return row, nil
+}
+
+type UnpackedRow struct {
+	RowMap
+	Count int
+}
+
+// deserializeRow unpacks a serialized Row, including nil and string dimensions. Note that the timestamp
+// column is not present in the resulting RowMap.
+func (db *DB) deserializeRow(row RowBytes) UnpackedRow {
+	count := int(row.count(db.Schema))
+	rowMap := make(RowMap)
+
+	dimensions := DimensionBytes(row[db.DimensionStartOffset:db.MetricStartOffset])
+	for i, col := range db.DimensionColumns {
+		name := col.Name
+		if dimensions.isNil(i) {
+			rowMap[name] = nil
+			continue
+		}
+		cell := unsafe.Pointer(&dimensions[db.DimensionOffsets[i]])
+		value := numericCellValue(cell, col.Type)
+		if col.String {
+			dimensionIndex := UntypedToInt(value)
+			value = db.State.DimensionTables[i].Values[dimensionIndex]
+		}
+		rowMap[name] = value
+	}
+
+	metrics := MetricBytes(row[db.MetricStartOffset:])
+	for i, col := range db.MetricColumns {
+		name := col.Name
+		cell := unsafe.Pointer(&metrics[db.MetricOffsets[i]])
+		value := numericCellValue(cell, col.Type)
+		rowMap[name] = value
+	}
+
+	return UnpackedRow{RowMap: rowMap, Count: count}
 }

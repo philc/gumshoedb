@@ -35,34 +35,26 @@ func TestExpectedNumberOfSegmentsAreAllocated(t *testing.T) {
 	Assert(t, numSegments, Equals, 2)
 }
 
-func physicalRows(db *DB) int {
-	resp := db.makeRequest()
-	defer resp.Done()
-	rows := 0
-	for _, interval := range resp.State.Intervals {
-		rows += interval.NumRows
-	}
-	return rows
-}
-
 func TestRowsGetCollapsedUponInsertion(t *testing.T) {
 	db := makeTestDB()
 	defer closeTestDB(db)
 
-	// These two rows should be collapsed
-	insertRows(db, []RowMap{
+	rows := []RowMap{
+		// These two rows should be collapsed
 		{"at": 0.0, "dim1": "string1", "metric1": 1.0},
 		{"at": 0.0, "dim1": "string1", "metric1": 3.0},
+		// This row should not, because it has a nil column.
+		{"at": 0.0, "dim1": nil, "metric1": 5.0},
+		// This row should not be collapsed with the others, because it falls in a different time interval.
+		{"at": hour(2), "dim1": "string1", "metric1": 7.0},
+	}
+
+	insertRows(db, rows)
+	Assert(t, db.GetDebugRows(), utils.DeepEqualsUnordered, []UnpackedRow{
+		{RowMap: RowMap{"at": 0.0, "dim1": "string1", "metric1": 4}, Count: 2},
+		{RowMap: rows[2], Count: 1},
+		{RowMap: rows[3], Count: 1},
 	})
-	Assert(t, physicalRows(db), Equals, 1)
-
-	// This row should not, because it has a nil column.
-	insertRow(db, RowMap{"at": 0.0, "dim1": nil, "metric1": 5.0})
-	Assert(t, physicalRows(db), Equals, 2)
-
-	// This row should not be collapsed with the others, because it falls in a different time interval.
-	insertRow(db, RowMap{"at": hour(2), "dim1": "string1", "metric1": 7.0})
-	Assert(t, physicalRows(db), Equals, 3)
 }
 
 func TestMemAndStateIntervalsAreCombined(t *testing.T) {
@@ -74,37 +66,37 @@ func TestMemAndStateIntervalsAreCombined(t *testing.T) {
 		panic(err)
 	}
 
+	first := float64(startTime.Unix())
+	second := float64(startTime.Add(time.Hour).Unix())
+	third := float64(startTime.Add(2 * time.Hour).Unix())
+
 	insertRows(db, []RowMap{
-		{"at": float64(startTime.Unix()), "dim1": "string1", "metric1": 1.0},
-		{"at": float64(startTime.Add(time.Hour).Unix()), "dim1": "string1", "metric1": 1.0},
+		{"at": first, "dim1": "string1", "metric1": 1.0},
+		{"at": second, "dim1": "string1", "metric1": 1.0},
 	})
 	Assert(t, len(db.State.Intervals), Equals, 2)
 
 	insertRows(db, []RowMap{
-		{"at": float64(startTime.Add(time.Hour).Unix()), "dim1": "string1", "metric1": 1.0},
-		{"at": float64(startTime.Add(2 * time.Hour).Unix()), "dim1": "string1", "metric1": 1.0},
+		{"at": second, "dim1": "string1", "metric1": 1.0},
+		{"at": third, "dim1": "string1", "metric1": 1.0},
 	})
 	Assert(t, len(db.State.Intervals), Equals, 3)
 
-	results := runWithGroupBy(db, QueryGrouping{TimeTruncationNone, "at", "at"})
-	Assert(t, results, utils.DeepEqualsUnordered, []RowMap{
-		{"at": float64(startTime.Unix()), "metric1": 1.0, "rowCount": 1.0},
-		{"at": float64(startTime.Add(time.Hour).Unix()), "metric1": 2.0, "rowCount": 2.0},
-		{"at": float64(startTime.Add(2 * time.Hour).Unix()), "metric1": 1.0, "rowCount": 1.0},
+	Assert(t, db.GetDebugRows(), utils.DeepEqualsUnordered, []UnpackedRow{
+		{RowMap: RowMap{"at": first, "dim1": "string1", "metric1": 1}, Count: 1},
+		{RowMap: RowMap{"at": second, "dim1": "string1", "metric1": 2}, Count: 2},
+		{RowMap: RowMap{"at": third, "dim1": "string1", "metric1": 1}, Count: 1},
 	})
 }
 
 func TestInsertAndReadNilValues(t *testing.T) {
 	db := makeTestDB()
-	insertRows(db, []RowMap{
+	rows := []RowMap{
 		{"at": hour(0), "dim1": "a", "metric1": 0.0},
 		{"at": hour(1), "dim1": nil, "metric1": 1.0},
-	})
-	results := runWithGroupBy(db, QueryGrouping{TimeTruncationNone, "dim1", "dim1"})
-	Assert(t, results, utils.DeepEqualsUnordered, []RowMap{
-		{"dim1": "a", "metric1": 0.0, "rowCount": 1.0},
-		{"dim1": nil, "metric1": 1.0, "rowCount": 1.0},
-	})
+	}
+	insertRows(db, rows)
+	Assert(t, db.GetDebugRows(), utils.DeepEqualsUnordered, []UnpackedRow{{rows[0], 1}, {rows[1], 1}})
 }
 
 func makeTestPersistentDB() *DB {
@@ -120,6 +112,16 @@ func makeTestPersistentDB() *DB {
 		panic(err)
 	}
 	return db
+}
+
+func physicalRows(db *DB) int {
+	resp := db.makeRequest()
+	defer resp.Done()
+	rows := 0
+	for _, interval := range resp.State.Intervals {
+		rows += interval.NumRows
+	}
+	return rows
 }
 
 func TestPersistenceEndToEnd(t *testing.T) {

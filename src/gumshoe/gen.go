@@ -146,7 +146,7 @@ func setRowValue(pos unsafe.Pointer, typ Type, value float64) {
 
 // numericCellValue decodes a numeric value from cell based on typ. It does not look into any dimension
 // tables.
-func (s *State) numericCellValue(cell unsafe.Pointer, typ Type) Untyped {
+func numericCellValue(cell unsafe.Pointer, typ Type) Untyped {
 	switch typ { {{range .Types}}
 	case {{.GumshoeTypeName}}:
 		return *(*{{.GoName}})(cell){{end}}

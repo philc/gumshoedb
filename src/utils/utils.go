@@ -118,6 +118,16 @@ func deepValueConvertibleEquals(v1, v2 reflect.Value) bool {
 			}
 		}
 		return true
+	case reflect.Struct:
+		if v1.NumField() != v2.NumField() {
+			return false
+		}
+		for i := 0; i < v1.NumField(); i++ {
+			if !deepValueConvertibleEquals(v1.Field(i), v2.Field(i)) {
+				return false
+			}
+		}
+		return true
 	case reflect.Interface:
 		if v1.IsNil() || v2.IsNil() {
 			return v1.IsNil() == v2.IsNil()
