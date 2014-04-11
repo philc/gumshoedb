@@ -75,10 +75,6 @@ func (db *DB) insertRow(rowMap RowMap) error {
 	return nil
 }
 
-func (db *DB) intervalStartOutOfRetention(timestamp time.Time) bool {
-	return time.Since(timestamp.Add(db.IntervalDuration)) > db.Retention
-}
-
 type times []time.Time
 
 func (t times) Len() int           { return len(t) }
@@ -87,6 +83,8 @@ func (t times) Swap(i, j int)      { t[i], t[j] = t[j], t[i] }
 
 // flush saves the current memTable to disk by combining with overlapping state intervals to create a new
 // state. This should only be called by the insertion goroutine.
+//
+// If db.FixedRetention is set, then flush will discard old intervals while constructing the new state.
 //
 // If the result error is not nil, the state of database may not be well-defined and a user should clean up
 // any extraneous segment files not referenced by the metadata. (Note the new metadata is written at the end,
@@ -107,47 +105,25 @@ func (db *DB) flush() error {
 	sort.Sort(times(stateKeys))
 	sort.Sort(times(memKeys))
 
-	// Walk the keys together to produce the new state intervals
-	intervals := make(map[time.Time]*Interval)
 	var intervalsForCleanup []*Interval
-	for len(stateKeys) > 0 && len(memKeys) > 0 {
-		stateKey := stateKeys[0]
-		memKey := memKeys[0]
-		switch {
-		case stateKey.Before(memKey):
-			// We reuse this interval directly; the data hasn't changed.
-			intervals[stateKey] = db.State.Intervals[stateKey]
-			stateKeys = stateKeys[1:]
-		case memKey.Before(stateKey):
-			iv, err := db.WriteMemInterval(db.memTable.Intervals[memKey])
-			if err != nil {
-				return err
-			}
-			intervals[memKey] = iv
-			memKeys = memKeys[1:]
-		default: // equal
-			stateInterval := db.State.Intervals[stateKey]
-			memInterval := db.memTable.Intervals[memKey]
-			iv, err := db.WriteCombinedInterval(memInterval, stateInterval)
-			if err != nil {
-				return err
-			}
-			intervals[stateKey] = iv
-			stateKeys = stateKeys[1:]
-			memKeys = memKeys[1:]
-			intervalsForCleanup = append(intervalsForCleanup, stateInterval)
+
+	// If we're using a fixed retention, drop old intervals.
+	if db.FixedRetention {
+		var outdatedStateKeys []time.Time
+		outdatedStateKeys, stateKeys = db.partitionIntervalStartsByRetention(stateKeys)
+		_, memKeys = db.partitionIntervalStartsByRetention(memKeys)
+
+		for _, key := range outdatedStateKeys {
+			intervalsForCleanup = append(intervalsForCleanup, db.State.Intervals[key])
 		}
 	}
-	for _, stateKey := range stateKeys {
-		intervals[stateKey] = db.State.Intervals[stateKey]
+
+	// Walk the keys together to produce the new state intervals
+	intervals, cleanup, err := db.combineSortedMemStateIntervals(memKeys, stateKeys)
+	if err != nil {
+		return err
 	}
-	for _, memKey := range memKeys {
-		iv, err := db.WriteMemInterval(db.memTable.Intervals[memKey])
-		if err != nil {
-			return err
-		}
-		intervals[memKey] = iv
-	}
+	intervalsForCleanup = append(intervalsForCleanup, cleanup...)
 
 	// Make the new State
 	newState := NewState(db.Schema)
@@ -183,6 +159,55 @@ func (db *DB) flush() error {
 	// Replace the MemTable with a fresh, empty one.
 	db.memTable = NewMemTable(db.Schema)
 	return nil
+}
+
+// combineSortedMemStateIntervals combines all the intervals corresponding to memKeys and stateKeys. These
+// must be in sorted order. This function returns the new interval set, a list of state intervals for cleanup,
+// and any error that occurs.
+func (db *DB) combineSortedMemStateIntervals(memKeys, stateKeys []time.Time) (
+	intervals map[time.Time]*Interval, intervalsForCleanup []*Interval, err error) {
+
+	intervals = make(map[time.Time]*Interval)
+	for len(stateKeys) > 0 && len(memKeys) > 0 {
+		stateKey := stateKeys[0]
+		memKey := memKeys[0]
+		switch {
+		case stateKey.Before(memKey):
+			// We reuse this interval directly; the data hasn't changed.
+			intervals[stateKey] = db.State.Intervals[stateKey]
+			stateKeys = stateKeys[1:]
+		case memKey.Before(stateKey):
+			iv, err := db.WriteMemInterval(db.memTable.Intervals[memKey])
+			if err != nil {
+				return nil, nil, err
+			}
+			intervals[memKey] = iv
+			memKeys = memKeys[1:]
+		default: // equal
+			stateInterval := db.State.Intervals[stateKey]
+			memInterval := db.memTable.Intervals[memKey]
+			iv, err := db.WriteCombinedInterval(memInterval, stateInterval)
+			if err != nil {
+				return nil, nil, err
+			}
+			intervals[stateKey] = iv
+			stateKeys = stateKeys[1:]
+			memKeys = memKeys[1:]
+			intervalsForCleanup = append(intervalsForCleanup, stateInterval)
+		}
+	}
+	for _, stateKey := range stateKeys {
+		intervals[stateKey] = db.State.Intervals[stateKey]
+	}
+	for _, memKey := range memKeys {
+		iv, err := db.WriteMemInterval(db.memTable.Intervals[memKey])
+		if err != nil {
+			return nil, nil, err
+		}
+		intervals[memKey] = iv
+	}
+
+	return intervals, intervalsForCleanup, nil
 }
 
 func (db *DB) combineDimensionTables() []*DimensionTable {
@@ -233,4 +258,19 @@ func (db *DB) cleanUpOldIntervals(intervals []*Interval) {
 			}
 		}
 	}
+}
+
+func (db *DB) intervalStartOutOfRetention(timestamp time.Time) bool {
+	return time.Since(timestamp.Add(db.IntervalDuration)) > db.Retention
+}
+
+func (db *DB) partitionIntervalStartsByRetention(keys []time.Time) (outdated, current []time.Time) {
+	for _, key := range keys {
+		if db.intervalStartOutOfRetention(key) {
+			outdated = append(outdated, key)
+		} else {
+			current = append(current, key)
+		}
+	}
+	return outdated, current
 }

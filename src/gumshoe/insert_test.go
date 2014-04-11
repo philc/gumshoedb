@@ -60,7 +60,7 @@ func TestRowsGetCollapsedUponInsertion(t *testing.T) {
 type Time time.Time
 
 func (t Time) hoursBack(n int) float64 {
-	return float64(time.Time(t).Add(time.Duration(n) * time.Hour).Unix())
+	return float64(time.Time(t).Add(time.Duration(-n) * time.Hour).Unix())
 }
 
 func TestMemAndStateIntervalsAreCombined(t *testing.T) {
@@ -85,6 +85,29 @@ func TestMemAndStateIntervalsAreCombined(t *testing.T) {
 		{RowMap: RowMap{"at": start.hoursBack(0), "dim1": "string1", "metric1": 1}, Count: 1},
 		{RowMap: RowMap{"at": start.hoursBack(1), "dim1": "string1", "metric1": 2}, Count: 2},
 		{RowMap: RowMap{"at": start.hoursBack(2), "dim1": "string1", "metric1": 1}, Count: 1},
+	})
+}
+
+func TestDeleteSegmentsOutOfRetention(t *testing.T) {
+	db := makeTestDB()
+	db.FixedRetention = false // Turn this on midway; kinda hacky but easy
+	db.Retention = 24 * time.Hour
+	defer closeTestDB(db)
+
+	start := Time(time.Now())
+
+	insertRows(db, []RowMap{
+		{"at": start.hoursBack(36), "dim1": "string1", "metric1": 1.0},
+		{"at": start.hoursBack(12), "dim1": "string1", "metric1": 1.0},
+	})
+	db.FixedRetention = true
+	insertRows(db, []RowMap{
+		{"at": start.hoursBack(36), "dim1": "string1", "metric1": 1.0},
+		{"at": start.hoursBack(12), "dim1": "string1", "metric1": 1.0},
+	})
+
+	Assert(t, db.GetDebugRows(), utils.DeepEqualsUnordered, []UnpackedRow{
+		{RowMap: RowMap{"at": start.hoursBack(12), "dim1": "string1", "metric1": 2}, Count: 2},
 	})
 }
 
