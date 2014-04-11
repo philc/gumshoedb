@@ -139,7 +139,7 @@ func (db *DB) serializeRowMap(rowMap RowMap) (*insertionRow, error) {
 	for i, metricCol := range db.MetricColumns {
 		value, ok := rowMap[metricCol.Name]
 		if !ok {
-			return nil, fmt.Errorf("missing metric column %q", metricCol.Name)
+			value = 0.0
 		}
 		if err := db.setMetricValue(metrics, i, value); err != nil {
 			return nil, err
