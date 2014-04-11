@@ -55,6 +55,10 @@ func (s *Server) Flush() {
 	}
 }
 
+func (s *Server) HandleRoot(w http.ResponseWriter, r *http.Request) {
+	w.Write([]byte("Gumshoe is on the case!"))
+}
+
 // HandleInsert decodes an array of JSON-formatted row maps from the request body and inserts them into the
 // database. Then it flushes before it returns.
 func (s *Server) HandleInsert(w http.ResponseWriter, r *http.Request) {
@@ -142,6 +146,7 @@ func NewServer(conf *config.Config, schema *gumshoe.Schema) *Server {
 	// Use a specific set of middlewares instead of the defaults. Note that we've removed panic recovery.
 	m.Handlers(martini.Logger(), martini.Static("public"))
 
+	m.Get("/", s.HandleRoot)
 	m.Put("/insert", s.HandleInsert)
 	m.Get("/dimension_tables", s.HandleDimensionTables)
 	m.Get("/dimension_tables/:name", s.HandleSingleDimension)
