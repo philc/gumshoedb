@@ -125,11 +125,13 @@ func (db *DB) serializeRowMap(rowMap RowMap) (*insertionRow, error) {
 	if !ok {
 		return nil, fmt.Errorf("timestamp column (%q) must have a numeric value", timestampColumnName)
 	}
+	missingColumns := 0
 	dimensions := make(DimensionBytes, db.DimensionWidth)
 	for i, dimCol := range db.DimensionColumns {
 		value, ok := rowMap[dimCol.Name]
 		if !ok {
-			return nil, fmt.Errorf("missing dimension column %q", dimCol.Name)
+			missingColumns++
+			value = nil
 		}
 		if err := db.setDimensionValue(dimensions, i, value); err != nil {
 			return nil, err
@@ -139,6 +141,7 @@ func (db *DB) serializeRowMap(rowMap RowMap) (*insertionRow, error) {
 	for i, metricCol := range db.MetricColumns {
 		value, ok := rowMap[metricCol.Name]
 		if !ok {
+			missingColumns++
 			value = 0.0
 		}
 		if err := db.setMetricValue(metrics, i, value); err != nil {
@@ -146,7 +149,8 @@ func (db *DB) serializeRowMap(rowMap RowMap) (*insertionRow, error) {
 		}
 	}
 	// Sanity check that we didn't get extra fields
-	if len(rowMap) > 1+len(db.DimensionColumns)+len(db.MetricColumns) {
+	expectedFields := 1 + len(db.DimensionColumns) + len(db.MetricColumns) - missingColumns
+	if len(rowMap) > expectedFields {
 		return nil, fmt.Errorf("extra (unrecognized) columns in insertion row")
 	}
 
