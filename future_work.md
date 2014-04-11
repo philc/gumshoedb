@@ -7,3 +7,5 @@
   requests.
 * Switching to a column-oriented design will almost certainly provide a huge speedup for our common-case
   queries. In particular this allows for much better compression and skipping much more data while scanning.
+* We can switch to using varints rather than our cornucopia of integer types. This would make our rows
+  non-fixed-size, though. (This makes more sense if we're column-oriented.)
