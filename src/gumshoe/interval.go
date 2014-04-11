@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"log"
 	"math"
 	"os"
 	"path/filepath"
@@ -214,6 +215,9 @@ func (s *Schema) WriteMemInterval(memInterval *MemInterval) (*Interval, error) {
 func (s *Schema) WriteCombinedInterval(memInterval *MemInterval, stateInterval *Interval) (*Interval, error) {
 	// Sanity check
 	if memInterval.Start != stateInterval.Start || memInterval.End != stateInterval.End {
+		// TODO(caleb) Remove these logging statements after I understand how this can occur
+		log.Printf("memInterval: start=%s, end=%s", memInterval.Start, memInterval.End)
+		log.Printf("stateInterval: start=%s, end=%s", stateInterval.Start, stateInterval.End)
 		panic("attempt to combine memInterval/stateInterval from different times")
 	}
 
