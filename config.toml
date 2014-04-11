@@ -1,15 +1,17 @@
 listen_addr = ":9000"
 
-table_file_path = "db/table"
+database_dir = "db"
 
-# The maximum amount of time between saves to disk.
-save_duration = "10s"
+# Flush to disk at least this frequently.
+flush_interval = "10s"
 
-# The maximum size of the DB
-rows = 100000
+[schema]
+
+# Data is partitioned into time intervals this large.
+interval_duration = "1h"
 
 # Every row must have a timestamp column. This is the name of that column.
-timestamp_column = "at"
+timestamp_column = ["at", "uint32"]
 
 dimension_columns = [
   ["name", "string:uint16"],
@@ -19,5 +21,5 @@ dimension_columns = [
 
 metric_columns = [
   ["visits", "uint8"],
-  ["clicks", "uint8"],
+  ["clicks", "uint8"]
 ]

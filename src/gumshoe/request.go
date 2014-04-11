@@ -31,6 +31,19 @@ func (db *DB) GetQueryResult(query *Query) ([]RowMap, error) {
 	return resp.State.InvokeQuery(query)
 }
 
+func (db *DB) GetDimensionTables() map[string][]string {
+	resp := db.makeRequest()
+	defer resp.Done()
+
+	results := make(map[string][]string)
+	for i, col := range db.DimensionColumns {
+		if col.String {
+			results[col.Name] = resp.State.DimensionTables[i].Values
+		}
+	}
+	return results
+}
+
 func (db *DB) GetNumRows() int {
 	resp := db.makeRequest()
 	defer resp.Done()

@@ -22,9 +22,10 @@ type Schema struct {
 }
 
 type Config struct {
-	ListenAddr  string `toml:"listen_addr"`
-	DatabaseDir string `toml:"database_dir"`
-	Schema      Schema `toml:"schema"`
+	ListenAddr    string   `toml:"listen_addr"`
+	DatabaseDir   string   `toml:"database_dir"`
+	FlushInterval Duration `toml:"flush_interval"`
+	Schema        Schema   `toml:"schema"`
 }
 
 // Produces a gumshoe Schema based on a Config's values.
@@ -36,6 +37,8 @@ func (c *Config) makeSchema() (*gumshoe.Schema, error) {
 		return nil, errors.New("database directory must be provided. Use 'MEMORY' to specify an in-memory DB.")
 	case "MEMORY":
 		diskBacked = false
+	default:
+		dir = c.DatabaseDir
 	}
 
 	name, typ, isString := parseColumn(c.Schema.TimestampColumn)
@@ -98,7 +101,10 @@ func (c *Config) makeSchema() (*gumshoe.Schema, error) {
 		names[col.Name] = true
 	}
 
-	// Check duration for sanity
+	// Check durations for sanity
+	if c.FlushInterval.Duration < time.Second {
+		return nil, fmt.Errorf("flush interval is too small: %s", c.FlushInterval)
+	}
 	if c.Schema.IntervalDuration.Duration < time.Minute {
 		return nil, fmt.Errorf("interval duration is too short: %s", c.Schema.IntervalDuration)
 	}

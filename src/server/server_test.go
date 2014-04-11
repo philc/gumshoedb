@@ -3,15 +3,31 @@ package main
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"config"
 )
 
 func TestSanity(t *testing.T) {
-	config := &config.Config{TableFilePath: "", MetricColumns: [][]string{{"col1", "uint8"}}}
-	server := httptest.NewServer(NewServer(config))
+	const configText = `
+listen_addr = ""
+database_dir = "MEMORY"
+flush_interval = "1h"
+
+[schema]
+interval_duration = "1h"
+timestamp_column = ["at", "uint32"]
+dimension_columns = [["dim1", "uint32"]]
+metric_columns = [["metric1", "uint32"]]
+	`
+	conf, schema, err := config.LoadTOMLConfig(strings.NewReader(configText))
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := httptest.NewServer(NewServer(conf, schema))
 	defer server.Close()
+
 	resp, err := http.Get(server.URL + "/")
 	if err != nil {
 		t.Fatal(err)

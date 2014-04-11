@@ -4,22 +4,18 @@
 package main
 
 import (
-	"bytes"
 	"encoding/json"
 	"flag"
 	"log"
-	"math"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
 	"runtime"
 	"time"
-	"unsafe"
 
 	"config"
 	"gumshoe"
 
-	"github.com/BurntSushi/toml"
 	"github.com/codegangsta/martini"
 )
 
@@ -31,7 +27,7 @@ var (
 type Server struct {
 	http.Handler
 	Config *config.Config
-	Table  *gumshoe.FactTable
+	DB     *gumshoe.DB
 }
 
 func WriteJSONResponse(w http.ResponseWriter, objectToSerialize interface{}) {
@@ -48,174 +44,179 @@ func WriteError(w http.ResponseWriter, err error) {
 	http.Error(w, err.Error(), 500)
 }
 
-// Given an array of JSON rows, insert them.
+func (s *Server) Flush() {
+	// NOTE(caleb): Right now there's no great way to recover from a flush error. These could occur for reasons
+	// such as the disk being full or having bad permissions. For now, we'll just log and crash hard. Note that
+	// the metadata is written atomically after a succesful flush, so restarting will return us to a consistent
+	// state (but missing any data since the previous successful flush).
+	if err := s.DB.Flush(); err != nil {
+		log.Printf(">>> FATAL ERROR ON FLUSH: %s", err)
+		os.Exit(1)
+	}
+}
+
+// HandleInsert decodes an array of JSON-formatted row maps from the request body and inserts them into the
+// database. Then it flushes before it returns.
 func (s *Server) HandleInsert(w http.ResponseWriter, r *http.Request) {
 	decoder := json.NewDecoder(r.Body)
-	jsonBody := []gumshoe.RowMap{}
-	if err := decoder.Decode(&jsonBody); err != nil {
+	var rows []gumshoe.RowMap
+	if err := decoder.Decode(&rows); err != nil {
 		WriteError(w, err)
 		return
 	}
-	log.Printf("Inserting %d rows", len(jsonBody))
-
-	if err := s.Table.InsertRowMaps(jsonBody); err != nil {
+	log.Printf("Inserting %d rows", len(rows))
+	if err := s.DB.Insert(rows); err != nil {
 		WriteError(w, err)
 		return
 	}
+	s.Flush()
 }
 
-// A debugging route to list the contents of a table. Returns up to 1000 rows.
-func (s *Server) HandleFactTable(w http.ResponseWriter, r *http.Request) {
-	// For now, only return up to 1000 rows. We can't serialize the entire table unless we stream the response,
-	// and for debugging, we only need a few rows to inspect that importing is working correctly.
-	const maxRowsToReturn = 1000
-	rowCount := int(math.Min(float64(s.Table.Count), maxRowsToReturn))
-	WriteJSONResponse(w, s.Table.GetRowMaps(0, rowCount))
+// HandleDebugRows responds to the client with a JSON representation of the physical rows. It returns up to
+// the first 100 rows in the database.
+func (s *Server) HandleDebugRows(w http.ResponseWriter, r *http.Request) {
+	WriteJSONResponse(w, s.DB.GetDebugRows())
 }
 
-// Returns the contents of the all of the dimensions tables, for use when debugging.
-func (s *Server) HandleDimensionsTable(w http.ResponseWriter, r *http.Request) {
-	// Assembles the map of dimensionTableName => list of values
-	results := make(map[string][]string)
-	for _, dimensionTable := range s.Table.DimensionTables {
-		results[dimensionTable.Name] = dimensionTable.Rows
-	}
-	WriteJSONResponse(w, results)
+// HandleDimensionTables responds with the JSON-formatted contents of all the dimension tables.
+func (s *Server) HandleDimensionTables(w http.ResponseWriter, r *http.Request) {
+	WriteJSONResponse(w, s.DB.GetDimensionTables())
 }
 
+// HandleSingleDimension responds with dimension table array for a single dimension.
 func (s *Server) HandleSingleDimension(w http.ResponseWriter, params martini.Params) {
 	name := params["name"]
 	if name == "" {
 		http.Error(w, "Must provide dimension name", http.StatusBadRequest)
 		return
 	}
-	for _, table := range s.Table.DimensionTables {
-		if table.Name == name {
-			WriteJSONResponse(w, table.Rows)
-			return
-		}
+	dimensionTables := s.DB.GetDimensionTables()
+	if values, ok := dimensionTables[name]; ok {
+		WriteJSONResponse(w, values)
+		return
 	}
 	http.Error(w, "No such dimension: "+name, http.StatusBadRequest)
 }
 
-// Evaluate a query and returns an aggregated result set.
+// HandleQuery evaluates a query and returns an aggregated result set.
 // See the README for the query JSON structure and the structure of the reuslts.
 func (s *Server) HandleQuery(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
-	query, err := gumshoe.ParseJSONQuery(r.Body)
+	query, err := s.DB.ParseJSONQuery(r.Body)
 	if err != nil {
 		WriteError(w, err)
 		return
 	}
-	if err = gumshoe.ValidateQuery(s.Table, query); err != nil {
+	rows, err := s.DB.GetQueryResult(query)
+	if err != nil {
 		WriteError(w, err)
 		return
 	}
-	results := s.Table.InvokeQuery(query)
-	results["duration"] = time.Since(start).Seconds() * 1000.0
+	elapsed := time.Since(start)
+	results := map[string]interface{}{
+		"results":  rows,
+		"duration": elapsed.Seconds() * 1000.0,
+	}
 	WriteJSONResponse(w, results)
 }
 
-type Metricz struct {
-	FactTableRows          int                        `json:"factTableRows"`
-	FactTableBytes         int                        `json:"factTableBytes"`
-	FactTableCapacityBytes int                        `json:"factTableCapacityBytes"`
-	DimensionTables        map[string]map[string]int  `json:"dimensionTables"`
-	OldestRow              map[string]gumshoe.Untyped `json:"oldestRow"`
-	NewestRow              map[string]gumshoe.Untyped `json:"newestRow"`
-}
+//type Metricz struct {
+//FactTableRows          int                        `json:"factTableRows"`
+//FactTableBytes         int                        `json:"factTableBytes"`
+//FactTableCapacityBytes int                        `json:"factTableCapacityBytes"`
+//DimensionTables        map[string]map[string]int  `json:"dimensionTables"`
+//OldestRow              map[string]gumshoe.Untyped `json:"oldestRow"`
+//NewestRow              map[string]gumshoe.Untyped `json:"newestRow"`
+//}
 
-func (s *Server) HandleMetricz(w http.ResponseWriter) {
-	dimensionTables := make(map[string]map[string]int)
-	for _, dimensionTable := range s.Table.DimensionTables {
-		if dimensionTable != nil {
-			dimensionTables[dimensionTable.Name] = map[string]int{
-				"Rows":  len(dimensionTable.Rows),
-				"Bytes": len(dimensionTable.Rows) * int(unsafe.Sizeof(*dimensionTable)),
-			}
-		}
-	}
+//func (s *Server) HandleMetricz(w http.ResponseWriter) {
+//dimensionTables := make(map[string]map[string]int)
+//for _, dimensionTable := range s.Table.DimensionTables {
+//if dimensionTable != nil {
+//dimensionTables[dimensionTable.Name] = map[string]int{
+//"Rows":  len(dimensionTable.Rows),
+//"Bytes": len(dimensionTable.Rows) * int(unsafe.Sizeof(*dimensionTable)),
+//}
+//}
+//}
 
-	metricz := &Metricz{
-		FactTableRows:   s.Table.Count,
-		FactTableBytes:  s.Table.Count * s.Table.RowSize,
-		DimensionTables: dimensionTables,
-	}
+//metricz := &Metricz{
+//FactTableRows:   s.Table.Count,
+//FactTableBytes:  s.Table.Count * s.Table.RowSize,
+//DimensionTables: dimensionTables,
+//}
 
-	if s.Table.Count > 0 {
-		s.Table.InsertLock.Lock()
-		defer s.Table.InsertLock.Unlock()
-		metricz.OldestRow = s.Table.GetRowMaps(0, 1)[0]
-		metricz.NewestRow = s.Table.GetRowMaps(s.Table.Count-1, s.Table.Count)[0]
-	}
+//if s.Table.Count > 0 {
+//s.Table.InsertLock.Lock()
+//defer s.Table.InsertLock.Unlock()
+//metricz.OldestRow = s.Table.GetRowMaps(0, 1)[0]
+//metricz.NewestRow = s.Table.GetRowMaps(s.Table.Count-1, s.Table.Count)[0]
+//}
 
-	metriczJSON, err := json.Marshal(metricz)
-	if err != nil {
-		WriteError(w, err)
-		return
-	}
+//metriczJSON, err := json.Marshal(metricz)
+//if err != nil {
+//WriteError(w, err)
+//return
+//}
 
-	var buf bytes.Buffer
-	if err := json.Indent(&buf, metriczJSON, "", "    "); err != nil {
-		WriteError(w, err)
-		return
-	}
-	buf.WriteTo(w)
-}
+//var buf bytes.Buffer
+//if err := json.Indent(&buf, metriczJSON, "", "    "); err != nil {
+//WriteError(w, err)
+//return
+//}
+//buf.WriteTo(w)
+//}
 
-// Loads the fact table from disk if it exists, or creates a new one.
-// TODO(caleb): We should probably just do this inside NewServer, but calling separately for now so the test
-// can avoid loading a fact table.
-func (s *Server) loadFactTable() {
-	log.Printf(`Trying to load "%s"... `, s.Config.TableFilePath)
-	table, err := gumshoe.LoadFactTableFromDisk(s.Config.TableFilePath)
-	if err != nil {
-		if !os.IsNotExist(err) {
-			log.Fatal(err)
-		}
-		log.Printf(`Table "%s" does not exist, creating... `, s.Config.TableFilePath)
-		table, err = gumshoe.NewFactTable(s.Config.TableFilePath, s.Config.ToSchema())
-		if err != nil {
-			log.Fatal(err)
-		}
-		if err := table.SaveToDisk(); err != nil {
-			log.Fatal(err)
-		}
-		log.Print("done.")
-	} else {
-		log.Printf("loaded %d rows.", table.Count)
-	}
-	s.Table = table
-}
-
-func (s *Server) RunBackgroundSaves() {
-	for _ = range time.Tick(s.Config.SaveDuration.Duration) {
-		log.Println("Saving to disk...")
-		if err := s.Table.SaveToDisk(); err != nil {
-			log.Fatal(err)
-		}
-		log.Println("...done saving to disk")
-	}
-}
-
-// NewServer initializes a Server with a fact table from disk and sets up its routes.
-func NewServer(config *config.Config) *Server {
-	s := &Server{Config: config}
+// NewServer initializes a Server with a DB and sets up its routes.
+func NewServer(conf *config.Config, schema *gumshoe.Schema) *Server {
+	s := &Server{Config: conf}
+	s.loadDB(schema)
 
 	m := martini.Classic()
 	// Use a specific set of middlewares instead of the defaults. Note that we've removed panic recovery.
 	m.Handlers(martini.Logger(), martini.Static("public"))
 
-	// TODO(philc): Make these REST routes more consistent.
-	m.Get("/metricz", s.HandleMetricz)
 	m.Put("/insert", s.HandleInsert)
-	m.Get("/tables/facts", s.HandleFactTable)
-	m.Get("/tables/dimensions", s.HandleDimensionsTable)
-	m.Get("/tables/dimensions/:name", s.HandleSingleDimension)
-	m.Post("/tables/facts/query", s.HandleQuery)
+	m.Get("/dimension_tables", s.HandleDimensionTables)
+	m.Get("/dimension_tables/:name", s.HandleSingleDimension)
+	m.Post("/query", s.HandleQuery)
+
+	//m.Get("/metricz", s.HandleMetricz)
+	m.Get("/debug/rows", s.HandleDebugRows)
 
 	s.Handler = m
+
+	go s.RunPeriodicFlushes()
 	return s
+}
+
+// loadDB opens the database if it exists, or else creates a new one.
+func (s *Server) loadDB(schema *gumshoe.Schema) {
+	dir := s.Config.DatabaseDir
+	log.Printf(`Trying to load %q...`, dir)
+	db, err := gumshoe.OpenDB(schema)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			log.Fatal(err)
+		}
+		log.Printf(`Database %q does not exist; creating`, dir)
+		db, err = gumshoe.NewDB(schema)
+		if err != nil {
+			log.Fatal(err)
+		}
+		log.Printf("Database at %q created successfully", dir)
+	} else {
+		log.Printf("Loaded database with %d rows", db.GetNumRows())
+	}
+	s.DB = db
+}
+
+func (s *Server) RunPeriodicFlushes() {
+	for _ = range time.Tick(s.Config.FlushInterval.Duration) {
+		log.Print("Flushing to disk...")
+		s.Flush()
+		log.Print("Done flushing")
+	}
 }
 
 func (s *Server) ListenAndServe() error {
@@ -229,15 +230,13 @@ func (s *Server) ListenAndServe() error {
 
 func main() {
 	flag.Parse()
-	// Set configuration defaults
-	config := &config.Config{
-		TableFilePath: "db/table",
-		SaveDuration:  config.Duration{10 * time.Second},
-	}
-	if _, err := toml.DecodeFile(*configFile, config); err != nil {
+
+	f, err := os.Open(*configFile)
+	if err != nil {
 		log.Fatal(err)
 	}
-	if err := config.Validate(); err != nil {
+	conf, schema, err := config.LoadTOMLConfig(f)
+	if err != nil {
 		log.Fatal(err)
 	}
 
@@ -255,8 +254,6 @@ func main() {
 		}()
 	}
 
-	server := NewServer(config)
-	server.loadFactTable()
-	go server.RunBackgroundSaves()
+	server := NewServer(conf, schema)
 	log.Fatal(server.ListenAndServe())
 }
