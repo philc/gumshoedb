@@ -24,7 +24,7 @@ func TestExpectedNumberOfSegmentsAreAllocated(t *testing.T) {
 		{"at": 0.0, "dim1": "c", "metric1": 1.0},
 	})
 
-	resp := db.makeRequest()
+	resp := db.MakeRequest()
 	defer resp.Done()
 
 	Assert(t, len(resp.State.Intervals), Equals, 1)
@@ -117,7 +117,7 @@ func makeTestPersistentDB() *DB {
 }
 
 func physicalRows(db *DB) int {
-	resp := db.makeRequest()
+	resp := db.MakeRequest()
 	defer resp.Done()
 	rows := 0
 	for _, interval := range resp.State.Intervals {

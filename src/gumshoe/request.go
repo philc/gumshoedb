@@ -18,21 +18,21 @@ func (r *Response) Done() {
 	r.done <- struct{}{}
 }
 
-func (db *DB) makeRequest() *Response {
+func (db *DB) MakeRequest() *Response {
 	respCh := make(chan *Response)
 	db.requests <- &Request{respCh}
 	return <-respCh
 }
 
 func (db *DB) GetQueryResult(query *Query) ([]RowMap, error) {
-	resp := db.makeRequest()
+	resp := db.MakeRequest()
 	defer resp.Done()
 
 	return resp.State.InvokeQuery(query)
 }
 
 func (db *DB) GetDimensionTables() map[string][]string {
-	resp := db.makeRequest()
+	resp := db.MakeRequest()
 	defer resp.Done()
 
 	results := make(map[string][]string)
@@ -45,7 +45,7 @@ func (db *DB) GetDimensionTables() map[string][]string {
 }
 
 func (db *DB) GetNumRows() int {
-	resp := db.makeRequest()
+	resp := db.MakeRequest()
 	defer resp.Done()
 
 	result := 0
@@ -56,14 +56,14 @@ func (db *DB) GetNumRows() int {
 }
 
 func (db *DB) GetCompressionRatio() float64 {
-	resp := db.makeRequest()
+	resp := db.MakeRequest()
 	defer resp.Done()
 
 	return resp.State.compressionRatio()
 }
 
 func (db *DB) GetDebugPrint() {
-	resp := db.makeRequest()
+	resp := db.MakeRequest()
 	defer resp.Done()
 
 	resp.State.debugPrint()
@@ -73,7 +73,7 @@ func (db *DB) GetDebugPrint() {
 func (db *DB) GetDebugRows() []UnpackedRow {
 	const max = 100
 
-	resp := db.makeRequest()
+	resp := db.MakeRequest()
 	defer resp.Done()
 
 	var results []UnpackedRow
