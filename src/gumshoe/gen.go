@@ -23,6 +23,9 @@ var types = []string{
 	"uint32",
 	"int32",
 	"float32",
+	"uint64",
+	"int64",
+	"float64",
 }
 
 var filters = []FilterType{
@@ -36,9 +39,11 @@ var filters = []FilterType{
 }
 
 type Type struct {
-	GoName          string // uint8
-	TitleName       string // Uint8
-	GumshoeTypeName string // TypeUint8
+	GoName             string // uint8
+	TitleName          string // Uint8
+	GumshoeTypeName    string // TypeUint8
+	BigTypeName        string // uint64
+	GumshoeBigTypeName string // TypeUint64
 }
 
 // Simple filters have a corresponding Go operator
@@ -51,7 +56,6 @@ type FilterType struct {
 func main() {
 	elements := struct {
 		Types             []Type
-		IntTypes          []Type
 		FloatTypes        []Type
 		FilterTypes       []FilterType
 		SimpleFilterTypes []FilterType // Binary op filters
@@ -62,13 +66,23 @@ func main() {
 	}
 
 	for _, name := range types {
-		typ := Type{
-			GoName:          name,
-			TitleName:       strings.Title(name),
-			GumshoeTypeName: "Type" + strings.Title(name),
+		var bigTypeName string
+		switch {
+		case strings.HasPrefix(name, "int"):
+			bigTypeName = "int64"
+		case strings.HasPrefix(name, "uint"):
+			bigTypeName = "uint64"
+		case strings.HasPrefix(name, "float"):
+			bigTypeName = "float64"
+		default:
+			panic("unexpected")
 		}
-		if strings.HasPrefix(name, "int") || strings.HasPrefix(name, "uint") {
-			elements.IntTypes = append(elements.IntTypes, typ)
+		typ := Type{
+			GoName:             name,
+			TitleName:          strings.Title(name),
+			GumshoeTypeName:    "Type" + strings.Title(name),
+			BigTypeName:        bigTypeName,
+			GumshoeBigTypeName: "Type" + strings.Title(bigTypeName),
 		}
 		if strings.HasPrefix(name, "float") {
 			elements.FloatTypes = append(elements.FloatTypes, typ)
@@ -120,6 +134,10 @@ var typeNames = []string{ {{range .Types}}
 
 var NameToType = map[string]Type{ {{range .Types}}
 "{{.GoName}}": {{.GumshoeTypeName}},{{end}}
+}
+
+var typeToBigType = []Type{ {{range .Types}}
+{{.GumshoeTypeName}}: {{.GumshoeBigTypeName}},{{end}}
 }
 
 // add adds other to m (only m is modified).
@@ -175,7 +193,7 @@ func makeSumFuncGen(typ Type) func(offset int) sumFunc {
 	if typ == {{.GumshoeTypeName}} {
 		return func(offset int) sumFunc {
 			return func(sum UntypedBytes, metrics MetricBytes) {
-				*(*{{.GoName}})(unsafe.Pointer(&sum[0])) += *(*{{.GoName}})(unsafe.Pointer(&metrics[offset]))
+				*(*{{.BigTypeName}})(unsafe.Pointer(&sum[0])) += {{.BigTypeName}}(*(*{{.GoName}})(unsafe.Pointer(&metrics[offset])))
 			}
 		}
 	}{{end}}
