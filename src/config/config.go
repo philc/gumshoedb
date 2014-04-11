@@ -123,7 +123,7 @@ func (c *Config) makeSchema() (*gumshoe.Schema, error) {
 		Dir:              dir,
 		RunConfig: gumshoe.RunConfig{
 			FixedRetention: true,
-			Retention:      c.RetentionDays * 24 * time.Hour,
+			Retention:      time.Duration(c.RetentionDays) * 24 * time.Hour,
 		},
 	}, nil
 }
