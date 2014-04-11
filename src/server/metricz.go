@@ -24,7 +24,8 @@ type Metricz struct {
 	Config              string
 	DimensionTableSizes []NameAndCount
 	Totals              Stats
-	IntervalStats       map[time.Time]Stats
+	// unix time -> Stats for interval. Using an int so that map iteration is ordered in the template.
+	IntervalStats map[int64]Stats
 }
 
 func (s *Server) makeMetricz() (*Metricz, error) {
@@ -47,7 +48,7 @@ func (s *Server) makeMetricz() (*Metricz, error) {
 	}
 
 	var totals Stats
-	intervalStats := make(map[time.Time]Stats)
+	intervalStats := make(map[int64]Stats)
 	for t, interval := range resp.State.Intervals {
 		totals.Segments += interval.NumSegments
 		totals.Rows += interval.NumRows
@@ -56,7 +57,7 @@ func (s *Server) makeMetricz() (*Metricz, error) {
 			size += uint64(len(segment.Bytes))
 		}
 		totals.Size += size
-		intervalStats[t] = Stats{Segments: interval.NumSegments, Rows: interval.NumRows, Size: size}
+		intervalStats[t.Unix()] = Stats{Segments: interval.NumSegments, Rows: interval.NumRows, Size: size}
 	}
 	totals.CompressionRatio = compressionRatio
 
@@ -70,7 +71,9 @@ func (s *Server) makeMetricz() (*Metricz, error) {
 
 var funcMap = template.FuncMap{
 	"humanize": humanize.Bytes,
-	"date":     func(t time.Time) string { return t.Format("2006-01-02 15:04:05") },
+	"date": func(timestamp int64) string {
+		return time.Unix(timestamp, 0).Format("2006-01-02 15:04:05")
+	},
 }
 
 var metriczTemplate = template.Must(template.New("metricz").Funcs(funcMap).Parse(metriczTemplateText))
