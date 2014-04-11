@@ -34,14 +34,14 @@ func WriteJSONResponse(w http.ResponseWriter, objectToSerialize interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	encoder := json.NewEncoder(w)
 	if err := encoder.Encode(objectToSerialize); err != nil {
-		WriteError(w, err)
+		WriteError(w, err, 500)
 		return
 	}
 }
 
-func WriteError(w http.ResponseWriter, err error) {
+func WriteError(w http.ResponseWriter, err error, status int) {
 	log.Print(err)
-	http.Error(w, err.Error(), 500)
+	http.Error(w, err.Error(), status)
 }
 
 func (s *Server) Flush() {
@@ -61,12 +61,12 @@ func (s *Server) HandleInsert(w http.ResponseWriter, r *http.Request) {
 	decoder := json.NewDecoder(r.Body)
 	var rows []gumshoe.RowMap
 	if err := decoder.Decode(&rows); err != nil {
-		WriteError(w, err)
+		WriteError(w, err, http.StatusBadRequest)
 		return
 	}
 	log.Printf("Inserting %d rows", len(rows))
 	if err := s.DB.Insert(rows); err != nil {
-		WriteError(w, err)
+		WriteError(w, err, http.StatusBadRequest)
 		return
 	}
 	s.Flush()
@@ -104,12 +104,12 @@ func (s *Server) HandleQuery(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 	query, err := s.DB.ParseJSONQuery(r.Body)
 	if err != nil {
-		WriteError(w, err)
+		WriteError(w, err, http.StatusBadRequest)
 		return
 	}
 	rows, err := s.DB.GetQueryResult(query)
 	if err != nil {
-		WriteError(w, err)
+		WriteError(w, err, http.StatusBadRequest)
 		return
 	}
 	elapsed := time.Since(start)
