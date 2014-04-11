@@ -101,6 +101,21 @@ func TestInsertAndReadNilValues(t *testing.T) {
 	Assert(t, db.GetDebugRows(), utils.DeepEqualsUnordered, []UnpackedRow{{rows[0], 1}, {rows[1], 1}})
 }
 
+func TestInsertDropsRowsOutOfRetention(t *testing.T) {
+	db := makeTestDB()
+	db.FixedRetention = true
+	db.Retention = 24 * time.Hour
+	defer closeTestDB(db)
+
+	rows := []RowMap{
+		{"at": float64(time.Now().Add(-22 * time.Hour).Unix()), "dim1": "foo", "metric1": 1.0},
+		{"at": float64(time.Now().Add(-26 * time.Hour).Unix()), "dim1": "bar", "metric1": 1.0},
+	}
+
+	insertRows(db, rows)
+	Assert(t, db.GetDebugRows(), utils.DeepEqualsUnordered, []UnpackedRow{{rows[0], 1}})
+}
+
 func makeTestPersistentDB() *DB {
 	tempDir, err := ioutil.TempDir("", "gumshoe-persistence-test")
 	if err != nil {

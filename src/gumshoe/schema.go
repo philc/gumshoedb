@@ -68,6 +68,8 @@ type Schema struct {
 }
 
 type RunConfig struct {
+	FixedRetention bool          // Whether to truncate old data
+	Retention      time.Duration // How long to save data if FixedRetention is true
 }
 
 // initialize fills in the derived fields of s.
@@ -114,6 +116,9 @@ func (s *Schema) initialize() {
 // fillDefaults sets fields of c to reasonable default values if they are currently set to the zero value for
 // the type.
 func (c *RunConfig) fillDefaults() {
+	if c.Retention <= 0 {
+		c.Retention = 7 * 24 * time.Hour
+	}
 }
 
 // Equivalent returns an error describing a difference between the json-public fields of s and other or nil if

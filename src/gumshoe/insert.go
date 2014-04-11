@@ -45,6 +45,11 @@ func (db *DB) insertRow(rowMap RowMap) error {
 		return err
 	}
 	timestamp := row.Timestamp.Truncate(db.IntervalDuration)
+	// Drop the row if it's out of retention
+	if db.FixedRetention && db.intervalStartOutOfRetention(timestamp) {
+		return nil
+	}
+
 	interval, ok := db.memTable.Intervals[timestamp]
 	if !ok {
 		interval = &MemInterval{
@@ -68,6 +73,10 @@ func (db *DB) insertRow(rowMap RowMap) error {
 	}
 	interval.Tree.Set([]byte(row.Dimensions), value)
 	return nil
+}
+
+func (db *DB) intervalStartOutOfRetention(timestamp time.Time) bool {
+	return time.Since(timestamp.Add(db.IntervalDuration)) > db.Retention
 }
 
 type times []time.Time

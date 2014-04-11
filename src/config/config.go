@@ -25,6 +25,7 @@ type Config struct {
 	ListenAddr    string   `toml:"listen_addr"`
 	DatabaseDir   string   `toml:"database_dir"`
 	FlushInterval Duration `toml:"flush_interval"`
+	RetentionDays int      `toml:"retention_days"`
 	Schema        Schema   `toml:"schema"`
 }
 
@@ -105,6 +106,9 @@ func (c *Config) makeSchema() (*gumshoe.Schema, error) {
 	if c.FlushInterval.Duration < time.Second {
 		return nil, fmt.Errorf("flush interval is too small: %s", c.FlushInterval)
 	}
+	if c.RetentionDays < 1 {
+		return nil, fmt.Errorf("retention days is too small: %d", c.RetentionDays)
+	}
 	if c.Schema.IntervalDuration.Duration < time.Minute {
 		return nil, fmt.Errorf("interval duration is too short: %s", c.Schema.IntervalDuration)
 	}
@@ -117,6 +121,10 @@ func (c *Config) makeSchema() (*gumshoe.Schema, error) {
 		IntervalDuration: c.Schema.IntervalDuration.Duration,
 		DiskBacked:       diskBacked,
 		Dir:              dir,
+		RunConfig: gumshoe.RunConfig{
+			FixedRetention: true,
+			Retention:      c.RetentionDays * 24 * time.Hour,
+		},
 	}, nil
 }
 
