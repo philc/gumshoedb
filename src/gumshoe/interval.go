@@ -214,7 +214,7 @@ func (s *Schema) WriteMemInterval(memInterval *MemInterval) (*Interval, error) {
 // with generation stateInterval.Generation+1.
 func (s *Schema) WriteCombinedInterval(memInterval *MemInterval, stateInterval *Interval) (*Interval, error) {
 	// Sanity check
-	if memInterval.Start != stateInterval.Start || memInterval.End != stateInterval.End {
+	if !memInterval.Start.Equal(stateInterval.Start) || !memInterval.End.Equal(stateInterval.End) {
 		// TODO(caleb) Remove these logging statements after I understand how this can occur
 		log.Printf("memInterval: start=%s, end=%s", memInterval.Start, memInterval.End)
 		log.Printf("stateInterval: start=%s, end=%s", stateInterval.Start, stateInterval.End)
