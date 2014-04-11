@@ -3,7 +3,6 @@ package gumshoe
 import (
 	"bytes"
 	"encoding/json"
-	"log"
 	"os"
 	"path/filepath"
 	"sort"
@@ -248,13 +247,13 @@ func (db *DB) cleanUpOldIntervals(intervals []*Interval) {
 		// Unmap, close, and delete all the segment files
 		for i, segment := range interval.Segments {
 			if err := segment.Bytes.Unmap(); err != nil {
-				log.Println("cleanup error unmapping segment file:", err)
+				Log.Println("cleanup error unmapping segment file:", err)
 			}
 			if err := segment.File.Close(); err != nil {
-				log.Println("cleanup error closing segment file:", err)
+				Log.Println("cleanup error closing segment file:", err)
 			}
 			if err := os.Remove(db.SegmentFilename(interval.Start, interval.Generation, i)); err != nil {
-				log.Println("cleanup error deleting segment file:", err)
+				Log.Println("cleanup error deleting segment file:", err)
 			}
 		}
 	}

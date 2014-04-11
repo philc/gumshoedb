@@ -9,6 +9,10 @@ import (
 
 const dbMetadataFilename = "db.json"
 
+// Log is a global logger instance. The user may replace it with a custom logger (e.g., a log.Logger) before
+// calling any gumshoedb functions.
+var Log Logger = nopLogger{}
+
 type DB struct {
 	*Schema
 	State    *State    // Owned by the request goroutine

@@ -19,9 +19,13 @@ import (
 	"github.com/codegangsta/martini"
 )
 
+// No date/time in the log because it's assumed our external log handling (svlogd) takes care of that.
+const logFlags = log.Lshortfile
+
 var (
 	configFile  = flag.String("config", "config.toml", "Configuration file to use")
 	profileAddr = flag.String("profile-addr", "", "If non-empty, address for net/http/pprof")
+	Log         = log.New(os.Stderr, "[server] ", logFlags)
 )
 
 type Server struct {
@@ -40,7 +44,7 @@ func WriteJSONResponse(w http.ResponseWriter, objectToSerialize interface{}) {
 }
 
 func WriteError(w http.ResponseWriter, err error, status int) {
-	log.Print(err)
+	Log.Print(err)
 	http.Error(w, err.Error(), status)
 }
 
@@ -50,7 +54,7 @@ func (s *Server) Flush() {
 	// the metadata is written atomically after a succesful flush, so restarting will return us to a consistent
 	// state (but missing any data since the previous successful flush).
 	if err := s.DB.Flush(); err != nil {
-		log.Printf(">>> FATAL ERROR ON FLUSH: %s", err)
+		Log.Printf(">>> FATAL ERROR ON FLUSH: %s", err)
 		os.Exit(1)
 	}
 }
@@ -68,7 +72,7 @@ func (s *Server) HandleInsert(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, err, http.StatusBadRequest)
 		return
 	}
-	log.Printf("Inserting %d rows", len(rows))
+	Log.Printf("Inserting %d rows", len(rows))
 	if err := s.DB.Insert(rows); err != nil {
 		WriteError(w, err, http.StatusBadRequest)
 		return
@@ -163,20 +167,20 @@ func NewServer(conf *config.Config, schema *gumshoe.Schema) *Server {
 // loadDB opens the database if it exists, or else creates a new one.
 func (s *Server) loadDB(schema *gumshoe.Schema) {
 	dir := s.Config.DatabaseDir
-	log.Printf(`Trying to load %q...`, dir)
+	Log.Printf(`Trying to load %q...`, dir)
 	db, err := gumshoe.OpenDB(schema)
 	if err != nil {
 		if !os.IsNotExist(err) {
-			log.Fatal(err)
+			Log.Fatal(err)
 		}
-		log.Printf(`Database %q does not exist; creating`, dir)
+		Log.Printf(`Database %q does not exist; creating`, dir)
 		db, err = gumshoe.NewDB(schema)
 		if err != nil {
-			log.Fatal(err)
+			Log.Fatal(err)
 		}
-		log.Printf("Database at %q created successfully", dir)
+		Log.Printf("Database at %q created successfully", dir)
 	} else {
-		log.Printf("Loaded database with %d rows", db.GetNumRows())
+		Log.Printf("Loaded database with %d rows", db.GetNumRows())
 	}
 	s.DB = db
 }
@@ -188,7 +192,7 @@ func (s *Server) RunPeriodicFlushes() {
 }
 
 func (s *Server) ListenAndServe() error {
-	log.Println("Now serving on", s.Config.ListenAddr)
+	Log.Println("Now serving on", s.Config.ListenAddr)
 	server := &http.Server{
 		Addr:    s.Config.ListenAddr,
 		Handler: s,
@@ -201,11 +205,11 @@ func main() {
 
 	f, err := os.Open(*configFile)
 	if err != nil {
-		log.Fatal(err)
+		Log.Fatal(err)
 	}
 	conf, schema, err := config.LoadTOMLConfig(f)
 	if err != nil {
-		log.Fatal(err)
+		Log.Fatal(err)
 	}
 
 	// Use all available cores for servicing requests in parallel.
@@ -216,12 +220,15 @@ func main() {
 	// Set up the pprof server, if enabled.
 	if *profileAddr != "" {
 		go func() {
-			log.Println("Pprof listening on", *profileAddr)
-			log.Printf("Go to http://%s/debug/pprof to see more", *profileAddr)
-			log.Fatal(http.ListenAndServe(*profileAddr, nil))
+			Log.Println("Pprof listening on", *profileAddr)
+			Log.Printf("Go to http://%s/debug/pprof to see more", *profileAddr)
+			Log.Fatal(http.ListenAndServe(*profileAddr, nil))
 		}()
 	}
 
+	// Configure the gumshoe logger
+	gumshoe.Log = log.New(os.Stdout, "[gumshoe] ", logFlags)
+
 	server := NewServer(conf, schema)
-	log.Fatal(server.ListenAndServe())
+	Log.Fatal(server.ListenAndServe())
 }
