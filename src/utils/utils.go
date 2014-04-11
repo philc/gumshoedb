@@ -1,31 +1,11 @@
 package utils
 
 import (
-	"encoding/json"
 	"fmt"
 	"reflect"
 
 	. "github.com/cespare/a"
 )
-
-// TODO(caleb): remove with HasEqualJSON
-func convertToJSONAndBack(o interface{}) interface{} {
-	b, err := json.Marshal(o)
-	if err != nil {
-		panic(err)
-	}
-	result := new(interface{})
-	json.Unmarshal(b, result)
-	return *result
-}
-
-// A variant of DeepEquals which is less finicky about which numeric type you're using in maps.
-// TODO(caleb): delete; deprecated by deepEqual
-func HasEqualJSON(args ...interface{}) (ok bool, message string) {
-	o1 := convertToJSONAndBack(args[0])
-	o2 := convertToJSONAndBack(args[1])
-	return DeepEquals(o1, o2)
-}
 
 // DeepConvertibleEquals is a checker like DeepEqual which converts all numeric types to float64 before comparing.
 // DeepConvertibleEquals only handles simple types, slices, and maps (but it is recursive).
