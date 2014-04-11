@@ -182,7 +182,7 @@ func (iv *writeOnlyInterval) closeCurrentSegment() error {
 }
 
 func (s *Schema) SegmentFilename(start time.Time, generation, segmentIndex int) string {
-	name := fmt.Sprintf("interval.%d.generation%04d.segment%04d", start.Unix(), generation, segmentIndex)
+	name := fmt.Sprintf("interval.%d.generation%04d.segment%04d.dat", start.Unix(), generation, segmentIndex)
 	return filepath.Join(s.Dir, name)
 }
 

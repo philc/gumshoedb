@@ -107,7 +107,7 @@ func makeTestPersistentDB() *DB {
 	schema := schemaFixture()
 	schema.DiskBacked = true
 	schema.Dir = tempDir
-	db, err := Open(schema)
+	db, err := NewDB(schema)
 	if err != nil {
 		panic(err)
 	}
@@ -143,7 +143,7 @@ func TestPersistenceEndToEnd(t *testing.T) {
 
 	// Reopen the DB and try again
 	db.Close()
-	db, err := Open(db.Schema)
+	db, err := OpenDB(db.Schema)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -159,7 +159,7 @@ func TestOldIntervalsAreDeleted(t *testing.T) {
 
 	insertRow(db, RowMap{"at": 0.0, "dim1": "string1", "metric1": 1.0})
 
-	firstGenSegmentFilename := filepath.Join(db.Dir, "interval.0.generation0000.segment0000")
+	firstGenSegmentFilename := filepath.Join(db.Dir, "interval.0.generation0000.segment0000.dat")
 	if _, err := os.Stat(firstGenSegmentFilename); err != nil {
 		t.Fatalf("expected segment file at %s to exist", firstGenSegmentFilename)
 	}
@@ -168,7 +168,7 @@ func TestOldIntervalsAreDeleted(t *testing.T) {
 	if _, err := os.Stat(firstGenSegmentFilename); !os.IsNotExist(err) {
 		t.Fatalf("expected segment file at %s to have been deleted", firstGenSegmentFilename)
 	}
-	secondGenSegmentFilename := filepath.Join(db.Dir, "interval.0.generation0001.segment0000")
+	secondGenSegmentFilename := filepath.Join(db.Dir, "interval.0.generation0001.segment0000.dat")
 	if _, err := os.Stat(secondGenSegmentFilename); err != nil {
 		t.Fatalf("expected segment file at %s to exist", secondGenSegmentFilename)
 	}

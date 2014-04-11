@@ -127,7 +127,7 @@ func setUpDB() *DB {
 	schema.TimestampColumn = makeColumn("at", "uint32")
 	schema.SegmentSize = 1 << 24
 
-	db, err := Open(schema)
+	db, err := NewDB(schema)
 	if err != nil {
 		panic(err)
 	}

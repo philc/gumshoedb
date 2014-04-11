@@ -57,7 +57,7 @@ func BenchmarkInsertion(b *testing.B) {
 	}
 	defer os.RemoveAll(tempDirName)
 
-	db, err := gumshoe.Open(schema)
+	db, err := gumshoe.NewDB(schema)
 	if err != nil {
 		b.Fatal(err)
 	}

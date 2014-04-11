@@ -2,6 +2,7 @@ package gumshoe
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 )
@@ -24,11 +25,39 @@ type DB struct {
 	flushes  chan *FlushInfo
 }
 
-// Open loads an existing DB or else makes a new one.
-// - If schema.DiskBacked is false, then the DB will be in-memory only.
-// - If schema.DiskBacked is true and schema.Dir doesn't exist, then a fresh, disk-backed DB will be created.
-// - Otherwise, Open loads an existing DB from schema.Dir after sanity checking against the given schema.
-func Open(schema *Schema) (*DB, error) {
+// OpenDB loads an existing DB. If schema.DiskBacked is false, this is the same as NewDB. Otherwise,
+// schema.Dir must already contain a valid saved database. OpenDB sanity-checks the existing DB against the
+// given schema.
+func OpenDB(schema *Schema) (*DB, error) {
+	if !schema.DiskBacked {
+		return NewDB(schema)
+	}
+
+	metadataFilename := filepath.Join(schema.Dir, dbMetadataFilename)
+	f, err := os.Open(metadataFilename)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	db := new(DB)
+	decoder := json.NewDecoder(f)
+	if err := decoder.Decode(db); err != nil {
+		return nil, err
+	}
+	if err := db.Schema.Equivalent(schema); err != nil {
+		return nil, err
+	}
+	if err := db.State.initialize(schema); err != nil {
+		return nil, err
+	}
+	db.Schema = schema
+	db.initialize()
+	return db, nil
+}
+
+// NewDB creates a fresh DB. If it is disk-backed, the directory (schema.Dir) must not contain any existing DB
+// files (*.json or *.dat).
+func NewDB(schema *Schema) (*DB, error) {
 	if !schema.DiskBacked {
 		db := &DB{
 			Schema: schema,
@@ -38,39 +67,24 @@ func Open(schema *Schema) (*DB, error) {
 		return db, nil
 	}
 
-	metadataFilename := filepath.Join(schema.Dir, dbMetadataFilename)
-	var db *DB
-	f, err := os.Open(metadataFilename)
-	switch {
-	case err == nil:
-		// Load the DB from the metadata file.
-		defer f.Close()
-		db = new(DB)
-		decoder := json.NewDecoder(f)
-		if err := decoder.Decode(db); err != nil {
+	if err := os.Mkdir(schema.Dir, 0755); err != nil {
+		if !os.IsExist(err) {
 			return nil, err
 		}
-		if err := db.Schema.Equivalent(schema); err != nil {
-			return nil, err
-		}
-		if err := db.State.initialize(schema); err != nil {
-			return nil, err
-		}
-		db.Schema = schema
-	case os.IsNotExist(err):
-		if err := os.Mkdir(schema.Dir, 0755); err != nil {
-			if !os.IsExist(err) {
+		for _, glob := range []string{"*.json", "*.dat"} {
+			matches, err := filepath.Glob(filepath.Join(schema.Dir, glob))
+			if err != nil {
 				return nil, err
 			}
+			if len(matches) > 0 {
+				return nil, fmt.Errorf("directory %s may already have a gumshoeDB database", schema.Dir)
+			}
 		}
-		db = &DB{
-			Schema: schema,
-			State:  NewState(schema),
-		}
-	default:
-		return nil, err
 	}
-
+	db := &DB{
+		Schema: schema,
+		State:  NewState(schema),
+	}
 	db.initialize()
 	return db, nil
 }

@@ -13,7 +13,7 @@ func schemaFixture() *Schema {
 }
 
 func makeTestDB() *DB {
-	db, err := Open(schemaFixture())
+	db, err := NewDB(schemaFixture())
 	if err != nil {
 		panic(err)
 	}
