@@ -60,23 +60,23 @@ func TestQueryFiltersRowsUsingEqualsFilter(t *testing.T) {
 	defer closeTestDB(db)
 
 	results := runWithFilter(db, QueryFilter{FilterEqual, "metric1", 2.0})
-	Assert(t, results[0]["metric1"], Equals, uint32(2))
+	Assert(t, results[0]["metric1"], utils.DeepConvertibleEquals, 2)
 
 	results = runWithFilter(db, QueryFilter{FilterEqual, "dim1", "string2"})
-	Assert(t, results[0]["metric1"], Equals, uint32(2))
+	Assert(t, results[0]["metric1"], utils.DeepConvertibleEquals, 2)
 
 	results = runWithFilter(db, QueryFilter{FilterEqual, "at", 0.0})
-	Assert(t, results[0]["metric1"], Equals, uint32(3))
+	Assert(t, results[0]["metric1"], utils.DeepConvertibleEquals, 3)
 
 	results = runWithFilter(db, QueryFilter{FilterEqual, "at", 1.0})
-	Assert(t, results[0]["metric1"], Equals, uint32(0))
+	Assert(t, results[0]["metric1"], utils.DeepConvertibleEquals, 0)
 
 	// These match zero rows.
 	results = runWithFilter(db, QueryFilter{FilterEqual, "metric1", 3.0})
-	Assert(t, results[0]["metric1"], Equals, uint32(0))
+	Assert(t, results[0]["metric1"], utils.DeepConvertibleEquals, 0)
 
 	results = runWithFilter(db, QueryFilter{FilterEqual, "dim1", "non-existent"})
-	Assert(t, results[0]["metric1"], Equals, uint32(0))
+	Assert(t, results[0]["metric1"], utils.DeepConvertibleEquals, 0)
 }
 
 func TestQueryFiltersRowsUsingLessThan(t *testing.T) {
@@ -84,14 +84,14 @@ func TestQueryFiltersRowsUsingLessThan(t *testing.T) {
 	defer closeTestDB(db)
 
 	results := runWithFilter(db, QueryFilter{FilterLessThan, "metric1", 2.0})
-	Assert(t, results[0]["metric1"], Equals, uint32(1))
+	Assert(t, results[0]["metric1"], utils.DeepConvertibleEquals, 1)
 
 	results = runWithFilter(db, QueryFilter{FilterLessThan, "at", 10.0})
-	Assert(t, results[0]["metric1"], Equals, uint32(3))
+	Assert(t, results[0]["metric1"], utils.DeepConvertibleEquals, 3)
 
 	// Matches zero rows.
 	results = runWithFilter(db, QueryFilter{FilterLessThan, "metric1", 1.0})
-	Assert(t, results[0]["metric1"], Equals, uint32(0))
+	Assert(t, results[0]["metric1"], utils.DeepConvertibleEquals, 0)
 }
 
 func inList(items ...interface{}) []interface{} {
@@ -113,21 +113,21 @@ func TestQueryFiltersRowsUsingIn(t *testing.T) {
 	db := createTestDBForFilterTests()
 	defer closeTestDB(db)
 
-	Assert(t, runWithFilter(db, QueryFilter{FilterIn, "metric1", inList(2)})[0]["metric1"], Equals, uint32(2))
+	Assert(t, runWithFilter(db, QueryFilter{FilterIn, "metric1", inList(2)})[0]["metric1"], utils.DeepConvertibleEquals, 2)
 	results := runWithFilter(db, QueryFilter{FilterIn, "metric1", inList(2, 1)})
-	Assert(t, results[0]["metric1"], Equals, uint32(3))
+	Assert(t, results[0]["metric1"], utils.DeepConvertibleEquals, 3)
 
 	results = runWithFilter(db, QueryFilter{FilterIn, "dim1", inList("string1")})
-	Assert(t, results[0]["metric1"], Equals, uint32(1))
+	Assert(t, results[0]["metric1"], utils.DeepConvertibleEquals, 1)
 
 	results = runWithFilter(db, QueryFilter{FilterIn, "at", inList(0, 10, 100)})
-	Assert(t, results[0]["metric1"], Equals, uint32(3))
+	Assert(t, results[0]["metric1"], utils.DeepConvertibleEquals, 3)
 
 	// These match zero rows.
 	results = runWithFilter(db, QueryFilter{FilterIn, "metric1", inList(3)})
-	Assert(t, results[0]["metric1"], Equals, uint32(0))
+	Assert(t, results[0]["metric1"], utils.DeepConvertibleEquals, 0)
 	results = runWithFilter(db, QueryFilter{FilterIn, "dim1", inList("non-existent")})
-	Assert(t, results[0]["metric1"], Equals, uint32(0))
+	Assert(t, results[0]["metric1"], utils.DeepConvertibleEquals, 0)
 }
 
 func TestQueryGroupingByAStringColumn(t *testing.T) {
@@ -198,4 +198,19 @@ func TestQueryGroupByWithNilValues(t *testing.T) {
 		{"metric1": 2, "groupbykey": "b", "rowCount": 1},
 		{"metric1": 4, "groupbykey": nil, "rowCount": 1},
 	})
+}
+
+// Even though a column may be a relatively narrow type, the sum is a larger "big type" as appropriate. For
+// instance, uint8s are summed in a uint64.
+func TestQuerySumsOverflowIndividualColumnTypes(t *testing.T) {
+	db := makeTestDB()
+	defer closeTestDB(db)
+
+	insertRows(db, []RowMap{
+		{"at": 0.0, "dim1": "string1", "metric1": 4294967295.0}, // MaxUint32
+		{"at": 0.0, "dim1": "string2", "metric1": 4294967295.0},
+	})
+
+	results := runQuery(db, createQuery())
+	Assert(t, results[0]["metric1"], utils.DeepConvertibleEquals, 8589934590)
 }

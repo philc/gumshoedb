@@ -178,7 +178,7 @@ func TestPersistenceEndToEnd(t *testing.T) {
 	// Query the data
 	Assert(t, physicalRows(db), Equals, 100)
 	result := runQuery(db, createQuery())
-	Assert(t, result[0]["metric1"], Equals, uint32(10000))
+	Assert(t, result[0]["metric1"], utils.DeepConvertibleEquals, 10000)
 
 	// Reopen the DB and try again
 	closeTestDB(db)
@@ -189,7 +189,7 @@ func TestPersistenceEndToEnd(t *testing.T) {
 	defer closeTestDB(db)
 	Assert(t, physicalRows(db), Equals, 100)
 	result = runQuery(db, createQuery())
-	Assert(t, result[0]["metric1"], Equals, uint32(10000))
+	Assert(t, result[0]["metric1"], utils.DeepConvertibleEquals, 10000)
 }
 
 func TestOldIntervalsAreDeleted(t *testing.T) {

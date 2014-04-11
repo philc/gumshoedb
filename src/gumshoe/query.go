@@ -153,7 +153,7 @@ func (s *State) scan(params *scanParams) *rowAggregate {
 	result := new(rowAggregate)
 	result.Sums = make([]UntypedBytes, len(params.SumColumns))
 	for i, col := range params.SumColumns {
-		result.Sums[i] = make(UntypedBytes, col.Width)
+		result.Sums[i] = make(UntypedBytes, typeWidths[typeToBigType[col.Type]])
 	}
 
 intervalLoop:
@@ -332,7 +332,7 @@ func makeRowAggregate(groupByValue Untyped, params *scanParams) *rowAggregate {
 	aggregate.GroupByValue = groupByValue
 	aggregate.Sums = make([]UntypedBytes, len(params.SumColumns))
 	for i, col := range params.SumColumns {
-		aggregate.Sums[i] = make(UntypedBytes, col.Width)
+		aggregate.Sums[i] = make(UntypedBytes, typeWidths[typeToBigType[col.Type]])
 	}
 	return aggregate
 }
@@ -345,7 +345,7 @@ func (s *State) postProcessScanRows(aggregates []*rowAggregate, query *Query,
 		for i, queryAggregate := range query.Aggregates {
 			index := s.MetricNameToIndex[queryAggregate.Column]
 			column := s.MetricColumns[index]
-			sum := numericCellValue(aggregate.Sums[i].Pointer(), column.Type)
+			sum := numericCellValue(aggregate.Sums[i].Pointer(), typeToBigType[column.Type])
 			switch queryAggregate.Type {
 			case AggregateSum:
 				row[queryAggregate.Name] = sum
