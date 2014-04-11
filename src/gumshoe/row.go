@@ -101,6 +101,12 @@ func (db *DB) setDimensionValue(dimensions DimensionBytes, index int, value Unty
 
 func (db *DB) setMetricValue(metrics MetricBytes, index int, value Untyped) error {
 	column := db.MetricColumns[index]
+
+	if value == nil {
+		setRowValue(unsafe.Pointer(&metrics[db.MetricOffsets[index]]), column.Type, 0)
+		return nil
+	}
+
 	float, ok := value.(float64)
 	if !ok {
 		return fmt.Errorf("expected numeric value for metric %s", column.Name)
