@@ -71,7 +71,6 @@ func NewState(schema *Schema) *State {
 
 func (s *State) initialize(schema *Schema) error {
 	s.Schema = schema
-	s.requests = make(chan *Request)
 	s.wg = new(sync.WaitGroup)
 
 	for _, interval := range s.Intervals {
@@ -92,10 +91,15 @@ func (s *State) initialize(schema *Schema) error {
 	return nil
 }
 
-func (s *State) spinUpRequestWorkers() {
+func (s *State) startRequestWorkers() {
+	s.requests = make(chan *Request)
 	for i := 0; i < numRequestGoroutines; i++ {
 		go s.handleRequests()
 	}
+}
+
+func (s *State) stopRequestWorkers() {
+	close(s.requests)
 }
 
 func (s *State) handleRequests() {
@@ -140,7 +144,6 @@ func (s *State) sortedIntervalTimes() []time.Time {
 	sort.Sort(byTime(times))
 	return times
 }
-
 
 func (s *State) debugPrint() {
 	fmt.Println("STATE DEBUG ----------------------------------")

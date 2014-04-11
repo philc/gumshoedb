@@ -137,11 +137,12 @@ func when(pred bool, c chan *Request) chan *Request {
 }
 
 func (db *DB) HandleRequests() {
-	db.State.spinUpRequestWorkers()
+	db.State.startRequestWorkers()
 	var req *Request
 	for {
 		select {
 		case <-db.shutdown:
+			db.State.stopRequestWorkers()
 			return
 		// Use the nil channel trick (nil chans are excluded from selects) to avoid blocking on pushing a
 		// request to the state's request chan.
@@ -150,6 +151,7 @@ func (db *DB) HandleRequests() {
 			db.State.wg.Add(1)
 			req = nil
 		case flushInfo := <-db.flushes:
+			db.State.stopRequestWorkers()
 			// Spin up a goroutine that waits for all requests on the current state to finish and pass the chan back
 			// to the inserter goroutine.
 			requestsFinished := make(chan struct{})
@@ -160,7 +162,7 @@ func (db *DB) HandleRequests() {
 			// Swap out the old state for the new -- the inserter goroutine can garbage collect the old one once all
 			// requests have been processed.
 			db.State = flushInfo.NewState
-			db.State.spinUpRequestWorkers()
+			db.State.startRequestWorkers()
 			flushInfo.AllRequestsFinishedChan <- requestsFinished
 		}
 	}

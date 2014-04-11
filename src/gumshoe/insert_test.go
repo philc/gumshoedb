@@ -91,6 +91,8 @@ func TestMemAndStateIntervalsAreCombined(t *testing.T) {
 
 func TestInsertAndReadNilValues(t *testing.T) {
 	db := makeTestDB()
+	defer closeTestDB(db)
+
 	rows := []RowMap{
 		{"at": hour(0), "dim1": "a", "metric1": 0.0},
 		{"at": hour(1), "dim1": nil, "metric1": 1.0},
@@ -142,7 +144,7 @@ func TestPersistenceEndToEnd(t *testing.T) {
 	Assert(t, result[0]["metric1"], Equals, uint32(10000))
 
 	// Reopen the DB and try again
-	db.Close()
+	closeTestDB(db)
 	db, err := OpenDB(db.Schema)
 	if err != nil {
 		t.Fatal(err)
@@ -156,6 +158,7 @@ func TestPersistenceEndToEnd(t *testing.T) {
 func TestOldIntervalsAreDeleted(t *testing.T) {
 	db := makeTestPersistentDB()
 	defer os.RemoveAll(db.Dir)
+	defer closeTestDB(db)
 
 	insertRow(db, RowMap{"at": 0.0, "dim1": "string1", "metric1": 1.0})
 
