@@ -53,8 +53,8 @@ type Schema struct {
 	RunConfig `json:"-"`
 
 	// All other fields are reconstructed from persisted fields
-	DimensionNameToIndex map[string]int
-	MetricNameToIndex    map[string]int
+	DimensionNameToIndex map[string]int `json:"-"`
+	MetricNameToIndex    map[string]int `json:"-"`
 	// Row is: count | nil bytes | dim1 | dim2 | ... | dimN | metric1 | metric2 | ... | metricN
 	//                <----------- DimensionBytes ----------><--------- MetricBytes ---------->
 	DimensionStartOffset int   `json:"-"`

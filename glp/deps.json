@@ -17,6 +17,10 @@
 			"rev": "e42150e93f948a1ed35bd1344c878d94ce2bd6ec"
 		},
 		{
+			"name": "github.com/dustin/go-humanize",
+			"rev": "152bd44907e2ce04ecfb87d783ebf98160ada012"
+		},
+		{
 			"name": "github.com/edsrzf/mmap-go",
 			"rev": "bd26bc5e78d34f2b0804f1e27400ac33d243d69b"
 		}

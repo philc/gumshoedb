@@ -120,52 +120,18 @@ func (s *Server) HandleQuery(w http.ResponseWriter, r *http.Request) {
 	WriteJSONResponse(w, results)
 }
 
-//type Metricz struct {
-//FactTableRows          int                        `json:"factTableRows"`
-//FactTableBytes         int                        `json:"factTableBytes"`
-//FactTableCapacityBytes int                        `json:"factTableCapacityBytes"`
-//DimensionTables        map[string]map[string]int  `json:"dimensionTables"`
-//OldestRow              map[string]gumshoe.Untyped `json:"oldestRow"`
-//NewestRow              map[string]gumshoe.Untyped `json:"newestRow"`
-//}
-
-//func (s *Server) HandleMetricz(w http.ResponseWriter) {
-//dimensionTables := make(map[string]map[string]int)
-//for _, dimensionTable := range s.Table.DimensionTables {
-//if dimensionTable != nil {
-//dimensionTables[dimensionTable.Name] = map[string]int{
-//"Rows":  len(dimensionTable.Rows),
-//"Bytes": len(dimensionTable.Rows) * int(unsafe.Sizeof(*dimensionTable)),
-//}
-//}
-//}
-
-//metricz := &Metricz{
-//FactTableRows:   s.Table.Count,
-//FactTableBytes:  s.Table.Count * s.Table.RowSize,
-//DimensionTables: dimensionTables,
-//}
-
-//if s.Table.Count > 0 {
-//s.Table.InsertLock.Lock()
-//defer s.Table.InsertLock.Unlock()
-//metricz.OldestRow = s.Table.GetRowMaps(0, 1)[0]
-//metricz.NewestRow = s.Table.GetRowMaps(s.Table.Count-1, s.Table.Count)[0]
-//}
-
-//metriczJSON, err := json.Marshal(metricz)
-//if err != nil {
-//WriteError(w, err)
-//return
-//}
-
-//var buf bytes.Buffer
-//if err := json.Indent(&buf, metriczJSON, "", "    "); err != nil {
-//WriteError(w, err)
-//return
-//}
-//buf.WriteTo(w)
-//}
+// HandleMetricz writes a metricz page.
+func (s *Server) HandleMetricz(w http.ResponseWriter, r *http.Request) {
+	metricz, err := s.makeMetricz()
+	if err != nil {
+		WriteError(w, err, 500)
+		return
+	}
+	if err := metriczTemplate.Execute(w, metricz); err != nil {
+		WriteError(w, err, 500)
+		return
+	}
+}
 
 // NewServer initializes a Server with a DB and sets up its routes.
 func NewServer(conf *config.Config, schema *gumshoe.Schema) *Server {
@@ -181,7 +147,7 @@ func NewServer(conf *config.Config, schema *gumshoe.Schema) *Server {
 	m.Get("/dimension_tables/:name", s.HandleSingleDimension)
 	m.Post("/query", s.HandleQuery)
 
-	//m.Get("/metricz", s.HandleMetricz)
+	m.Get("/metricz", s.HandleMetricz)
 	m.Get("/debug/rows", s.HandleDebugRows)
 
 	s.Handler = m
