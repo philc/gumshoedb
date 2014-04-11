@@ -57,35 +57,34 @@ func TestRowsGetCollapsedUponInsertion(t *testing.T) {
 	})
 }
 
+type Time time.Time
+
+func (t Time) hoursBack(n int) float64 {
+	return float64(time.Time(t).Add(time.Duration(n) * time.Hour).Unix())
+}
+
 func TestMemAndStateIntervalsAreCombined(t *testing.T) {
 	db := makeTestDB()
 	defer closeTestDB(db)
 
-	startTime, err := time.Parse("January 2, 2006", "April 1, 2014")
-	if err != nil {
-		panic(err)
-	}
-
-	first := float64(startTime.Unix())
-	second := float64(startTime.Add(time.Hour).Unix())
-	third := float64(startTime.Add(2 * time.Hour).Unix())
+	start := Time(time.Now())
 
 	insertRows(db, []RowMap{
-		{"at": first, "dim1": "string1", "metric1": 1.0},
-		{"at": second, "dim1": "string1", "metric1": 1.0},
+		{"at": start.hoursBack(0), "dim1": "string1", "metric1": 1.0},
+		{"at": start.hoursBack(1), "dim1": "string1", "metric1": 1.0},
 	})
 	Assert(t, len(db.State.Intervals), Equals, 2)
 
 	insertRows(db, []RowMap{
-		{"at": second, "dim1": "string1", "metric1": 1.0},
-		{"at": third, "dim1": "string1", "metric1": 1.0},
+		{"at": start.hoursBack(1), "dim1": "string1", "metric1": 1.0},
+		{"at": start.hoursBack(2), "dim1": "string1", "metric1": 1.0},
 	})
 	Assert(t, len(db.State.Intervals), Equals, 3)
 
 	Assert(t, db.GetDebugRows(), utils.DeepEqualsUnordered, []UnpackedRow{
-		{RowMap: RowMap{"at": first, "dim1": "string1", "metric1": 1}, Count: 1},
-		{RowMap: RowMap{"at": second, "dim1": "string1", "metric1": 2}, Count: 2},
-		{RowMap: RowMap{"at": third, "dim1": "string1", "metric1": 1}, Count: 1},
+		{RowMap: RowMap{"at": start.hoursBack(0), "dim1": "string1", "metric1": 1}, Count: 1},
+		{RowMap: RowMap{"at": start.hoursBack(1), "dim1": "string1", "metric1": 2}, Count: 2},
+		{RowMap: RowMap{"at": start.hoursBack(2), "dim1": "string1", "metric1": 1}, Count: 1},
 	})
 }
 
