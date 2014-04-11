@@ -60,7 +60,7 @@ func (s *Server) HandleRoot(w http.ResponseWriter, r *http.Request) {
 }
 
 // HandleInsert decodes an array of JSON-formatted row maps from the request body and inserts them into the
-// database. Then it flushes before it returns.
+// database.
 func (s *Server) HandleInsert(w http.ResponseWriter, r *http.Request) {
 	decoder := json.NewDecoder(r.Body)
 	var rows []gumshoe.RowMap
@@ -73,7 +73,6 @@ func (s *Server) HandleInsert(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, err, http.StatusBadRequest)
 		return
 	}
-	s.Flush()
 }
 
 // HandleDebugRows responds to the client with a JSON representation of the physical rows. It returns up to
