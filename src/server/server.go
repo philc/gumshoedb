@@ -118,8 +118,8 @@ func (s *Server) HandleQuery(w http.ResponseWriter, r *http.Request) {
 	}
 	elapsed := time.Since(start)
 	results := map[string]interface{}{
-		"results":  rows,
-		"duration": elapsed.Seconds() * 1000.0,
+		"results":     rows,
+		"duration_ms": elapsed.Seconds() * 1000.0,
 	}
 	WriteJSONResponse(w, results)
 }
