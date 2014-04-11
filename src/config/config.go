@@ -148,6 +148,8 @@ func (d *Duration) UnmarshalText(text []byte) error {
 	return err
 }
 
+func (d Duration) MarshalText() ([]byte, error) { return []byte(d.Duration.String()), nil }
+
 func LoadTOMLConfig(r io.Reader) (*Config, *gumshoe.Schema, error) {
 	config := new(Config)
 	meta, err := toml.DecodeReader(r, config)

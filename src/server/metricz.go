@@ -21,15 +21,14 @@ type Stats struct {
 }
 
 type Metricz struct {
-	Schema              string
+	Config              string
 	DimensionTableSizes []NameAndCount
 	Totals              Stats
 	IntervalStats       map[time.Time]Stats
 }
 
 func (s *Server) makeMetricz() (*Metricz, error) {
-	schema := s.DB.Schema
-	schemaBytes, err := json.MarshalIndent(schema, "", "  ")
+	configBytes, err := json.MarshalIndent(s.Config, "", "  ")
 	if err != nil {
 		return nil, err
 	}
@@ -40,7 +39,7 @@ func (s *Server) makeMetricz() (*Metricz, error) {
 	defer resp.Done()
 
 	var dimTableSizes []NameAndCount
-	for i, col := range schema.DimensionColumns {
+	for i, col := range s.DB.Schema.DimensionColumns {
 		if col.String {
 			count := len(resp.State.DimensionTables[i].Values)
 			dimTableSizes = append(dimTableSizes, NameAndCount{col.Name, count})
@@ -62,7 +61,7 @@ func (s *Server) makeMetricz() (*Metricz, error) {
 	totals.CompressionRatio = compressionRatio
 
 	return &Metricz{
-		Schema:              string(schemaBytes),
+		Config:              string(configBytes),
 		DimensionTableSizes: dimTableSizes,
 		Totals:              totals,
 		IntervalStats:       intervalStats,
@@ -134,9 +133,9 @@ th:last-child,td:last-child { text-align: right; }
 <section class="columns">
 
 <section class="column">
-<h2>schema</h2>
+<h2>Config</h2>
 <pre>
-{{.Schema}}
+{{.Config}}
 <pre>
 </section>
 
