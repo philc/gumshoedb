@@ -5,7 +5,6 @@ package gumshoe
 import (
 	"errors"
 	"fmt"
-	"log"
 	"time"
 	"unsafe"
 )
@@ -150,7 +149,7 @@ func (s *State) InvokeQuery(query *Query) ([]RowMap, error) {
 	} else {
 		rows, stats = s.scanWithGrouping(params)
 	}
-	log.Printf("Query: scan completed in %s; %d intervals skipped; %d intervals scanned; %d rows scanned",
+	Log.Printf("Query: scan completed in %s; %d intervals skipped; %d intervals scanned; %d rows scanned",
 		time.Since(start), stats.IntervalsSkipped, stats.IntervalsScanned, stats.RowsScanned)
 
 	return s.postProcessScanRows(rows, query, grouping), nil
