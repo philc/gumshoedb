@@ -10,7 +10,9 @@ import (
 	"net/http"
 	_ "net/http/pprof"
 	"os"
+	"os/signal"
 	"runtime"
+	"syscall"
 	"time"
 
 	"config"
@@ -27,6 +29,9 @@ var (
 	configFile  = flag.String("config", "config.toml", "Configuration file to use")
 	profileAddr = flag.String("profile-addr", "", "If non-empty, address for net/http/pprof")
 	Log         = log.New(os.Stderr, "[server] ", logFlags)
+
+	// Anything that needs to know about program shutdown can listen on this chan.
+	shutdown = make(chan struct{})
 )
 
 type Server struct {
@@ -185,9 +190,16 @@ func (s *Server) loadDB(schema *gumshoe.Schema) {
 }
 
 func (s *Server) RunPeriodicFlushes() {
+	timer := time.NewTimer(s.Config.FlushInterval.Duration)
 	for {
-		time.Sleep(s.Config.FlushInterval.Duration)
-		s.Flush()
+		select {
+		case <-timer.C:
+			s.Flush()
+			timer.Reset(s.Config.FlushInterval.Duration)
+		case <-shutdown:
+			s.Flush()
+			os.Exit(0)
+		}
 	}
 }
 
@@ -228,6 +240,14 @@ func main() {
 
 	// Configure the gumshoe logger
 	gumshoe.Log = log.New(os.Stdout, "[gumshoe] ", logFlags)
+
+	// Listen for signals so we can try to flush before shutdown
+	go func() {
+		c := make(chan os.Signal)
+		signal.Notify(c, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
+		<-c
+		close(shutdown)
+	}()
 
 	server := NewServer(conf, schema)
 	Log.Fatal(server.ListenAndServe())
