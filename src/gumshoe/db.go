@@ -151,10 +151,15 @@ func (db *DB) HandleRequests() {
 		// Use the nil channel trick (nil chans are excluded from selects) to avoid blocking on pushing a
 		// request to the StaticTable's request chan.
 		case req = <-when(req == nil, db.requests):
-		case when(req != nil, db.StaticTable.requests) <- req:
 			db.StaticTable.wg.Add(1)
+		case when(req != nil, db.StaticTable.requests) <- req:
 			req = nil
 		case flushInfo := <-db.flushes:
+			if req != nil {
+				// We'll grandfather req to the next StaticTable. Mark it as done for now and increment wg once the
+				// new StaticTable is in place.
+				db.StaticTable.wg.Done()
+			}
 			db.StaticTable.stopRequestWorkers()
 			// Spin up a goroutine that waits for all requests on the current StaticTable to finish and pass the
 			// chan back to the inserter goroutine.
@@ -167,6 +172,9 @@ func (db *DB) HandleRequests() {
 			// once all requests have been processed.
 			db.StaticTable = flushInfo.NewStaticTable
 			db.StaticTable.startRequestWorkers()
+			if req != nil {
+				db.StaticTable.wg.Add(1)
+			}
 			flushInfo.AllRequestsFinishedChan <- requestsFinished
 		}
 	}
