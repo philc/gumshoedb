@@ -77,7 +77,7 @@ func (s *StaticTable) initialize(schema *Schema) error {
 		interval.Segments = make([]*Segment, interval.NumSegments)
 		for i := 0; i < interval.NumSegments; i++ {
 
-			f, err := os.Open(schema.SegmentFilename(interval.Start, interval.Generation, i))
+			f, err := os.Open(interval.SegmentFilename(schema, i))
 			if err != nil {
 				return err
 			}

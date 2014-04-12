@@ -142,7 +142,7 @@ func (iv *writeOnlyInterval) freeze(s *Schema) (*Interval, error) {
 			iv.Segments[i] = &Segment{Bytes: iv.buffers[i].Bytes()}
 			continue
 		}
-		filename := s.SegmentFilename(iv.Start, iv.Generation, i)
+		filename := iv.SegmentFilename(s, i)
 		f, err := os.Open(filename)
 		if err != nil {
 			return nil, err
@@ -164,7 +164,7 @@ func (iv *writeOnlyInterval) openFreshSegment(s *Schema) error {
 		return nil
 	}
 
-	filename := s.SegmentFilename(iv.Start, iv.Generation, iv.NumSegments)
+	filename := iv.SegmentFilename(s, iv.NumSegments)
 	f, err := os.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0666)
 	if err != nil {
 		return err
@@ -181,8 +181,9 @@ func (iv *writeOnlyInterval) closeCurrentSegment() error {
 	return nil
 }
 
-func (s *Schema) SegmentFilename(start time.Time, generation, segmentIndex int) string {
-	name := fmt.Sprintf("interval.%d.generation%04d.segment%04d.dat", start.Unix(), generation, segmentIndex)
+func (iv *Interval) SegmentFilename(s *Schema, segmentIndex int) string {
+	name := fmt.Sprintf("interval.%d.generation%04d.segment%04d.dat",
+		iv.Start.Unix(), iv.Generation, segmentIndex)
 	return filepath.Join(s.Dir, name)
 }
 

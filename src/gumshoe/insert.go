@@ -273,7 +273,7 @@ func (db *DB) cleanUpOldIntervals(intervals []*Interval) {
 			if err := segment.File.Close(); err != nil {
 				Log.Println("cleanup error closing segment file:", err)
 			}
-			if err := os.Remove(db.SegmentFilename(interval.Start, interval.Generation, i)); err != nil {
+			if err := os.Remove(interval.SegmentFilename(db.Schema, i)); err != nil {
 				Log.Println("cleanup error deleting segment file:", err)
 			}
 		}
