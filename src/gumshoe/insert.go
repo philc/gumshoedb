@@ -72,7 +72,7 @@ func (db *DB) insertRows(rows []RowMap) error {
 		interval.Tree.Set([]byte(row.Dimensions), value)
 		insertedRows++
 	}
-	Log.Printf("Inserted %d rows succesfully; dropped %d rows out of retention", insertedRows, droppedOldRows)
+	Log.Printf("Inserted %d rows succesfully; dropped %d out-of-retention rows", insertedRows, droppedOldRows)
 	return nil
 }
 
@@ -94,6 +94,11 @@ func (t times) Swap(i, j int)      { t[i], t[j] = t[j], t[i] }
 //
 // TODO(caleb): Automatic cleanup
 func (db *DB) flush() error {
+	start := time.Now()
+	defer func() {
+		Log.Printf("Flush completed in %s", time.Since(start))
+	}()
+
 	// Collect the interval keys in the StaticTable and MemTable.
 	staticKeys := make([]time.Time, 0, len(db.StaticTable.Intervals))
 	for t := range db.StaticTable.Intervals {
