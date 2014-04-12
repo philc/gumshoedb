@@ -5,6 +5,7 @@ package gumshoe
 import (
 	"errors"
 	"fmt"
+	"log"
 	"time"
 	"unsafe"
 )
@@ -138,19 +139,32 @@ func (s *State) InvokeQuery(query *Query) ([]RowMap, error) {
 		Grouping:             grouping,
 	}
 
+	Log.Printf("Query: grouping=%t, %d timestamp filter funcs, %d sum columns, %d filter funcs",
+		grouping != nil, len(sumColumns), len(filterFuncs), len(timestampFilterFuncs))
+
+	start := time.Now()
 	var rows []*rowAggregate
+	var stats *scanStats
 	if grouping == nil {
-		row := s.scan(params)
-		rows = []*rowAggregate{row}
+		rows, stats = s.scan(params)
 	} else {
-		rows = s.scanWithGrouping(params)
+		rows, stats = s.scanWithGrouping(params)
 	}
+	log.Printf("Query: scan completed in %s; %d intervals skipped; %d intervals scanned; %d rows scanned",
+		time.Since(start), stats.IntervalsSkipped, stats.IntervalsScanned, stats.RowsScanned)
 
 	return s.postProcessScanRows(rows, query, grouping), nil
 }
 
-func (s *State) scan(params *scanParams) *rowAggregate {
+type scanStats struct {
+	IntervalsSkipped int
+	IntervalsScanned int
+	RowsScanned      int
+}
+
+func (s *State) scan(params *scanParams) ([]*rowAggregate, *scanStats) {
 	result := new(rowAggregate)
+	stats := new(scanStats)
 	result.Sums = make([]UntypedBytes, len(params.SumColumns))
 	for i, col := range params.SumColumns {
 		result.Sums[i] = make(UntypedBytes, typeWidths[typeToBigType[col.Type]])
@@ -159,10 +173,13 @@ func (s *State) scan(params *scanParams) *rowAggregate {
 intervalLoop:
 	for timestamp, interval := range s.Intervals {
 		if !params.AllTimestampFilterFuncsMatch(timestamp) {
+			stats.IntervalsSkipped++
 			continue intervalLoop
 		}
+		stats.IntervalsScanned++
 
 		for _, segment := range interval.Segments {
+			stats.RowsScanned += len(segment.Bytes) / s.RowSize
 		rowLoop:
 			for i := 0; i < len(segment.Bytes); i += s.RowSize {
 				row := RowBytes(segment.Bytes[i : i+s.RowSize])
@@ -184,15 +201,16 @@ intervalLoop:
 			}
 		}
 	}
-	return result
+	return []*rowAggregate{result}, stats
 }
 
-func (s *State) scanWithGrouping(params *scanParams) []*rowAggregate {
+func (s *State) scanWithGrouping(params *scanParams) ([]*rowAggregate, *scanStats) {
 	// Only support computing the max value of 8 and 16 bit unsigned types, since that set of values can
 	// efficiently be mapped to slice indices for the purposes of groupingOptions.
 	var sliceGroups []*rowAggregate
 	var nilGroup *rowAggregate // used with sliceGroups
 	var mapGroups map[Untyped]*rowAggregate
+	stats := new(scanStats)
 
 	var groupingColumn Column
 	if params.Grouping.OnTimestampColumn {
@@ -231,8 +249,10 @@ func (s *State) scanWithGrouping(params *scanParams) []*rowAggregate {
 intervalLoop:
 	for timestamp, interval := range s.Intervals {
 		if !params.AllTimestampFilterFuncsMatch(timestamp) {
+			stats.IntervalsSkipped++
 			continue intervalLoop
 		}
+		stats.IntervalsScanned++
 		var groupMapKey Untyped
 		var aggregate *rowAggregate // Corresponding to groupValue
 		if groupOnTimestampColumn {
@@ -248,6 +268,7 @@ intervalLoop:
 		// alone for now.
 
 		for _, segment := range interval.Segments {
+			stats.RowsScanned += len(segment.Bytes) / s.RowSize
 		rowLoop:
 			for i := 0; i < len(segment.Bytes); i += s.RowSize {
 				row := RowBytes(segment.Bytes[i : i+s.RowSize])
@@ -324,7 +345,7 @@ intervalLoop:
 			results = append(results, aggregate)
 		}
 	}
-	return results
+	return results, stats
 }
 
 func makeRowAggregate(groupByValue Untyped, params *scanParams) *rowAggregate {
