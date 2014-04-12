@@ -9,12 +9,12 @@
 			"rev": "ad7cc872c9b60e2f4253a633aaa9c11f752033d8"
 		},
 		{
-			"name": "github.com/codegangsta/inject",
-			"rev": "9aea7a2fa5b79ef7fc00f63a575e72df33b4e886"
+			"name": "github.com/cespare/hutil",
+			"rev": "f97b077d4c710f9563843775684db5dc7826ca51"
 		},
 		{
-			"name": "github.com/codegangsta/martini",
-			"rev": "e42150e93f948a1ed35bd1344c878d94ce2bd6ec"
+			"name": "github.com/cespare/hutil/apachelog",
+			"rev": "f97b077d4c710f9563843775684db5dc7826ca51"
 		},
 		{
 			"name": "github.com/dustin/go-humanize",
@@ -23,6 +23,18 @@
 		{
 			"name": "github.com/edsrzf/mmap-go",
 			"rev": "bd26bc5e78d34f2b0804f1e27400ac33d243d69b"
+		},
+		{
+			"name": "github.com/gorilla/context",
+			"rev": "1be7a086a5fd6440ef16fe96baeda0c78282b980"
+		},
+		{
+			"name": "github.com/gorilla/mux",
+			"rev": "9ede152210fa25c1377d33e867cb828c19316445"
+		},
+		{
+			"name": "github.com/gorilla/pat",
+			"rev": "ae2e162c4b2ae96aa66b596b2c18f17834299ed0"
 		}
 	]
 }

@@ -16,7 +16,8 @@ import (
 	"config"
 	"gumshoe"
 
-	"github.com/codegangsta/martini"
+	"github.com/cespare/hutil/apachelog"
+	"github.com/gorilla/pat"
 )
 
 // No date/time in the log because it's assumed our external log handling (svlogd) takes care of that.
@@ -91,8 +92,8 @@ func (s *Server) HandleDimensionTables(w http.ResponseWriter, r *http.Request) {
 }
 
 // HandleSingleDimension responds with dimension table array for a single dimension.
-func (s *Server) HandleSingleDimension(w http.ResponseWriter, params martini.Params) {
-	name := params["name"]
+func (s *Server) HandleSingleDimension(w http.ResponseWriter, r *http.Request) {
+	name := r.URL.Query().Get(":name")
 	if name == "" {
 		http.Error(w, "Must provide dimension name", http.StatusBadRequest)
 		return
@@ -145,20 +146,18 @@ func NewServer(conf *config.Config, schema *gumshoe.Schema) *Server {
 	s := &Server{Config: conf}
 	s.loadDB(schema)
 
-	m := martini.Classic()
-	// Use a specific set of middlewares instead of the defaults. Note that we've removed panic recovery.
-	m.Handlers(martini.Logger(), martini.Static("public"))
+	mux := pat.New()
 
-	m.Get("/", s.HandleRoot)
-	m.Put("/insert", s.HandleInsert)
-	m.Get("/dimension_tables", s.HandleDimensionTables)
-	m.Get("/dimension_tables/:name", s.HandleSingleDimension)
-	m.Post("/query", s.HandleQuery)
+	mux.Put("/insert", s.HandleInsert)
+	mux.Get("/dimension_tables", s.HandleDimensionTables)
+	mux.Get("/dimension_tables/{name}", s.HandleSingleDimension)
+	mux.Post("/query", s.HandleQuery)
 
-	m.Get("/metricz", s.HandleMetricz)
-	m.Get("/debug/rows", s.HandleDebugRows)
+	mux.Get("/metricz", s.HandleMetricz)
+	mux.Get("/debug/rows", s.HandleDebugRows)
+	mux.Get("/", s.HandleRoot)
 
-	s.Handler = m
+	s.Handler = apachelog.NewDefaultHandler(mux)
 
 	go s.RunPeriodicFlushes()
 	return s
