@@ -186,7 +186,8 @@ func (s *Server) loadDB(schema *gumshoe.Schema) {
 }
 
 func (s *Server) RunPeriodicFlushes() {
-	for _ = range time.Tick(s.Config.FlushInterval.Duration) {
+	for {
+		time.Sleep(s.Config.FlushInterval.Duration)
 		s.Flush()
 	}
 }
