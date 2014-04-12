@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 )
 
-const dbMetadataFilename = "db.json"
+const MetadataFilename = "db.json"
 
 // Log is a global logger instance. The user may replace it with a custom logger (e.g., a log.Logger) before
 // calling any gumshoedb functions.
@@ -37,8 +37,7 @@ func OpenDB(schema *Schema) (*DB, error) {
 		return NewDB(schema)
 	}
 
-	metadataFilename := filepath.Join(schema.Dir, dbMetadataFilename)
-	f, err := os.Open(metadataFilename)
+	f, err := os.Open(filepath.Join(schema.Dir, MetadataFilename))
 	if err != nil {
 		return nil, err
 	}

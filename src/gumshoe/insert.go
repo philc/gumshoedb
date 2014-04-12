@@ -247,7 +247,7 @@ func (db *DB) combineDimensionTables() []*DimensionTable {
 }
 
 func (db *DB) writeMetadataFile() error {
-	filename := filepath.Join(db.Dir, dbMetadataFilename)
+	filename := filepath.Join(db.Dir, MetadataFilename)
 	tmpFilename := filename + ".tmp"
 	f, err := os.Create(tmpFilename)
 	if err != nil {
