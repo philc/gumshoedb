@@ -73,12 +73,12 @@ func (db *DB) setDimensionValue(dimensions DimensionBytes, index int, value Unty
 		if !ok {
 			return fmt.Errorf("expected string value for dimension %s", column.Name)
 		}
-		dimValueIndex, ok := db.State.DimensionTables[index].Get(stringValue)
+		dimValueIndex, ok := db.StaticTable.DimensionTables[index].Get(stringValue)
 		if !ok {
 			dimValueIndex, _ = db.memTable.DimensionTables[index].GetAndMaybeSet(stringValue)
-			// The index in a memtable's dimension table must be offset by the size of the state's dimension table
-			// (with which it will be later combined).
-			dimValueIndex += uint32(len(db.State.DimensionTables[index].Values))
+			// The index in a MemTable's dimension table must be offset by the size of the StaticTable's dimension
+			// table (with which it will be later combined).
+			dimValueIndex += uint32(len(db.StaticTable.DimensionTables[index].Values))
 		}
 		if float64(dimValueIndex) > typeMaxes[column.Type] {
 			return fmt.Errorf("adding a new value (%v) to dimension %s overflows the dimension table",
@@ -190,7 +190,7 @@ func (db *DB) deserializeRow(row RowBytes) UnpackedRow {
 		value := numericCellValue(cell, col.Type)
 		if col.String {
 			dimensionIndex := UntypedToInt(value)
-			value = db.State.DimensionTables[i].Values[dimensionIndex]
+			value = db.StaticTable.DimensionTables[i].Values[dimensionIndex]
 		}
 		rowMap[name] = value
 	}

@@ -27,9 +27,9 @@ func TestExpectedNumberOfSegmentsAreAllocated(t *testing.T) {
 	resp := db.MakeRequest()
 	defer resp.Done()
 
-	Assert(t, len(resp.State.Intervals), Equals, 1)
+	Assert(t, len(resp.StaticTable.Intervals), Equals, 1)
 	numSegments := 0
-	for _, interval := range resp.State.Intervals {
+	for _, interval := range resp.StaticTable.Intervals {
 		numSegments += interval.NumSegments
 	}
 	Assert(t, numSegments, Equals, 2)
@@ -63,7 +63,7 @@ func (t Time) hoursBack(n int) float64 {
 	return float64(time.Time(t).Add(time.Duration(-n) * time.Hour).Unix())
 }
 
-func TestMemAndStateIntervalsAreCombined(t *testing.T) {
+func TestMemAndStaticIntervalsAreCombined(t *testing.T) {
 	db := makeTestDB()
 	defer closeTestDB(db)
 
@@ -73,13 +73,13 @@ func TestMemAndStateIntervalsAreCombined(t *testing.T) {
 		{"at": start.hoursBack(0), "dim1": "string1", "metric1": 1.0},
 		{"at": start.hoursBack(1), "dim1": "string1", "metric1": 1.0},
 	})
-	Assert(t, len(db.State.Intervals), Equals, 2)
+	Assert(t, len(db.StaticTable.Intervals), Equals, 2)
 
 	insertRows(db, []RowMap{
 		{"at": start.hoursBack(1), "dim1": "string1", "metric1": 1.0},
 		{"at": start.hoursBack(2), "dim1": "string1", "metric1": 1.0},
 	})
-	Assert(t, len(db.State.Intervals), Equals, 3)
+	Assert(t, len(db.StaticTable.Intervals), Equals, 3)
 
 	Assert(t, db.GetDebugRows(), utils.DeepEqualsUnordered, []UnpackedRow{
 		{RowMap: RowMap{"at": start.hoursBack(0), "dim1": "string1", "metric1": 1}, Count: 1},
@@ -157,7 +157,7 @@ func physicalRows(db *DB) int {
 	resp := db.MakeRequest()
 	defer resp.Done()
 	rows := 0
-	for _, interval := range resp.State.Intervals {
+	for _, interval := range resp.StaticTable.Intervals {
 		rows += interval.NumRows
 	}
 	return rows

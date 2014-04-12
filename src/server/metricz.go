@@ -42,14 +42,14 @@ func (s *Server) makeMetricz() (*Metricz, error) {
 	var dimTableSizes []NameAndCount
 	for i, col := range s.DB.Schema.DimensionColumns {
 		if col.String {
-			count := len(resp.State.DimensionTables[i].Values)
+			count := len(resp.StaticTable.DimensionTables[i].Values)
 			dimTableSizes = append(dimTableSizes, NameAndCount{col.Name, count})
 		}
 	}
 
 	var totals Stats
 	intervalStats := make(map[int64]Stats)
-	for t, interval := range resp.State.Intervals {
+	for t, interval := range resp.StaticTable.Intervals {
 		totals.Segments += interval.NumSegments
 		totals.Rows += interval.NumRows
 		var size uint64

@@ -82,10 +82,10 @@ func (t times) Len() int           { return len(t) }
 func (t times) Less(i, j int) bool { return t[i].Before(t[j]) }
 func (t times) Swap(i, j int)      { t[i], t[j] = t[j], t[i] }
 
-// flush saves the current memTable to disk by combining with overlapping state intervals to create a new
-// state. This should only be called by the insertion goroutine.
+// flush saves the current memTable to disk by combining with overlapping static intervals to create a new
+// StaticTable. This should only be called by the insertion goroutine.
 //
-// If db.FixedRetention is set, then flush will discard old intervals while constructing the new state.
+// If db.FixedRetention is set, then flush will discard old intervals while constructing the new StaticTable.
 //
 // If the result error is not nil, the state of database may not be well-defined and a user should clean up
 // any extraneous segment files not referenced by the metadata. (Note the new metadata is written at the end,
@@ -94,36 +94,36 @@ func (t times) Swap(i, j int)      { t[i], t[j] = t[j], t[i] }
 //
 // TODO(caleb): Automatic cleanup
 func (db *DB) flush() error {
-	// Collect the interval keys in the state and in the memTable
-	stateKeys := make([]time.Time, 0, len(db.State.Intervals))
-	for t := range db.State.Intervals {
-		stateKeys = append(stateKeys, t)
+	// Collect the interval keys in the StaticTable and MemTable.
+	staticKeys := make([]time.Time, 0, len(db.StaticTable.Intervals))
+	for t := range db.StaticTable.Intervals {
+		staticKeys = append(staticKeys, t)
 	}
 	memKeys := make([]time.Time, 0, len(db.memTable.Intervals))
 	for t := range db.memTable.Intervals {
 		memKeys = append(memKeys, t)
 	}
-	sort.Sort(times(stateKeys))
+	sort.Sort(times(staticKeys))
 	sort.Sort(times(memKeys))
 
 	var intervalsForCleanup []*Interval
 
 	// If we're using a fixed retention, drop old intervals.
 	if db.FixedRetention {
-		var outdatedStateKeys, outdatedMemKeys []time.Time
-		outdatedStateKeys, stateKeys = db.partitionIntervalStartsByRetention(stateKeys)
+		var outdatedStaticKeys, outdatedMemKeys []time.Time
+		outdatedStaticKeys, staticKeys = db.partitionIntervalStartsByRetention(staticKeys)
 		outdatedMemKeys, memKeys = db.partitionIntervalStartsByRetention(memKeys)
-		Log.Printf("Flush: ignoring %d mem intervals and %d state intervals out of retention",
-			len(outdatedMemKeys), len(outdatedStateKeys))
+		Log.Printf("Flush: ignoring %d mem intervals and %d static intervals out of retention",
+			len(outdatedMemKeys), len(outdatedStaticKeys))
 
-		for _, key := range outdatedStateKeys {
-			intervalsForCleanup = append(intervalsForCleanup, db.State.Intervals[key])
+		for _, key := range outdatedStaticKeys {
+			intervalsForCleanup = append(intervalsForCleanup, db.StaticTable.Intervals[key])
 		}
 	}
-	Log.Printf("Flushing %d mem intervals into %d state intervals", len(memKeys), len(stateKeys))
+	Log.Printf("Flushing %d mem intervals into %d static intervals", len(memKeys), len(staticKeys))
 
-	// Walk the keys together to produce the new state intervals
-	intervals, cleanup, err := db.combineSortedMemStateIntervals(memKeys, stateKeys)
+	// Walk the keys together to produce the new static intervals
+	intervals, cleanup, err := db.combineSortedMemStaticIntervals(memKeys, staticKeys)
 	if err != nil {
 		return err
 	}
@@ -131,25 +131,25 @@ func (db *DB) flush() error {
 	Log.Printf("Flushing %d total intervals and cleaning up %d obsolete or out-of-retention intervals",
 		len(intervals), len(intervalsForCleanup))
 
-	// Make the new State
-	newState := NewState(db.Schema)
-	newState.Intervals = intervals
-	newState.DimensionTables = db.combineDimensionTables()
+	// Make the new StaticTable
+	newStaticTable := NewStaticTable(db.Schema)
+	newStaticTable.Intervals = intervals
+	newStaticTable.DimensionTables = db.combineDimensionTables()
 
 	// Figure out the row count
 	for _, interval := range intervals {
 		for _, segment := range interval.Segments {
-			newState.Count += len(segment.Bytes) / db.RowSize
+			newStaticTable.Count += len(segment.Bytes) / db.RowSize
 		}
 	}
 
 	// Create the FlushInfo and send it over to the request handling goroutine which will make the swap and then
-	// return a chan to wait on all requests currently running on the old state.
+	// return a chan to wait on all requests currently running on the old StaticTable.
 	allRequestsFinishedChan := make(chan chan struct{})
-	db.flushes <- &FlushInfo{NewState: newState, AllRequestsFinishedChan: allRequestsFinishedChan}
+	db.flushes <- &FlushInfo{NewStaticTable: newStaticTable, AllRequestsFinishedChan: allRequestsFinishedChan}
 	allRequestsFinished := <-allRequestsFinishedChan
 
-	// Wait for all requests on the old state to be done.
+	// Wait for all requests on the old StaticTable to be done.
 	<-allRequestsFinished
 
 	if db.DiskBacked {
@@ -158,7 +158,7 @@ func (db *DB) flush() error {
 			return err
 		}
 
-		// Clean up any now-unused intervals (only associated with previous state).
+		// Clean up any now-unused intervals (only associated with previous StaticTable).
 		db.cleanUpOldIntervals(intervalsForCleanup)
 	}
 
@@ -167,24 +167,24 @@ func (db *DB) flush() error {
 	return nil
 }
 
-// combineSortedMemStateIntervals combines all the intervals corresponding to memKeys and stateKeys. These
-// must be in sorted order. This function returns the new interval set, a list of state intervals for cleanup,
-// and any error that occurs.
-func (db *DB) combineSortedMemStateIntervals(memKeys, stateKeys []time.Time) (
+// combineSortedMemStaticIntervals combines all the intervals corresponding to memKeys and staticKeys. These
+// must be in sorted order. This function returns the new interval set, a list of static intervals for
+// cleanup, and any error that occurs.
+func (db *DB) combineSortedMemStaticIntervals(memKeys, staticKeys []time.Time) (
 	intervals map[time.Time]*Interval, intervalsForCleanup []*Interval, err error) {
 
-	var numMemIntervals, numStateIntervals, numCombinedIntervals int
+	var numMemIntervals, numStaticIntervals, numCombinedIntervals int
 	intervals = make(map[time.Time]*Interval)
-	for len(stateKeys) > 0 && len(memKeys) > 0 {
-		stateKey := stateKeys[0]
+	for len(staticKeys) > 0 && len(memKeys) > 0 {
+		staticKey := staticKeys[0]
 		memKey := memKeys[0]
 		switch {
-		case stateKey.Before(memKey):
+		case staticKey.Before(memKey):
 			// We reuse this interval directly; the data hasn't changed.
-			numStateIntervals++
-			intervals[stateKey] = db.State.Intervals[stateKey]
-			stateKeys = stateKeys[1:]
-		case memKey.Before(stateKey):
+			numStaticIntervals++
+			intervals[staticKey] = db.StaticTable.Intervals[staticKey]
+			staticKeys = staticKeys[1:]
+		case memKey.Before(staticKey):
 			numMemIntervals++
 			iv, err := db.WriteMemInterval(db.memTable.Intervals[memKey])
 			if err != nil {
@@ -194,21 +194,21 @@ func (db *DB) combineSortedMemStateIntervals(memKeys, stateKeys []time.Time) (
 			memKeys = memKeys[1:]
 		default: // equal
 			numCombinedIntervals++
-			stateInterval := db.State.Intervals[stateKey]
+			staticInterval := db.StaticTable.Intervals[staticKey]
 			memInterval := db.memTable.Intervals[memKey]
-			iv, err := db.WriteCombinedInterval(memInterval, stateInterval)
+			iv, err := db.WriteCombinedInterval(memInterval, staticInterval)
 			if err != nil {
 				return nil, nil, err
 			}
-			intervals[stateKey] = iv
-			stateKeys = stateKeys[1:]
+			intervals[staticKey] = iv
+			staticKeys = staticKeys[1:]
 			memKeys = memKeys[1:]
-			intervalsForCleanup = append(intervalsForCleanup, stateInterval)
+			intervalsForCleanup = append(intervalsForCleanup, staticInterval)
 		}
 	}
-	for _, stateKey := range stateKeys {
-		numStateIntervals++
-		intervals[stateKey] = db.State.Intervals[stateKey]
+	for _, staticKey := range staticKeys {
+		numStaticIntervals++
+		intervals[staticKey] = db.StaticTable.Intervals[staticKey]
 	}
 	for _, memKey := range memKeys {
 		numMemIntervals++
@@ -219,8 +219,8 @@ func (db *DB) combineSortedMemStateIntervals(memKeys, stateKeys []time.Time) (
 		intervals[memKey] = iv
 	}
 
-	Log.Printf("Flush: using %d mem intervals and %d state intervals as-is and combining %d intervals",
-		numMemIntervals, numStateIntervals, numCombinedIntervals)
+	Log.Printf("Flush: using %d mem intervals and %d static intervals as-is and combining %d intervals",
+		numMemIntervals, numStaticIntervals, numCombinedIntervals)
 
 	return intervals, intervalsForCleanup, nil
 }
@@ -231,7 +231,7 @@ func (db *DB) combineDimensionTables() []*DimensionTable {
 		if !col.String {
 			continue
 		}
-		for _, value := range db.State.DimensionTables[i].Values {
+		for _, value := range db.StaticTable.DimensionTables[i].Values {
 			_, _ = dimTables[i].GetAndMaybeSet(value)
 		}
 		for _, value := range db.memTable.DimensionTables[i].Values {

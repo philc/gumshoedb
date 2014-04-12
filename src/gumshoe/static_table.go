@@ -14,14 +14,14 @@ import (
 // TODO(caleb) Increase this (benchmark)
 const numRequestGoroutines = 1
 
-// State is an immutable snapshot of the DB's data.
-type State struct {
+// StaticTable is an immutable snapshot of the DB's data.
+type StaticTable struct {
 	*Schema         `json:"-"`
 	Intervals       IntervalMap
 	DimensionTables []*DimensionTable // Same length as the number of dimensions; non-string columns are nil
 	Count           int               // Number of logical rows
 	requests        chan *Request     // The request workers pull from this channel
-	wg              *sync.WaitGroup   // For outstanding requests, so that we can know when we can GC this state
+	wg              *sync.WaitGroup   // For outstanding requests, to know when we can GC this StaticTable
 }
 
 // IntervalMap is a type that implements JSON conversions for map[time.Time]*Interval. (This doesn't work
@@ -56,20 +56,20 @@ func (m *IntervalMap) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
-// NewState returns a blank state corresponding to schema. The state is not backed by files (yet) and has no
-// data.
-func NewState(schema *Schema) *State {
-	state := &State{
+// NewStaticTable returns a blank StaticTable corresponding to schema. The StaticTable is not backed by files
+// (yet) and has no data.
+func NewStaticTable(schema *Schema) *StaticTable {
+	staticTable := &StaticTable{
 		Schema:          schema,
 		Intervals:       make(map[time.Time]*Interval),
 		DimensionTables: NewDimensionTablesForSchema(schema),
 		requests:        make(chan *Request),
 		wg:              new(sync.WaitGroup),
 	}
-	return state
+	return staticTable
 }
 
-func (s *State) initialize(schema *Schema) error {
+func (s *StaticTable) initialize(schema *Schema) error {
 	s.Schema = schema
 	s.wg = new(sync.WaitGroup)
 
@@ -91,31 +91,31 @@ func (s *State) initialize(schema *Schema) error {
 	return nil
 }
 
-func (s *State) startRequestWorkers() {
+func (s *StaticTable) startRequestWorkers() {
 	s.requests = make(chan *Request)
 	for i := 0; i < numRequestGoroutines; i++ {
 		go s.handleRequests()
 	}
 }
 
-func (s *State) stopRequestWorkers() {
+func (s *StaticTable) stopRequestWorkers() {
 	close(s.requests)
 }
 
-func (s *State) handleRequests() {
+func (s *StaticTable) handleRequests() {
 	done := make(chan struct{})
 	for req := range s.requests {
-		req.Resp <- &Response{State: s, done: done}
+		req.Resp <- &Response{StaticTable: s, done: done}
 		<-done
 		s.wg.Done()
 	}
 }
 
-// compressionRatio returns the ratio of logical rows in the table to the stored rows in this state. For
+// compressionRatio returns the ratio of logical rows in the table to the stored rows in this StaticTable. For
 // instance, if the rows are completely uncollapsible, then the count is 1 for every row and the compression
 // ratio is 1. If 4 rows are stored in the table but they all fit into a single collapsed row, then the
 // compression factor is 4.0. Note that this function scans the table.
-func (s *State) compressionRatio() float64 {
+func (s *StaticTable) compressionRatio() float64 {
 	logicalRows := 0
 	physicalRows := 0
 	for _, interval := range s.Intervals {
@@ -136,7 +136,7 @@ func (t byTime) Len() int           { return len(t) }
 func (t byTime) Less(i, j int) bool { return t[i].Before(t[j]) }
 func (t byTime) Swap(i, j int)      { t[i], t[j] = t[j], t[i] }
 
-func (s *State) sortedIntervalTimes() []time.Time {
+func (s *StaticTable) sortedIntervalTimes() []time.Time {
 	var times []time.Time
 	for t := range s.Intervals {
 		times = append(times, t)
@@ -145,7 +145,7 @@ func (s *State) sortedIntervalTimes() []time.Time {
 	return times
 }
 
-func (s *State) debugPrint() {
+func (s *StaticTable) debugPrint() {
 	fmt.Println("STATE DEBUG ----------------------------------")
 	for _, t := range s.sortedIntervalTimes() {
 		interval := s.Intervals[t]

@@ -209,30 +209,32 @@ func (s *Schema) WriteMemInterval(memInterval *MemInterval) (*Interval, error) {
 	return interval.freeze(s)
 }
 
-// WriteCombinedInterval writes out the combined data from memInterval and stateInterval to a fresh Interval
-// with generation stateInterval.Generation+1.
-func (s *Schema) WriteCombinedInterval(memInterval *MemInterval, stateInterval *Interval) (*Interval, error) {
+// WriteCombinedInterval writes out the combined data from memInterval and staticInterval to a fresh Interval
+// with generation staticInterval.Generation+1.
+func (s *Schema) WriteCombinedInterval(memInterval *MemInterval,
+	staticInterval *Interval) (*Interval, error) {
+
 	start := time.Now()
 	// Sanity check
-	if !memInterval.Start.Equal(stateInterval.Start) || !memInterval.End.Equal(stateInterval.End) {
+	if !memInterval.Start.Equal(staticInterval.Start) || !memInterval.End.Equal(staticInterval.End) {
 		// TODO(caleb) Remove these logging statements after I understand how this can occur
 		Log.Printf("memInterval: start=%s, end=%s", memInterval.Start, memInterval.End)
-		Log.Printf("stateInterval: start=%s, end=%s", stateInterval.Start, stateInterval.End)
-		panic("attempt to combine memInterval/stateInterval from different times")
+		Log.Printf("staticInterval: start=%s, end=%s", staticInterval.Start, staticInterval.End)
+		panic("attempt to combine memInterval/staticInterval from different times")
 	}
 
 	memCursor, err := memInterval.Tree.SeekFirst()
 	if err != nil {
 		return nil, err
 	}
-	stateCursor := stateInterval.cursor(s)
-	interval := newWriteOnlyInterval(s.DiskBacked, stateInterval.Generation+1,
+	staticCursor := staticInterval.cursor(s)
+	interval := newWriteOnlyInterval(s.DiskBacked, staticInterval.Generation+1,
 		memInterval.Start, memInterval.End)
 
-	// Do an initial read from both mem and state, then loop and compare, advancing one or both (a classic
+	// Do an initial read from both mem and static, then loop and compare, advancing one or both (a classic
 	// merge).
 	moreMemKeys := true
-	moreStateKeys := true
+	moreStaticKeys := true
 	memKey, memVal, err := memCursor.Next()
 	if err != nil {
 		if err != io.EOF {
@@ -240,16 +242,16 @@ func (s *Schema) WriteCombinedInterval(memInterval *MemInterval, stateInterval *
 		}
 		moreMemKeys = false
 	}
-	stateKey, stateVal, stateCount, more := stateCursor.Next()
+	staticKey, staticVal, staticCount, more := staticCursor.Next()
 	if !more {
-		moreStateKeys = false
+		moreStaticKeys = false
 	}
 
-	var numMemRows, numStateRows, numCombinedRows int
+	var numMemRows, numStaticRows, numCombinedRows int
 
-	for moreMemKeys && moreStateKeys {
-		cmp := bytes.Compare(memKey, stateKey)
-		var advanceMem, advanceState bool
+	for moreMemKeys && moreStaticKeys {
+		cmp := bytes.Compare(memKey, staticKey)
+		var advanceMem, advanceStatic bool
 		switch {
 		case cmp < 0:
 			numMemRows++
@@ -258,22 +260,22 @@ func (s *Schema) WriteCombinedInterval(memInterval *MemInterval, stateInterval *
 			}
 			advanceMem = true
 		case cmp > 0:
-			numStateRows++
-			if err := interval.appendRow(s, stateKey, stateVal, stateCount); err != nil {
+			numStaticRows++
+			if err := interval.appendRow(s, staticKey, staticVal, staticCount); err != nil {
 				return nil, err
 			}
-			advanceState = true
+			advanceStatic = true
 		default: // equal
 			numCombinedRows++
 			metrics := make(MetricBytes, len(memVal.Metric))
 			copy(metrics, memVal.Metric)
-			metrics.add(s, MetricBytes(stateVal))
-			count := memVal.Count + stateCount
+			metrics.add(s, MetricBytes(staticVal))
+			count := memVal.Count + staticCount
 			if err := interval.appendRow(s, memKey, metrics, count); err != nil {
 				return nil, err
 			}
 			advanceMem = true
-			advanceState = true
+			advanceStatic = true
 		}
 
 		if advanceMem {
@@ -285,15 +287,15 @@ func (s *Schema) WriteCombinedInterval(memInterval *MemInterval, stateInterval *
 				moreMemKeys = false
 			}
 		}
-		if advanceState {
-			stateKey, stateVal, stateCount, more = stateCursor.Next()
+		if advanceStatic {
+			staticKey, staticVal, staticCount, more = staticCursor.Next()
 			if !more {
-				moreStateKeys = false
+				moreStaticKeys = false
 			}
 		}
 	}
 
-	// Possibly drain leftover key/vals from memInterval or stateInterval.
+	// Possibly drain leftover key/vals from memInterval or staticInterval.
 
 	if moreMemKeys {
 		for {
@@ -310,13 +312,13 @@ func (s *Schema) WriteCombinedInterval(memInterval *MemInterval, stateInterval *
 			}
 		}
 	}
-	if moreStateKeys {
+	if moreStaticKeys {
 		for {
-			numStateRows++
-			if err := interval.appendRow(s, stateKey, stateVal, stateCount); err != nil {
+			numStaticRows++
+			if err := interval.appendRow(s, staticKey, staticVal, staticCount); err != nil {
 				return nil, err
 			}
-			stateKey, stateVal, stateCount, more = stateCursor.Next()
+			staticKey, staticVal, staticCount, more = staticCursor.Next()
 			if !more {
 				break
 			}
@@ -324,10 +326,10 @@ func (s *Schema) WriteCombinedInterval(memInterval *MemInterval, stateInterval *
 	}
 
 	totalSourceMemRows := numMemRows + numCombinedRows
-	totalSourceStateRows := numStateRows + numCombinedRows
-	totalResultRows := numMemRows + numStateRows + numCombinedRows
-	Log.Printf("Combined interval: %d mem rows and %d state rows written into %d total rows (%d rows combined)",
-		totalSourceMemRows, totalSourceStateRows, totalResultRows, numCombinedRows)
+	totalSourceStaticRows := numStaticRows + numCombinedRows
+	totalResultRows := numMemRows + numStaticRows + numCombinedRows
+	Log.Printf("Combined interval: %d mem rows and %d static rows written into %d total rows (%d rows combined)",
+		totalSourceMemRows, totalSourceStaticRows, totalResultRows, numCombinedRows)
 	Log.Printf("Combining interval took %s", time.Since(start))
 
 	return interval.freeze(s)

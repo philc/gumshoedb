@@ -15,8 +15,8 @@ var Log Logger = nopLogger{}
 
 type DB struct {
 	*Schema
-	State    *State    // Owned by the request goroutine
-	memTable *MemTable // Owned by the inserter goroutine
+	StaticTable *StaticTable // Owned by the request goroutine
+	memTable    *MemTable    // Owned by the inserter goroutine
 
 	shutdown chan struct{} // To tell goroutines to exit by closing
 
@@ -51,7 +51,7 @@ func OpenDB(schema *Schema) (*DB, error) {
 	if err := db.Schema.Equivalent(schema); err != nil {
 		return nil, err
 	}
-	if err := db.State.initialize(schema); err != nil {
+	if err := db.StaticTable.initialize(schema); err != nil {
 		return nil, err
 	}
 	db.Schema = schema
@@ -64,8 +64,8 @@ func OpenDB(schema *Schema) (*DB, error) {
 func NewDB(schema *Schema) (*DB, error) {
 	if !schema.DiskBacked {
 		db := &DB{
-			Schema: schema,
-			State:  NewState(schema),
+			Schema:      schema,
+			StaticTable: NewStaticTable(schema),
 		}
 		db.initialize()
 		return db, nil
@@ -86,8 +86,8 @@ func NewDB(schema *Schema) (*DB, error) {
 		}
 	}
 	db := &DB{
-		Schema: schema,
-		State:  NewState(schema),
+		Schema:      schema,
+		StaticTable: NewStaticTable(schema),
 	}
 	db.initialize()
 	return db, nil
@@ -129,7 +129,7 @@ type InsertRequest struct {
 }
 
 type FlushInfo struct {
-	NewState                *State
+	NewStaticTable          *StaticTable
 	AllRequestsFinishedChan chan chan struct{}
 }
 
@@ -141,32 +141,32 @@ func when(pred bool, c chan *Request) chan *Request {
 }
 
 func (db *DB) HandleRequests() {
-	db.State.startRequestWorkers()
+	db.StaticTable.startRequestWorkers()
 	var req *Request
 	for {
 		select {
 		case <-db.shutdown:
-			db.State.stopRequestWorkers()
+			db.StaticTable.stopRequestWorkers()
 			return
 		// Use the nil channel trick (nil chans are excluded from selects) to avoid blocking on pushing a
-		// request to the state's request chan.
+		// request to the StaticTable's request chan.
 		case req = <-when(req == nil, db.requests):
-		case when(req != nil, db.State.requests) <- req:
-			db.State.wg.Add(1)
+		case when(req != nil, db.StaticTable.requests) <- req:
+			db.StaticTable.wg.Add(1)
 			req = nil
 		case flushInfo := <-db.flushes:
-			db.State.stopRequestWorkers()
-			// Spin up a goroutine that waits for all requests on the current state to finish and pass the chan back
-			// to the inserter goroutine.
+			db.StaticTable.stopRequestWorkers()
+			// Spin up a goroutine that waits for all requests on the current StaticTable to finish and pass the
+			// chan back to the inserter goroutine.
 			requestsFinished := make(chan struct{})
-			go func(state *State) {
-				state.wg.Wait()
+			go func(st *StaticTable) {
+				st.wg.Wait()
 				requestsFinished <- struct{}{}
-			}(db.State)
-			// Swap out the old state for the new -- the inserter goroutine can garbage collect the old one once all
-			// requests have been processed.
-			db.State = flushInfo.NewState
-			db.State.startRequestWorkers()
+			}(db.StaticTable)
+			// Swap out the old StaticTable for the new -- the inserter goroutine can garbage collect the old one
+			// once all requests have been processed.
+			db.StaticTable = flushInfo.NewStaticTable
+			db.StaticTable.startRequestWorkers()
 			flushInfo.AllRequestsFinishedChan <- requestsFinished
 		}
 	}

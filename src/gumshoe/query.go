@@ -56,8 +56,8 @@ func (p *scanParams) AllTimestampFilterFuncsMatch(intervalTimestamp time.Time) b
 	return true
 }
 
-// InvokeQuery runs query on a State. It returns a slice of aggregated row results.
-func (s *State) InvokeQuery(query *Query) ([]RowMap, error) {
+// InvokeQuery runs query on a StaticTable. It returns a slice of aggregated row results.
+func (s *StaticTable) InvokeQuery(query *Query) ([]RowMap, error) {
 	sumColumns := make([]MetricColumn, len(query.Aggregates))
 	sumFuncs := make([]sumFunc, len(query.Aggregates))
 	for i, aggregate := range query.Aggregates {
@@ -161,7 +161,7 @@ type scanStats struct {
 	RowsScanned      int
 }
 
-func (s *State) scan(params *scanParams) ([]*rowAggregate, *scanStats) {
+func (s *StaticTable) scan(params *scanParams) ([]*rowAggregate, *scanStats) {
 	result := new(rowAggregate)
 	stats := new(scanStats)
 	result.Sums = make([]UntypedBytes, len(params.SumColumns))
@@ -203,7 +203,7 @@ intervalLoop:
 	return []*rowAggregate{result}, stats
 }
 
-func (s *State) scanWithGrouping(params *scanParams) ([]*rowAggregate, *scanStats) {
+func (s *StaticTable) scanWithGrouping(params *scanParams) ([]*rowAggregate, *scanStats) {
 	// Only support computing the max value of 8 and 16 bit unsigned types, since that set of values can
 	// efficiently be mapped to slice indices for the purposes of groupingOptions.
 	var sliceGroups []*rowAggregate
@@ -357,7 +357,7 @@ func makeRowAggregate(groupByValue Untyped, params *scanParams) *rowAggregate {
 	return aggregate
 }
 
-func (s *State) postProcessScanRows(aggregates []*rowAggregate, query *Query,
+func (s *StaticTable) postProcessScanRows(aggregates []*rowAggregate, query *Query,
 	grouping *groupingParams) []RowMap {
 	rows := make([]RowMap, len(aggregates))
 	for i, aggregate := range aggregates {
@@ -390,7 +390,7 @@ func (s *State) postProcessScanRows(aggregates []*rowAggregate, query *Query,
 	return rows
 }
 
-func (s *State) makeSumFunc(aggregate QueryAggregate, index int) sumFunc {
+func (s *StaticTable) makeSumFunc(aggregate QueryAggregate, index int) sumFunc {
 	col := s.MetricColumns[index]
 	offset := s.MetricOffsets[index]
 	return makeSumFuncGen(col.Type)(offset)
@@ -398,7 +398,7 @@ func (s *State) makeSumFunc(aggregate QueryAggregate, index int) sumFunc {
 
 // makeTimeTruncationFunc returns a function which, given a cell, performs a date truncation transformation.
 // intervalName should be one of "minute", "hour", or "day".
-func (s *State) makeTimeTruncationFunc(truncationType TimeTruncationType,
+func (s *StaticTable) makeTimeTruncationFunc(truncationType TimeTruncationType,
 	column Column) (transformFunc, error) {
 	if column.Type != TypeUint32 {
 		return nil, errors.New("cannot apply timestamp truncation to non-uint32 column")
@@ -418,7 +418,7 @@ func (s *State) makeTimeTruncationFunc(truncationType TimeTruncationType,
 	}, nil
 }
 
-func (s *State) makeTimestampFilterFunc(filter QueryFilter) (timestampFilterFunc, error) {
+func (s *StaticTable) makeTimestampFilterFunc(filter QueryFilter) (timestampFilterFunc, error) {
 	if filter.Type == FilterIn {
 		return s.makeTimestampFilterFuncIn(filter)
 	}
@@ -431,7 +431,7 @@ func (s *State) makeTimestampFilterFunc(filter QueryFilter) (timestampFilterFunc
 	return makeTimestampFilterFuncSimpleGen(filter.Type)(timestamp), nil
 }
 
-func (s *State) makeTimestampFilterFuncIn(filter QueryFilter) (timestampFilterFunc, error) {
+func (s *StaticTable) makeTimestampFilterFuncIn(filter QueryFilter) (timestampFilterFunc, error) {
 	values, ok := filter.Value.([]interface{})
 	if !ok {
 		return nil, fmt.Errorf("timestamp column 'in' filter must be given an array; got %v", filter.Value)
@@ -454,7 +454,7 @@ func (s *State) makeTimestampFilterFuncIn(filter QueryFilter) (timestampFilterFu
 	}, nil
 }
 
-func (s *State) makeDimensionFilterFunc(filter QueryFilter, index int) (filterFunc, error) {
+func (s *StaticTable) makeDimensionFilterFunc(filter QueryFilter, index int) (filterFunc, error) {
 	if filter.Type == FilterIn {
 		return s.makeDimensionFilterFuncIn(filter, index)
 	}
@@ -503,7 +503,7 @@ func (s *State) makeDimensionFilterFunc(filter QueryFilter, index int) (filterFu
 	return filterGenFunc(value, nilOffset, mask, valueOffset), nil
 }
 
-func (s *State) makeDimensionFilterFuncIn(filter QueryFilter, index int) (filterFunc, error) {
+func (s *StaticTable) makeDimensionFilterFuncIn(filter QueryFilter, index int) (filterFunc, error) {
 	valueSlice, ok := filter.Value.([]interface{})
 	if !ok {
 		return nil, fmt.Errorf("'in' queries require a list for comparison; got %v", filter.Value)
@@ -562,7 +562,7 @@ func (s *State) makeDimensionFilterFuncIn(filter QueryFilter, index int) (filter
 	return filterGenFunc(values, acceptNil, nilOffset, mask, valueOffset), nil
 }
 
-func (s *State) makeMetricFilterFunc(filter QueryFilter, index int) (filterFunc, error) {
+func (s *StaticTable) makeMetricFilterFunc(filter QueryFilter, index int) (filterFunc, error) {
 	if filter.Type == FilterIn {
 		return s.makeMetricFilterFuncIn(filter, index)
 	}
@@ -576,7 +576,7 @@ func (s *State) makeMetricFilterFunc(filter QueryFilter, index int) (filterFunc,
 	return makeMetricFilterFuncSimpleGen(col.Type, filter.Type)(float, offset), nil
 }
 
-func (s *State) makeMetricFilterFuncIn(filter QueryFilter, index int) (filterFunc, error) {
+func (s *StaticTable) makeMetricFilterFuncIn(filter QueryFilter, index int) (filterFunc, error) {
 	values, ok := filter.Value.([]interface{})
 	if !ok {
 		return nil, fmt.Errorf("'in' queries require a list for comparison; got %v", filter.Value)
