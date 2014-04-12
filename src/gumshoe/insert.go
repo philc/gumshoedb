@@ -120,7 +120,7 @@ func (db *DB) flush() error {
 			intervalsForCleanup = append(intervalsForCleanup, db.State.Intervals[key])
 		}
 	}
-	Log.Printf("Flushing %d mem intervals into a %d state intervals", len(memKeys), len(stateKeys))
+	Log.Printf("Flushing %d mem intervals into %d state intervals", len(memKeys), len(stateKeys))
 
 	// Walk the keys together to produce the new state intervals
 	intervals, cleanup, err := db.combineSortedMemStateIntervals(memKeys, stateKeys)
