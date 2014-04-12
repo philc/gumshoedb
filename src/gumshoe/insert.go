@@ -23,54 +23,56 @@ func (db *DB) HandleInserts() {
 		case <-db.shutdown:
 			return
 		case insert := <-db.inserts:
-			var err error
-			for _, row := range insert.Rows {
-				if err = db.insertRow(row); err != nil {
-					break
-				}
-			}
-			insert.Err <- err
+			insert.Err <- db.insertRows(insert.Rows)
 		case errCh := <-db.flushSignals:
 			errCh <- db.flush()
 		}
 	}
 }
 
-// insertRow puts row into the memtable, combining with other rows if possible. This should only be called by
-// the insertion goroutine.
-func (db *DB) insertRow(rowMap RowMap) error {
-	row, err := db.serializeRowMap(rowMap)
-	if err != nil {
-		return err
-	}
-	timestamp := row.Timestamp.Truncate(db.IntervalDuration)
-	// Drop the row if it's out of retention
-	if db.FixedRetention && db.intervalStartOutOfRetention(timestamp) {
-		return nil
-	}
+// insertRows puts each row into the memtable, combining with other rows if possible. This should only be
+// called by the insertion goroutine.
+func (db *DB) insertRows(rows []RowMap) error {
+	Log.Printf("Inserting %d rows", len(rows))
+	insertedRows := 0
+	droppedOldRows := 0
+	for _, rowMap := range rows {
+		row, err := db.serializeRowMap(rowMap)
+		if err != nil {
+			return err
+		}
+		timestamp := row.Timestamp.Truncate(db.IntervalDuration)
+		// Drop the row if it's out of retention
+		if db.FixedRetention && db.intervalStartOutOfRetention(timestamp) {
+			droppedOldRows++
+			continue
+		}
 
-	interval, ok := db.memTable.Intervals[timestamp]
-	if !ok {
-		interval = &MemInterval{
-			Start: timestamp,
-			End:   timestamp.Add(db.IntervalDuration),
-			// Make a B+tree with bytes.Compare (lexicographical) as the key comparison function.
-			Tree: b.TreeNew(bytes.Compare),
+		interval, ok := db.memTable.Intervals[timestamp]
+		if !ok {
+			interval = &MemInterval{
+				Start: timestamp,
+				End:   timestamp.Add(db.IntervalDuration),
+				// Make a B+tree with bytes.Compare (lexicographical) as the key comparison function.
+				Tree: b.TreeNew(bytes.Compare),
+			}
+			db.memTable.Intervals[timestamp] = interval
 		}
-		db.memTable.Intervals[timestamp] = interval
-	}
-	value, ok := interval.Tree.Get([]byte(row.Dimensions))
-	if ok {
-		// This key already exists in the tree. Add the metrics; bump the count.
-		MetricBytes(value.Metric).add(db.Schema, row.Metrics)
-		value.Count++
-	} else {
-		value = b.MetricWithCount{
-			Count:  1,
-			Metric: []byte(row.Metrics),
+		value, ok := interval.Tree.Get([]byte(row.Dimensions))
+		if ok {
+			// This key already exists in the tree. Add the metrics; bump the count.
+			MetricBytes(value.Metric).add(db.Schema, row.Metrics)
+			value.Count++
+		} else {
+			value = b.MetricWithCount{
+				Count:  1,
+				Metric: []byte(row.Metrics),
+			}
 		}
+		interval.Tree.Set([]byte(row.Dimensions), value)
+		insertedRows++
 	}
-	interval.Tree.Set([]byte(row.Dimensions), value)
+	Log.Printf("Inserted %d rows succesfully; dropped %d rows out of retention", insertedRows, droppedOldRows)
 	return nil
 }
 
@@ -108,14 +110,17 @@ func (db *DB) flush() error {
 
 	// If we're using a fixed retention, drop old intervals.
 	if db.FixedRetention {
-		var outdatedStateKeys []time.Time
+		var outdatedStateKeys, outdatedMemKeys []time.Time
 		outdatedStateKeys, stateKeys = db.partitionIntervalStartsByRetention(stateKeys)
-		_, memKeys = db.partitionIntervalStartsByRetention(memKeys)
+		outdatedMemKeys, memKeys = db.partitionIntervalStartsByRetention(memKeys)
+		Log.Printf("Flush: ignoring %d mem intervals and %d state intervals out of retention",
+			len(outdatedMemKeys), len(outdatedStateKeys))
 
 		for _, key := range outdatedStateKeys {
 			intervalsForCleanup = append(intervalsForCleanup, db.State.Intervals[key])
 		}
 	}
+	Log.Printf("Flushing %d mem intervals into a %d state intervals", len(memKeys), len(stateKeys))
 
 	// Walk the keys together to produce the new state intervals
 	intervals, cleanup, err := db.combineSortedMemStateIntervals(memKeys, stateKeys)
@@ -123,6 +128,8 @@ func (db *DB) flush() error {
 		return err
 	}
 	intervalsForCleanup = append(intervalsForCleanup, cleanup...)
+	Log.Printf("Flushing %d total intervals and cleaning up %d obsolete or out-of-retention intervals",
+		len(intervals), len(intervalsForCleanup))
 
 	// Make the new State
 	newState := NewState(db.Schema)
@@ -166,6 +173,7 @@ func (db *DB) flush() error {
 func (db *DB) combineSortedMemStateIntervals(memKeys, stateKeys []time.Time) (
 	intervals map[time.Time]*Interval, intervalsForCleanup []*Interval, err error) {
 
+	var numMemIntervals, numStateIntervals, numCombinedIntervals int
 	intervals = make(map[time.Time]*Interval)
 	for len(stateKeys) > 0 && len(memKeys) > 0 {
 		stateKey := stateKeys[0]
@@ -173,9 +181,11 @@ func (db *DB) combineSortedMemStateIntervals(memKeys, stateKeys []time.Time) (
 		switch {
 		case stateKey.Before(memKey):
 			// We reuse this interval directly; the data hasn't changed.
+			numStateIntervals++
 			intervals[stateKey] = db.State.Intervals[stateKey]
 			stateKeys = stateKeys[1:]
 		case memKey.Before(stateKey):
+			numMemIntervals++
 			iv, err := db.WriteMemInterval(db.memTable.Intervals[memKey])
 			if err != nil {
 				return nil, nil, err
@@ -183,6 +193,7 @@ func (db *DB) combineSortedMemStateIntervals(memKeys, stateKeys []time.Time) (
 			intervals[memKey] = iv
 			memKeys = memKeys[1:]
 		default: // equal
+			numCombinedIntervals++
 			stateInterval := db.State.Intervals[stateKey]
 			memInterval := db.memTable.Intervals[memKey]
 			iv, err := db.WriteCombinedInterval(memInterval, stateInterval)
@@ -196,15 +207,20 @@ func (db *DB) combineSortedMemStateIntervals(memKeys, stateKeys []time.Time) (
 		}
 	}
 	for _, stateKey := range stateKeys {
+		numStateIntervals++
 		intervals[stateKey] = db.State.Intervals[stateKey]
 	}
 	for _, memKey := range memKeys {
+		numMemIntervals++
 		iv, err := db.WriteMemInterval(db.memTable.Intervals[memKey])
 		if err != nil {
 			return nil, nil, err
 		}
 		intervals[memKey] = iv
 	}
+
+	Log.Printf("Flush: using %d mem intervals and %d state intervals as-is and combining %d intervals",
+		numMemIntervals, numStateIntervals, numCombinedIntervals)
 
 	return intervals, intervalsForCleanup, nil
 }

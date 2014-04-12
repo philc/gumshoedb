@@ -212,6 +212,7 @@ func (s *Schema) WriteMemInterval(memInterval *MemInterval) (*Interval, error) {
 // WriteCombinedInterval writes out the combined data from memInterval and stateInterval to a fresh Interval
 // with generation stateInterval.Generation+1.
 func (s *Schema) WriteCombinedInterval(memInterval *MemInterval, stateInterval *Interval) (*Interval, error) {
+	start := time.Now()
 	// Sanity check
 	if !memInterval.Start.Equal(stateInterval.Start) || !memInterval.End.Equal(stateInterval.End) {
 		// TODO(caleb) Remove these logging statements after I understand how this can occur
@@ -244,21 +245,26 @@ func (s *Schema) WriteCombinedInterval(memInterval *MemInterval, stateInterval *
 		moreStateKeys = false
 	}
 
+	var numMemRows, numStateRows, numCombinedRows int
+
 	for moreMemKeys && moreStateKeys {
 		cmp := bytes.Compare(memKey, stateKey)
 		var advanceMem, advanceState bool
 		switch {
 		case cmp < 0:
+			numMemRows++
 			if err := interval.appendRow(s, memKey, memVal.Metric, memVal.Count); err != nil {
 				return nil, err
 			}
 			advanceMem = true
 		case cmp > 0:
+			numStateRows++
 			if err := interval.appendRow(s, stateKey, stateVal, stateCount); err != nil {
 				return nil, err
 			}
 			advanceState = true
 		default: // equal
+			numCombinedRows++
 			metrics := make(MetricBytes, len(memVal.Metric))
 			copy(metrics, memVal.Metric)
 			metrics.add(s, MetricBytes(stateVal))
@@ -291,6 +297,7 @@ func (s *Schema) WriteCombinedInterval(memInterval *MemInterval, stateInterval *
 
 	if moreMemKeys {
 		for {
+			numMemRows++
 			if err = interval.appendRow(s, memKey, memVal.Metric, memVal.Count); err != nil {
 				return nil, err
 			}
@@ -305,6 +312,7 @@ func (s *Schema) WriteCombinedInterval(memInterval *MemInterval, stateInterval *
 	}
 	if moreStateKeys {
 		for {
+			numStateRows++
 			if err := interval.appendRow(s, stateKey, stateVal, stateCount); err != nil {
 				return nil, err
 			}
@@ -314,6 +322,13 @@ func (s *Schema) WriteCombinedInterval(memInterval *MemInterval, stateInterval *
 			}
 		}
 	}
+
+	totalSourceMemRows := numMemRows + numCombinedRows
+	totalSourceStateRows := numStateRows + numCombinedRows
+	totalResultRows := numMemRows + numStateRows + numCombinedRows
+	Log.Printf("Combined interval: %d mem rows and %d state rows written into %d total rows (%d rows combined)",
+		totalSourceMemRows, totalSourceStateRows, totalResultRows, numCombinedRows)
+	Log.Printf("Combining interval took %s", time.Since(start))
 
 	return interval.freeze(s)
 }
