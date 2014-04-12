@@ -1,4 +1,5 @@
 .vagrant
 /bin
+/pkg
 /db
 /glp/_cache
