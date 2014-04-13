@@ -187,6 +187,7 @@ func (s *StaticTable) stats() *StaticTableStats {
 				logicalRows += int(row.count(s.Schema))
 			}
 		}
+		stats.Bytes += intervalBytes
 		stats.ByInterval[t] = &IntervalStats{interval.NumSegments, interval.NumRows, intervalBytes}
 	}
 
