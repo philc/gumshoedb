@@ -18,6 +18,7 @@ import (
 	"config"
 	"gumshoe"
 
+	"github.com/cespare/gostc"
 	"github.com/cespare/hutil/apachelog"
 	"github.com/gorilla/pat"
 )
@@ -26,9 +27,12 @@ import (
 const logFlags = log.Lshortfile
 
 var (
+	// Flags
 	configFile  = flag.String("config", "config.toml", "Configuration file to use")
 	profileAddr = flag.String("profile-addr", "", "If non-empty, address for net/http/pprof")
-	Log         = log.New(os.Stderr, "[server] ", logFlags)
+
+	Log    = log.New(os.Stderr, "[server] ", logFlags)
+	statsd *gostc.Client
 
 	// Anything that needs to know about program shutdown can listen on this chan.
 	shutdown = make(chan struct{})
@@ -59,10 +63,12 @@ func (s *Server) Flush() {
 	// such as the disk being full or having bad permissions. For now, we'll just log and crash hard. Note that
 	// the metadata is written atomically after a succesful flush, so restarting will return us to a consistent
 	// state (but missing any data since the previous successful flush).
+	start := time.Now()
 	if err := s.DB.Flush(); err != nil {
 		Log.Printf(">>> FATAL ERROR ON FLUSH: %s", err)
 		os.Exit(1)
 	}
+	statsd.Time("gumshoedb.flush", time.Since(start))
 }
 
 func (s *Server) HandleRoot(w http.ResponseWriter, r *http.Request) {
@@ -79,6 +85,7 @@ func (s *Server) HandleInsert(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	Log.Printf("Inserting %d rows", len(rows))
+	statsd.Count("gumshoedb.insert", float64(len(rows)), 1)
 	if err := s.DB.Insert(rows); err != nil {
 		WriteError(w, err, http.StatusBadRequest)
 		return
@@ -126,6 +133,7 @@ func (s *Server) HandleQuery(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	elapsed := time.Since(start)
+	statsd.Time("gumshoedb.query", elapsed)
 	results := map[string]interface{}{
 		"results":     rows,
 		"duration_ms": elapsed.Seconds() * 1000.0,
@@ -184,7 +192,8 @@ func (s *Server) loadDB(schema *gumshoe.Schema) {
 		}
 		Log.Printf("Database at %q created successfully", dir)
 	} else {
-		Log.Printf("Loaded database with %d rows", db.GetNumRows())
+		stats := db.GetDebugStats()
+		Log.Printf("Loaded database with %d rows", stats.Rows)
 	}
 	s.DB = db
 }
@@ -240,6 +249,12 @@ func main() {
 
 	// Configure the gumshoe logger
 	gumshoe.Log = log.New(os.Stdout, "[gumshoe] ", logFlags)
+
+	// Configure the statsd client
+	statsd, err = gostc.NewClient(conf.StatsdAddr)
+	if err != nil {
+		Log.Fatal(err)
+	}
 
 	// Listen for signals so we can try to flush before shutdown
 	go func() {
