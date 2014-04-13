@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"html/template"
+	"sort"
 	"time"
 
 	"gumshoe"
@@ -15,12 +16,23 @@ type NameAndCount struct {
 	Count int
 }
 
+type IntervalStatsAndTime struct {
+	Time time.Time
+	*gumshoe.IntervalStats
+}
+
+type byTime []IntervalStatsAndTime
+
+func (b byTime) Len() int           { return len(b) }
+func (b byTime) Less(i, j int) bool { return b[i].Time.Before(b[j].Time) }
+func (b byTime) Swap(i, j int)      { b[i], b[j] = b[j], b[i] }
+
 type Metricz struct {
 	Config               string
 	DimensionTableCounts []NameAndCount
 	Stats                *gumshoe.StaticTableStats
-	// unix time -> Stats for interval. Using an int so that map iteration is ordered in the template.
-	IntervalStats map[int64]*gumshoe.IntervalStats
+	// Use a slice here so we can show the intervals in order (recent first).
+	IntervalStats []IntervalStatsAndTime
 }
 
 func (s *Server) makeMetricz() (*Metricz, error) {
@@ -30,10 +42,11 @@ func (s *Server) makeMetricz() (*Metricz, error) {
 	}
 
 	stats := s.DB.GetDebugStats()
-	intervalStats := make(map[int64]*gumshoe.IntervalStats)
-	for t, s := range stats.ByInterval {
-		intervalStats[t.Unix()] = s
+	var intervalStats []IntervalStatsAndTime
+	for t, is := range stats.ByInterval {
+		intervalStats = append(intervalStats, IntervalStatsAndTime{t, is})
 	}
+	sort.Sort(sort.Reverse(byTime(intervalStats)))
 
 	resp := s.DB.MakeRequest()
 	defer resp.Done()
@@ -56,9 +69,7 @@ func (s *Server) makeMetricz() (*Metricz, error) {
 
 var funcMap = template.FuncMap{
 	"humanize": func(size int) string { return humanize.Bytes(uint64(size)) },
-	"date": func(timestamp int64) string {
-		return time.Unix(timestamp, 0).Format("2006-01-02 15:04:05")
-	},
+	"date":     func(t time.Time) string { return t.Format("2006-01-02 15:04:05") },
 }
 
 var metriczTemplate = template.Must(template.New("metricz").Funcs(funcMap).Parse(metriczTemplateText))
@@ -147,8 +158,8 @@ th:last-child,td:last-child { text-align: right; }
 <h2>Intervals ({{.IntervalStats | len}})</h2>
 <table>
 <tr><th>Start</th><th>Segments</th><th>Rows</th><th>Size</th></tr>
-{{range $start, $stats := .IntervalStats}}
-<tr><td>{{$start | date}}</td><td>{{$stats.Segments}}</td><td>{{$stats.Rows}}</td><td>{{$stats.Bytes | humanize}}</td></tr>
+{{range $stats := .IntervalStats}}
+<tr><td>{{$stats.Time | date}}</td><td>{{$stats.Segments}}</td><td>{{$stats.Rows}}</td><td>{{$stats.Bytes | humanize}}</td></tr>
 {{end}}
 </table>
 </section>
