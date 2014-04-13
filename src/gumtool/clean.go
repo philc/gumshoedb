@@ -31,6 +31,7 @@ func clean(args []string) {
 	if err != nil {
 		fatalln(err)
 	}
+	defer f.Close()
 	decoder := json.NewDecoder(f)
 	db := new(gumshoe.DB)
 	if err := decoder.Decode(db); err != nil {

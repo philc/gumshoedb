@@ -241,6 +241,7 @@ func main() {
 	if err != nil {
 		Log.Fatal(err)
 	}
+	defer f.Close()
 	conf, schema, err := config.LoadTOMLConfig(f)
 	if err != nil {
 		Log.Fatal(err)
