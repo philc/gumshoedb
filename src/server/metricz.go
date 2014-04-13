@@ -16,9 +16,9 @@ type NameAndCount struct {
 }
 
 type Metricz struct {
-	Config              string
-	DimensionTableSizes []NameAndCount
-	Stats               *gumshoe.StaticTableStats
+	Config               string
+	DimensionTableCounts []NameAndCount
+	Stats                *gumshoe.StaticTableStats
 	// unix time -> Stats for interval. Using an int so that map iteration is ordered in the template.
 	IntervalStats map[int64]*gumshoe.IntervalStats
 }
@@ -38,19 +38,19 @@ func (s *Server) makeMetricz() (*Metricz, error) {
 	resp := s.DB.MakeRequest()
 	defer resp.Done()
 
-	var dimTableSizes []NameAndCount
+	var dimTableCounts []NameAndCount
 	for i, col := range s.DB.Schema.DimensionColumns {
 		if col.String {
 			count := len(resp.StaticTable.DimensionTables[i].Values)
-			dimTableSizes = append(dimTableSizes, NameAndCount{col.Name, count})
+			dimTableCounts = append(dimTableCounts, NameAndCount{col.Name, count})
 		}
 	}
 
 	return &Metricz{
-		Config:              string(configBytes),
-		DimensionTableSizes: dimTableSizes,
-		Stats:               stats,
-		IntervalStats:       intervalStats,
+		Config:               string(configBytes),
+		DimensionTableCounts: dimTableCounts,
+		Stats:                stats,
+		IntervalStats:        intervalStats,
 	}, nil
 }
 
@@ -128,10 +128,10 @@ th:last-child,td:last-child { text-align: right; }
 </section>
 
 <section class="column">
-<h2>Dimension table sizes</h2>
+<h2>Dimension table counts</h2>
 <table>
-<tr><th>Name</th><th>Size</th></tr>
-{{range .DimensionTableSizes}}
+<tr><th>Name</th><th>Count</th></tr>
+{{range .DimensionTableCounts}}
 <tr><td>{{.Name}}</td><td>{{.Count}}</td></tr>
 {{end}}
 </table>
