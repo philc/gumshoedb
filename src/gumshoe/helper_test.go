@@ -26,6 +26,15 @@ func closeTestDB(db *DB) {
 	}
 }
 
+func reopenTestDB(db *DB) *DB {
+	closeTestDB(db)
+	db, err := OpenDB(db.Schema)
+	if err != nil {
+		panic(err)
+	}
+	return db
+}
+
 func insertRows(db *DB, rows []RowMap) {
 	if err := db.Insert(rows); err != nil {
 		panic(err)

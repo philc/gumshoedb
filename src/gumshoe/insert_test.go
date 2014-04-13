@@ -181,11 +181,7 @@ func TestPersistenceEndToEnd(t *testing.T) {
 	Assert(t, result[0]["metric1"], utils.DeepConvertibleEquals, 10000)
 
 	// Reopen the DB and try again
-	closeTestDB(db)
-	db, err := OpenDB(db.Schema)
-	if err != nil {
-		t.Fatal(err)
-	}
+	db = reopenTestDB(db)
 	defer closeTestDB(db)
 	Assert(t, physicalRows(db), Equals, 100)
 	result = runQuery(db, createQuery())

@@ -73,6 +73,17 @@ func (s *StaticTable) initialize(schema *Schema) error {
 	s.Schema = schema
 	s.wg = new(sync.WaitGroup)
 
+	// Load dimension tables
+	for i, col := range schema.DimensionColumns {
+		if !col.String {
+			continue
+		}
+		if err := s.DimensionTables[i].Load(schema, i); err != nil {
+			return err
+		}
+	}
+
+	// Load each interval/segment
 	for _, interval := range s.Intervals {
 		interval.Segments = make([]*Segment, interval.NumSegments)
 		for i := 0; i < interval.NumSegments; i++ {
@@ -88,6 +99,7 @@ func (s *StaticTable) initialize(schema *Schema) error {
 			interval.Segments[i] = &Segment{File: f, Bytes: mapped}
 		}
 	}
+
 	return nil
 }
 

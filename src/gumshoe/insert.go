@@ -137,7 +137,9 @@ func (db *DB) flush() error {
 	// Make the new StaticTable
 	newStaticTable := NewStaticTable(db.Schema)
 	newStaticTable.Intervals = intervals
-	newStaticTable.DimensionTables = db.combineDimensionTables()
+	if newStaticTable.DimensionTables, err = db.combineDimensionTables(); err != nil {
+		return err
+	}
 
 	// Figure out the row count
 	for _, interval := range intervals {
@@ -228,20 +230,42 @@ func (db *DB) combineSortedMemStaticIntervals(memKeys, staticKeys []time.Time) (
 	return intervals, intervalsForCleanup, nil
 }
 
-func (db *DB) combineDimensionTables() []*DimensionTable {
-	dimTables := NewDimensionTablesForSchema(db.Schema)
+// combineDimensionTables returns a combined set of dimension tables appropriate for the schema from the
+// memtable and static table's dimension tables. Any dimensions in which the memtable has no new entries are
+// reused from the static table. Changed dimensions have a new dimension table created with the combined
+// values and incremented generation and are written to disk.
+func (db *DB) combineDimensionTables() ([]*DimensionTable, error) {
+	dimTables := make([]*DimensionTable, len(db.DimensionColumns))
 	for i, col := range db.DimensionColumns {
 		if !col.String {
 			continue
 		}
-		for _, value := range db.StaticTable.DimensionTables[i].Values {
-			_, _ = dimTables[i].GetAndMaybeSet(value)
+		memDimTable := db.memTable.DimensionTables[i]
+		staticDimTable := db.StaticTable.DimensionTables[i]
+		if len(memDimTable.Values) == 0 {
+			// No changes. Just use the old dimension table.
+			dimTables[i] = staticDimTable
+			continue
 		}
-		for _, value := range db.memTable.DimensionTables[i].Values {
-			_, _ = dimTables[i].GetAndMaybeSet(value)
+		generation := staticDimTable.Generation + 1
+		newDimTable := newDimensionTable(generation, append(staticDimTable.Values, memDimTable.Values...))
+		dimTables[i] = newDimTable
+
+		if db.DiskBacked {
+			if err := newDimTable.Store(db.Schema, i); err != nil {
+				return nil, err
+			}
+
+			// Delete the old dimension table's file. If the old generation is 0, then there is no corresponding
+			// file.
+			if staticDimTable.Generation > 0 {
+				if err := os.Remove(staticDimTable.Filename(db.Schema, i)); err != nil {
+					Log.Println("cleanup error deleting dimension table file:", err)
+				}
+			}
 		}
 	}
-	return dimTables
+	return dimTables, nil
 }
 
 func (db *DB) writeMetadataFile() error {
