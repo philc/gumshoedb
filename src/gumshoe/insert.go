@@ -90,9 +90,7 @@ func (t times) Swap(i, j int)      { t[i], t[j] = t[j], t[i] }
 // If the result error is not nil, the state of database may not be well-defined and a user should clean up
 // any extraneous segment files not referenced by the metadata. (Note the new metadata is written at the end,
 // atomically, so it should be used as the source of truth for which segments should be used and which
-// discarded.)
-//
-// TODO(caleb): Automatic cleanup
+// discarded. 'gumtool clean' can perform this task.)
 func (db *DB) flush() error {
 	start := time.Now()
 	defer func() {
