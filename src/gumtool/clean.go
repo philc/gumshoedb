@@ -38,21 +38,39 @@ func clean(args []string) {
 		fatalln(err)
 	}
 
+	var expectedDimensionFiles []string
+	for i, dimTable := range db.StaticTable.DimensionTables {
+		if dimTable == nil || dimTable.Generation == 0 {
+			continue
+		}
+		expectedDimensionFiles = append(expectedDimensionFiles, dimTable.Filename(db.Schema, i))
+	}
+
+	var expectedIntervalFiles []string
+	for _, interval := range db.StaticTable.Intervals {
+		for i := 0; i < interval.NumSegments; i++ {
+			expectedIntervalFiles = append(expectedIntervalFiles, interval.SegmentFilename(db.Schema, i))
+		}
+	}
+
+	warnMissingAndRemoveExtras(expectedDimensionFiles, "dimension table", *dir, "dimension.*.gob.gz")
+	warnMissingAndRemoveExtras(expectedIntervalFiles, "interval", *dir, "interval.*.dat")
+}
+
+func warnMissingAndRemoveExtras(expected []string, typeDescription, dir, glob string) {
 	existingFiles := make(map[string]bool)
 	expectedFiles := make(map[string]bool)
 
-	existing, err := filepath.Glob(filepath.Join(*dir, "interval.*.dat"))
+	for _, filename := range expected {
+		expectedFiles[filename] = true
+	}
+
+	existing, err := filepath.Glob(filepath.Join(dir, glob))
 	if err != nil {
 		fatalln(err)
 	}
 	for _, filename := range existing {
 		existingFiles[filepath.Base(filename)] = true
-	}
-
-	for _, interval := range db.StaticTable.Intervals {
-		for i := 0; i < interval.NumSegments; i++ {
-			expectedFiles[interval.SegmentFilename(db.Schema, i)] = true
-		}
 	}
 
 	var missingFiles, extraFiles []string
@@ -68,7 +86,7 @@ func clean(args []string) {
 	}
 
 	if len(missingFiles) > 0 {
-		fmt.Printf("Warning: missing %d database file(s):\n", len(missingFiles))
+		fmt.Printf("Warning: missing %d %s file(s):\n", len(missingFiles), typeDescription)
 		for _, filename := range missingFiles {
 			fmt.Printf("  %s\n", filename)
 		}
@@ -76,15 +94,15 @@ func clean(args []string) {
 	}
 
 	if len(extraFiles) == 0 {
-		fmt.Println("No extra files found.")
+		fmt.Printf("No extra %s file(s) found.\n", typeDescription)
 		return
 	}
 
-	fmt.Printf("Found %d extra file(s) not referenced by DB metadata:\n", len(extraFiles))
+	fmt.Printf("Found %d extra %s file(s) not referenced by DB metadata:\n", len(extraFiles), typeDescription)
 	for _, filename := range extraFiles {
 		fmt.Printf("  %s\n", filename)
 	}
-	fmt.Printf("Delete these %d file(s)s? [y/N]: ", len(extraFiles))
+	fmt.Printf("Delete these %d %s file(s)s? [y/N]: ", len(extraFiles), typeDescription)
 	var response string
 	fmt.Scanln(&response)
 	switch response {
@@ -95,9 +113,9 @@ func clean(args []string) {
 	}
 
 	for _, filename := range extraFiles {
-		if err := os.Remove(filepath.Join(*dir, filename)); err != nil {
+		if err := os.Remove(filepath.Join(dir, filename)); err != nil {
 			fatalln(err)
 		}
 	}
-	fmt.Printf("%d extra files deleted successfully.\n", len(extraFiles))
+	fmt.Printf("%d extra %s file(s) deleted successfully.\n", len(extraFiles), typeDescription)
 }
