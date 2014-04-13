@@ -24,6 +24,7 @@ type Schema struct {
 type Config struct {
 	ListenAddr    string   `toml:"listen_addr"`
 	StatsdAddr    string   `toml:"statsd_addr"`
+	OpenFileLimit int      `toml:"open_file_limit"`
 	DatabaseDir   string   `toml:"database_dir"`
 	FlushInterval Duration `toml:"flush_interval"`
 	RetentionDays int      `toml:"retention_days"`

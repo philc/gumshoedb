@@ -252,6 +252,13 @@ func main() {
 		runtime.GOMAXPROCS(runtime.NumCPU())
 	}
 
+	// Try to set the RLIMIT_NOFILE to the config value. This might fail if the binary lacks sufficient
+	// permissions/capabilities, or on non-Linux OSes.
+	rlimit := &syscall.Rlimit{uint64(conf.OpenFileLimit), uint64(conf.OpenFileLimit)}
+	if err := syscall.Setrlimit(syscall.RLIMIT_NOFILE, rlimit); err != nil {
+		Log.Println("Error raising RLIMIT_NOFILE:", err)
+	}
+
 	// Set up the pprof server, if enabled.
 	if *profileAddr != "" {
 		go func() {

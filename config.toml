@@ -4,6 +4,9 @@ listen_addr = ":9000"
 # Send statsd messages to this address.
 statsd_addr = "localhost:8125"
 
+# The process will set RLIMIT_NOFILE to this value.
+open_file_limit = 20000
+
 database_dir = "db"
 
 # Flush to disk at least this frequently.
