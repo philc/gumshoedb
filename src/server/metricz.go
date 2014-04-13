@@ -5,6 +5,8 @@ import (
 	"html/template"
 	"time"
 
+	"gumshoe"
+
 	humanize "github.com/dustin/go-humanize"
 )
 
@@ -13,19 +15,12 @@ type NameAndCount struct {
 	Count int
 }
 
-type Stats struct {
-	Segments         int
-	Rows             int
-	Size             uint64  // uint64 for humanize
-	CompressionRatio float64 // unused for interval stats
-}
-
 type Metricz struct {
 	Config              string
 	DimensionTableSizes []NameAndCount
-	Totals              Stats
+	Stats               *gumshoe.StaticTableStats
 	// unix time -> Stats for interval. Using an int so that map iteration is ordered in the template.
-	IntervalStats map[int64]Stats
+	IntervalStats map[int64]*gumshoe.IntervalStats
 }
 
 func (s *Server) makeMetricz() (*Metricz, error) {
@@ -34,7 +29,11 @@ func (s *Server) makeMetricz() (*Metricz, error) {
 		return nil, err
 	}
 
-	compressionRatio := s.DB.GetCompressionRatio()
+	stats := s.DB.GetDebugStats()
+	intervalStats := make(map[int64]*gumshoe.IntervalStats)
+	for t, s := range stats.ByInterval {
+		intervalStats[t.Unix()] = s
+	}
 
 	resp := s.DB.MakeRequest()
 	defer resp.Done()
@@ -47,30 +46,16 @@ func (s *Server) makeMetricz() (*Metricz, error) {
 		}
 	}
 
-	var totals Stats
-	intervalStats := make(map[int64]Stats)
-	for t, interval := range resp.StaticTable.Intervals {
-		totals.Segments += interval.NumSegments
-		totals.Rows += interval.NumRows
-		var size uint64
-		for _, segment := range interval.Segments {
-			size += uint64(len(segment.Bytes))
-		}
-		totals.Size += size
-		intervalStats[t.Unix()] = Stats{Segments: interval.NumSegments, Rows: interval.NumRows, Size: size}
-	}
-	totals.CompressionRatio = compressionRatio
-
 	return &Metricz{
 		Config:              string(configBytes),
 		DimensionTableSizes: dimTableSizes,
-		Totals:              totals,
+		Stats:               stats,
 		IntervalStats:       intervalStats,
 	}, nil
 }
 
 var funcMap = template.FuncMap{
-	"humanize": humanize.Bytes,
+	"humanize": func(size int) string { return humanize.Bytes(uint64(size)) },
 	"date": func(timestamp int64) string {
 		return time.Unix(timestamp, 0).Format("2006-01-02 15:04:05")
 	},
@@ -152,10 +137,10 @@ th:last-child,td:last-child { text-align: right; }
 </table>
 
 <h2>Stat totals</h2>
-{{with .Totals}}
+{{with .Stats}}
 <table>
 <tr><th>Segments</th><th>Rows</th><th>Size</th><th>Compression Ratio</th></tr>
-<tr><td>{{.Segments}}</td><td>{{.Rows}}</td><td>{{.Size | humanize}}</td><td>{{.CompressionRatio | printf "%.2f"}}</td></tr>
+<tr><td>{{.Segments}}</td><td>{{.Rows}}</td><td>{{.Bytes | humanize}}</td><td>{{.CompressionRatio | printf "%.2f"}}</td></tr>
 </table>
 {{end}}
 
@@ -163,7 +148,7 @@ th:last-child,td:last-child { text-align: right; }
 <table>
 <tr><th>Start</th><th>Segments</th><th>Rows</th><th>Size</th></tr>
 {{range $start, $stats := .IntervalStats}}
-<tr><td>{{$start | date}}</td><td>{{$stats.Segments}}</td><td>{{$stats.Rows}}</td><td>{{$stats.Size | humanize}}</td></tr>
+<tr><td>{{$start | date}}</td><td>{{$stats.Segments}}</td><td>{{$stats.Rows}}</td><td>{{$stats.Bytes | humanize}}</td></tr>
 {{end}}
 </table>
 </section>

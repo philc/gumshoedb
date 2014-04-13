@@ -16,5 +16,6 @@ func TestCompressionFactorWorks(t *testing.T) {
 	Assert(t, db.GetDebugRows(), utils.DeepConvertibleEquals, []UnpackedRow{
 		{RowMap: RowMap{"at": 0, "dim1": "string1", "metric1": 4}, Count: 4},
 	})
-	Assert(t, db.GetCompressionRatio(), Equals, 4.0)
+	stats := db.GetDebugStats()
+	Assert(t, stats.CompressionRatio, Equals, 4.0)
 }

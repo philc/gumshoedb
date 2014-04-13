@@ -44,22 +44,12 @@ func (db *DB) GetDimensionTables() map[string][]string {
 	return results
 }
 
-func (db *DB) GetNumRows() int {
+func (db *DB) GetDebugStats() *StaticTableStats {
 	resp := db.MakeRequest()
 	defer resp.Done()
 
-	result := 0
-	for _, interval := range resp.StaticTable.Intervals {
-		result += interval.NumRows
-	}
-	return result
-}
+	return resp.StaticTable.stats()
 
-func (db *DB) GetCompressionRatio() float64 {
-	resp := db.MakeRequest()
-	defer resp.Done()
-
-	return resp.StaticTable.compressionRatio()
 }
 
 func (db *DB) GetDebugPrint() {

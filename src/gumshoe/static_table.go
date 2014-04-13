@@ -111,25 +111,6 @@ func (s *StaticTable) handleRequests() {
 	}
 }
 
-// compressionRatio returns the ratio of logical rows in the table to the stored rows in this StaticTable. For
-// instance, if the rows are completely uncollapsible, then the count is 1 for every row and the compression
-// ratio is 1. If 4 rows are stored in the table but they all fit into a single collapsed row, then the
-// compression factor is 4.0. Note that this function scans the table.
-func (s *StaticTable) compressionRatio() float64 {
-	logicalRows := 0
-	physicalRows := 0
-	for _, interval := range s.Intervals {
-		physicalRows += interval.NumRows
-		for _, segment := range interval.Segments {
-			for cursor := 0; cursor < len(segment.Bytes); cursor += s.RowSize {
-				row := RowBytes(segment.Bytes[cursor : cursor+s.RowSize])
-				logicalRows += int(row.count(s.Schema))
-			}
-		}
-	}
-	return float64(logicalRows) / float64(physicalRows)
-}
-
 type byTime []time.Time
 
 func (t byTime) Len() int           { return len(t) }
@@ -163,4 +144,53 @@ func (s *StaticTable) debugPrint() {
 		}
 	}
 	fmt.Println("----------------------------------------------")
+}
+
+type StaticTableStats struct {
+	Intervals int
+	Segments  int
+	Rows      int
+	Bytes     int
+
+	// CompressionRatio is the ratio of logical rows in the table to the stored rows in this StaticTable. For
+	// instance, if the rows are completely uncollapsible, then the count is 1 for every row and the compression
+	// ratio is 1. If 4 rows are stored in the table but they all fit into a single collapsed row, then the
+	// compression factor is 4.0.
+	CompressionRatio float64
+
+	ByInterval map[time.Time]*IntervalStats
+}
+
+type IntervalStats struct {
+	Segments int
+	Rows     int
+	Bytes    int
+}
+
+// stats does a full table scan and returns various metrics about the table in the form of StaticTableStats.
+func (s *StaticTable) stats() *StaticTableStats {
+	stats := &StaticTableStats{
+		Intervals:  len(s.Intervals),
+		ByInterval: make(map[time.Time]*IntervalStats),
+	}
+
+	logicalRows := 0
+	physicalRows := 0
+	for t, interval := range s.Intervals {
+		stats.Segments += interval.NumSegments
+		physicalRows += interval.NumRows
+		intervalBytes := 0
+		for _, segment := range interval.Segments {
+			intervalBytes += len(segment.Bytes)
+			for cursor := 0; cursor < len(segment.Bytes); cursor += s.RowSize {
+				row := RowBytes(segment.Bytes[cursor : cursor+s.RowSize])
+				logicalRows += int(row.count(s.Schema))
+			}
+		}
+		stats.ByInterval[t] = &IntervalStats{interval.NumSegments, interval.NumRows, intervalBytes}
+	}
+
+	stats.Rows = physicalRows
+	stats.CompressionRatio = float64(logicalRows) / float64(physicalRows)
+	return stats
 }
