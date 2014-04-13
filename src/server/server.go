@@ -173,6 +173,7 @@ func NewServer(conf *config.Config, schema *gumshoe.Schema) *Server {
 	s.Handler = apachelog.NewDefaultHandler(mux)
 
 	go s.RunPeriodicFlushes()
+	go s.RunPeriodicStatsChecks()
 	return s
 }
 
@@ -209,6 +210,18 @@ func (s *Server) RunPeriodicFlushes() {
 			s.Flush()
 			os.Exit(0)
 		}
+	}
+}
+
+func (s *Server) RunPeriodicStatsChecks() {
+	// NOTE(caleb): For now, hardcode the interval. We can adjust it or make it a configuration option later.
+	for _ = range time.Tick(time.Minute) {
+		stats := s.DB.GetDebugStats()
+		statsd.Gauge("gumshoedb.static-table.intervals", float64(stats.Intervals))
+		statsd.Gauge("gumshoedb.static-table.segments", float64(stats.Segments))
+		statsd.Gauge("gumshoedb.static-table.rows", float64(stats.Rows))
+		statsd.Gauge("gumshoedb.static-table.bytes", float64(stats.Bytes))
+		statsd.Gauge("gumshoedb.static-table.compression-ratio", stats.CompressionRatio)
 	}
 }
 
