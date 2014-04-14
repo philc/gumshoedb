@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"sync"
 	"time"
 )
 
@@ -98,14 +99,55 @@ func (db *DB) flush() error {
 	return nil
 }
 
+const intervalWriterParallelism = 8
+
+type intervalWriterResponse struct {
+	key      time.Time
+	interval *Interval
+	err      error
+}
+
 // combineSortedMemStaticIntervals combines all the intervals corresponding to memKeys and staticKeys. These
 // must be in sorted order. This function returns the new interval set, a list of static intervals for
 // cleanup, and any error that occurs.
 func (db *DB) combineSortedMemStaticIntervals(memKeys, staticKeys []time.Time) (
 	intervals map[time.Time]*Interval, intervalsForCleanup []*Interval, err error) {
 
-	var numMemIntervals, numStaticIntervals, numCombinedIntervals int
+	// Spin up several goroutines to write out new intervals concurrently.
+	intervalWriterRequests := make(chan func() *intervalWriterResponse)
+	intervalWriterResponses := make(chan *intervalWriterResponse)
+	wg := new(sync.WaitGroup)
+	for i := 0; i < intervalWriterParallelism; i++ {
+		wg.Add(1)
+		go func() {
+			for fn := range intervalWriterRequests {
+				intervalWriterResponses <- fn()
+			}
+			wg.Done()
+		}()
+	}
+
+	// intervals is only modified in the response receiver goroutine below.
 	intervals = make(map[time.Time]*Interval)
+	done := make(chan error)
+
+	go func() {
+		var err error
+		for response := range intervalWriterResponses {
+			// If we previously saw an error; still drain the response queue (but we'll report the first one).
+			if err != nil {
+				continue
+			}
+			if response.err != nil {
+				err = response.err
+				continue
+			}
+			intervals[response.key] = response.interval
+		}
+		done <- err
+	}()
+
+	var numMemIntervals, numStaticIntervals, numCombinedIntervals int
 	for len(staticKeys) > 0 && len(memKeys) > 0 {
 		staticKey := staticKeys[0]
 		memKey := memKeys[0]
@@ -113,25 +155,25 @@ func (db *DB) combineSortedMemStaticIntervals(memKeys, staticKeys []time.Time) (
 		case staticKey.Before(memKey):
 			// We reuse this interval directly; the data hasn't changed.
 			numStaticIntervals++
-			intervals[staticKey] = db.StaticTable.Intervals[staticKey]
+			intervalWriterRequests <- func() *intervalWriterResponse {
+				return &intervalWriterResponse{staticKey, db.StaticTable.Intervals[staticKey], nil}
+			}
 			staticKeys = staticKeys[1:]
 		case memKey.Before(staticKey):
 			numMemIntervals++
-			iv, err := db.WriteMemInterval(db.memTable.Intervals[memKey])
-			if err != nil {
-				return nil, nil, err
+			intervalWriterRequests <- func() *intervalWriterResponse {
+				iv, err := db.WriteMemInterval(db.memTable.Intervals[memKey])
+				return &intervalWriterResponse{memKey, iv, err}
 			}
-			intervals[memKey] = iv
 			memKeys = memKeys[1:]
 		default: // equal
 			numCombinedIntervals++
 			staticInterval := db.StaticTable.Intervals[staticKey]
 			memInterval := db.memTable.Intervals[memKey]
-			iv, err := db.WriteCombinedInterval(memInterval, staticInterval)
-			if err != nil {
-				return nil, nil, err
+			intervalWriterRequests <- func() *intervalWriterResponse {
+				iv, err := db.WriteCombinedInterval(memInterval, staticInterval)
+				return &intervalWriterResponse{staticKey, iv, err}
 			}
-			intervals[staticKey] = iv
 			staticKeys = staticKeys[1:]
 			memKeys = memKeys[1:]
 			intervalsForCleanup = append(intervalsForCleanup, staticInterval)
@@ -139,15 +181,25 @@ func (db *DB) combineSortedMemStaticIntervals(memKeys, staticKeys []time.Time) (
 	}
 	for _, staticKey := range staticKeys {
 		numStaticIntervals++
-		intervals[staticKey] = db.StaticTable.Intervals[staticKey]
+		key := staticKey
+		intervalWriterRequests <- func() *intervalWriterResponse {
+			return &intervalWriterResponse{key, db.StaticTable.Intervals[key], nil}
+		}
 	}
 	for _, memKey := range memKeys {
 		numMemIntervals++
-		iv, err := db.WriteMemInterval(db.memTable.Intervals[memKey])
-		if err != nil {
-			return nil, nil, err
+		key := memKey
+		intervalWriterRequests <- func() *intervalWriterResponse {
+			iv, err := db.WriteMemInterval(db.memTable.Intervals[key])
+			return &intervalWriterResponse{key, iv, err}
 		}
-		intervals[memKey] = iv
+	}
+
+	close(intervalWriterRequests)
+	wg.Wait()
+	close(intervalWriterResponses)
+	if err := <-done; err != nil {
+		return nil, nil, err
 	}
 
 	Log.Printf("Flush: using %d mem intervals and %d static intervals as-is and combining %d intervals",
