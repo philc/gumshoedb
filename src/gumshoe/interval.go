@@ -218,9 +218,6 @@ func (s *Schema) WriteCombinedInterval(memInterval *MemInterval,
 	start := time.Now()
 	// Sanity check
 	if !memInterval.Start.Equal(staticInterval.Start) || !memInterval.End.Equal(staticInterval.End) {
-		// TODO(caleb) Remove these logging statements after I understand how this can occur
-		Log.Printf("memInterval: start=%s, end=%s", memInterval.Start, memInterval.End)
-		Log.Printf("staticInterval: start=%s, end=%s", staticInterval.Start, staticInterval.End)
 		panic("attempt to combine memInterval/staticInterval from different times")
 	}
 
