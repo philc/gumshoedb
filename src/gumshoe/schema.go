@@ -70,6 +70,7 @@ type Schema struct {
 type RunConfig struct {
 	FixedRetention bool          // Whether to truncate old data
 	Retention      time.Duration // How long to save data if FixedRetention is true
+	QueryParallelism int
 }
 
 // initialize fills in the derived fields of s.
@@ -118,6 +119,9 @@ func (s *Schema) initialize() {
 func (c *RunConfig) fillDefaults() {
 	if c.Retention <= 0 {
 		c.Retention = 7 * 24 * time.Hour
+	}
+	if c.QueryParallelism == 0 {
+		c.QueryParallelism = 2
 	}
 }
 

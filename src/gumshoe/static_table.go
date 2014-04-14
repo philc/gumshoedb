@@ -11,17 +11,15 @@ import (
 	mmap "github.com/edsrzf/mmap-go"
 )
 
-// TODO(caleb) Increase this (benchmark)
-const numRequestGoroutines = 1
-
 // StaticTable is an immutable snapshot of the DB's data.
 type StaticTable struct {
-	*Schema         `json:"-"`
-	Intervals       IntervalMap
-	DimensionTables []*DimensionTable // Same length as the number of dimensions; non-string columns are nil
-	Count           int               // Number of logical rows
-	requests        chan *Request     // The request workers pull from this channel
-	wg              *sync.WaitGroup   // For outstanding requests, to know when we can GC this StaticTable
+	*Schema          `json:"-"`
+	Intervals        IntervalMap
+	DimensionTables  []*DimensionTable // Same length as the number of dimensions; non-string columns are nil
+	Count            int               // Number of logical rows
+	requests         chan *Request     // The request workers pull from this channel
+	querySegmentJobs chan func()       // A copy of the chan in the DB
+	wg               *sync.WaitGroup   // For outstanding requests, to know when we can GC this StaticTable
 }
 
 // IntervalMap is a type that implements JSON conversions for map[time.Time]*Interval. (This doesn't work
@@ -103,9 +101,12 @@ func (s *StaticTable) initialize(schema *Schema) error {
 	return nil
 }
 
+// numRequestWorkers controls the number of workers servicing requests for a StaticTable.
+const numRequestWorkers = 16
+
 func (s *StaticTable) startRequestWorkers() {
 	s.requests = make(chan *Request)
-	for i := 0; i < numRequestGoroutines; i++ {
+	for i := 0; i < numRequestWorkers; i++ {
 		go s.handleRequests()
 	}
 }

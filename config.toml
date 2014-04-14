@@ -12,6 +12,9 @@ database_dir = "db"
 # Flush to disk at least this frequently.
 flush_interval = "10s"
 
+# Run this many segment scans in parallel.
+query_parallelism = 4
+
 # Delete data older than this.
 retention_days = 7
 

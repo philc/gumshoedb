@@ -22,13 +22,14 @@ type Schema struct {
 }
 
 type Config struct {
-	ListenAddr    string   `toml:"listen_addr"`
-	StatsdAddr    string   `toml:"statsd_addr"`
-	OpenFileLimit int      `toml:"open_file_limit"`
-	DatabaseDir   string   `toml:"database_dir"`
-	FlushInterval Duration `toml:"flush_interval"`
-	RetentionDays int      `toml:"retention_days"`
-	Schema        Schema   `toml:"schema"`
+	ListenAddr       string   `toml:"listen_addr"`
+	StatsdAddr       string   `toml:"statsd_addr"`
+	OpenFileLimit    int      `toml:"open_file_limit"`
+	DatabaseDir      string   `toml:"database_dir"`
+	FlushInterval    Duration `toml:"flush_interval"`
+	QueryParallelism int      `toml:"query_parallelism"`
+	RetentionDays    int      `toml:"retention_days"`
+	Schema           Schema   `toml:"schema"`
 }
 
 // Produces a gumshoe Schema based on a Config's values.
@@ -104,9 +105,12 @@ func (c *Config) makeSchema() (*gumshoe.Schema, error) {
 		names[col.Name] = true
 	}
 
-	// Check durations for sanity
+	// Sanity checks
 	if c.FlushInterval.Duration < time.Second {
 		return nil, fmt.Errorf("flush interval is too small: %s", c.FlushInterval)
+	}
+	if c.QueryParallelism < 1 {
+		return nil, fmt.Errorf("bad query parallelism (must be positive): %d", c.QueryParallelism)
 	}
 	if c.RetentionDays < 1 {
 		return nil, fmt.Errorf("retention days is too small: %d", c.RetentionDays)

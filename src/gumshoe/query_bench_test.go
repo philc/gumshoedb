@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	BenchmarkRows    = 100000 // The row count to use in these benchmarks.
+	BenchmarkRows    = 1000000 // The row count to use in these benchmarks.
 	BenchmarkColumns = 42
 )
 

@@ -174,6 +174,58 @@ func numericCellValue(cell unsafe.Pointer, typ Type) Untyped {
 	panic("unexpected type")
 }
 
+func untypedZero(typ Type) Untyped {
+	switch typ {
+	case TypeUint8:
+		return uint8(0)
+	case TypeInt8:
+		return int8(0)
+	case TypeUint16:
+		return uint16(0)
+	case TypeInt16:
+		return int16(0)
+	case TypeUint32:
+		return uint32(0)
+	case TypeInt32:
+		return int32(0)
+	case TypeFloat32:
+		return float32(0)
+	case TypeUint64:
+		return uint64(0)
+	case TypeInt64:
+		return int64(0)
+	case TypeFloat64:
+		return float64(0)
+	}
+	panic("unexpected type")
+}
+
+func sumUntyped(u1, u2 Untyped, typ Type) Untyped {
+	switch typ {
+	case TypeUint8:
+		return u1.(uint8) + u2.(uint8)
+	case TypeInt8:
+		return u1.(int8) + u2.(int8)
+	case TypeUint16:
+		return u1.(uint16) + u2.(uint16)
+	case TypeInt16:
+		return u1.(int16) + u2.(int16)
+	case TypeUint32:
+		return u1.(uint32) + u2.(uint32)
+	case TypeInt32:
+		return u1.(int32) + u2.(int32)
+	case TypeFloat32:
+		return u1.(float32) + u2.(float32)
+	case TypeUint64:
+		return u1.(uint64) + u2.(uint64)
+	case TypeInt64:
+		return u1.(int64) + u2.(int64)
+	case TypeFloat64:
+		return u1.(float64) + u2.(float64)
+	}
+	panic("unexpected type")
+}
+
 // Query helper functions
 
 type FilterType int

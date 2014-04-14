@@ -172,6 +172,22 @@ func numericCellValue(cell unsafe.Pointer, typ Type) Untyped {
 	panic("unexpected type")
 }
 
+func untypedZero(typ Type) Untyped {
+	switch typ { {{range .Types}}
+	case {{.GumshoeTypeName}}:
+		return {{.GoName}}(0){{end}}
+	}
+	panic("unexpected type")
+}
+
+func sumUntyped(u1, u2 Untyped, typ Type) Untyped {
+	switch typ { {{range .Types}}
+	case {{.GumshoeTypeName}}:
+		return u1.({{.GoName}}) + u2.({{.GoName}}){{end}}
+	}
+	panic("unexpected type")
+}
+
 // Query helper functions
 
 type FilterType int

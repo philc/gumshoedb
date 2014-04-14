@@ -63,6 +63,8 @@ func (db *DB) flush() error {
 
 	// Make the new StaticTable
 	newStaticTable := NewStaticTable(db.Schema)
+	// Whenever we make a new StaticTable, we must give it a querySegmentJobs reference.
+	newStaticTable.querySegmentJobs = db.querySegmentJobs
 	newStaticTable.Intervals = intervals
 	if newStaticTable.DimensionTables, err = db.combineDimensionTables(); err != nil {
 		return err
