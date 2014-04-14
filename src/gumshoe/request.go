@@ -27,7 +27,6 @@ func (db *DB) MakeRequest() *Response {
 func (db *DB) GetQueryResult(query *Query) ([]RowMap, error) {
 	resp := db.MakeRequest()
 	defer resp.Done()
-
 	return resp.StaticTable.InvokeQuery(query)
 }
 
@@ -47,15 +46,12 @@ func (db *DB) GetDimensionTables() map[string][]string {
 func (db *DB) GetDebugStats() *StaticTableStats {
 	resp := db.MakeRequest()
 	defer resp.Done()
-
 	return resp.StaticTable.stats()
-
 }
 
 func (db *DB) GetDebugPrint() {
 	resp := db.MakeRequest()
 	defer resp.Done()
-
 	resp.StaticTable.debugPrint()
 }
 
