@@ -132,7 +132,7 @@ func (s *Server) HandleQuery(w http.ResponseWriter, r *http.Request) {
 	statsd.Time("gumshoedb.query", elapsed)
 	results := map[string]interface{}{
 		"results":     rows,
-		"duration_ms": elapsed.Seconds() * 1000.0,
+		"duration_ms": int(elapsed.Seconds() * 1000),
 	}
 	WriteJSONResponse(w, results)
 }
