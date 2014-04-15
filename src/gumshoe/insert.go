@@ -44,6 +44,11 @@ func (db *DB) insertRows(rows []RowMap) error {
 			droppedOldRows++
 			continue
 		}
+		db.latestTimestampLock.Lock()
+		if timestamp.After(db.latestTimestamp) {
+			db.latestTimestamp = timestamp
+		}
+		db.latestTimestampLock.Unlock()
 
 		interval, ok := db.memTable.Intervals[timestamp]
 		if !ok {

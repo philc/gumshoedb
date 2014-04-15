@@ -71,10 +71,6 @@ func (s *Server) Flush() {
 	statsd.Time("gumshoedb.flush", time.Since(start))
 }
 
-func (s *Server) HandleRoot(w http.ResponseWriter, r *http.Request) {
-	w.Write([]byte("Gumshoe is on the case!"))
-}
-
 // HandleInsert decodes an array of JSON-formatted row maps from the request body and inserts them into the
 // database.
 func (s *Server) HandleInsert(w http.ResponseWriter, r *http.Request) {
@@ -154,6 +150,31 @@ func (s *Server) HandleMetricz(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (s *Server) HandleRoot(w http.ResponseWriter, r *http.Request) {
+	w.Write([]byte("Gumshoe is on the case!"))
+}
+
+type Statusz struct {
+	// Unix times, nullable
+	LastUpdated *int64
+	OldestInterval *int64
+}
+
+func (s *Server) HandleStatusz(w http.ResponseWriter, r *http.Request) {
+	var statusz Statusz
+	latestTimestamp := s.DB.GetLatestTimestamp()
+	lastUpdated := latestTimestamp.Unix()
+	if !latestTimestamp.IsZero() {
+		statusz.LastUpdated = &lastUpdated
+	}
+	oldestInterval := s.DB.GetOldestIntervalTimestamp()
+	oldest := oldestInterval.Unix()
+	if !oldestInterval.IsZero() {
+		statusz.OldestInterval = &oldest
+	}
+	WriteJSONResponse(w, statusz)
+}
+
 // NewServer initializes a Server with a DB and sets up its routes.
 func NewServer(conf *config.Config, schema *gumshoe.Schema) *Server {
 	s := &Server{Config: conf}
@@ -168,6 +189,7 @@ func NewServer(conf *config.Config, schema *gumshoe.Schema) *Server {
 
 	mux.Get("/metricz", s.HandleMetricz)
 	mux.Get("/debug/rows", s.HandleDebugRows)
+	mux.Get("/statusz", s.HandleStatusz)
 	mux.Get("/", s.HandleRoot)
 
 	s.Handler = apachelog.NewDefaultHandler(mux)

@@ -1,5 +1,7 @@
 package gumshoe
 
+import "time"
+
 // DB request methods (all named Get*) are for retrieving DB information at a high level.
 
 // A Request is used to read data.
@@ -41,6 +43,24 @@ func (db *DB) GetDimensionTables() map[string][]string {
 		}
 	}
 	return results
+}
+
+func (db *DB) GetLatestTimestamp() time.Time {
+	db.latestTimestampLock.Lock()
+	defer db.latestTimestampLock.Unlock()
+	return db.latestTimestamp
+}
+
+func (db *DB) GetOldestIntervalTimestamp() time.Time {
+	resp := db.MakeRequest()
+	defer resp.Done()
+	var oldest time.Time
+	for t := range resp.StaticTable.Intervals {
+		if oldest.IsZero() || t.Before(oldest) {
+			oldest = t
+		}
+	}
+	return oldest
 }
 
 func (db *DB) GetDebugStats() *StaticTableStats {

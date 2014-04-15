@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
+	"time"
 )
 
 const MetadataFilename = "db.json"
@@ -30,6 +32,10 @@ type DB struct {
 
 	// Queries scan segments in parallel on a fixed goroutine pool pulling from querySegmentJobs
 	querySegmentJobs chan func()
+
+	latestTimestampLock *sync.Mutex
+	// Latest inserted row timestamp.
+	latestTimestamp time.Time
 }
 
 // OpenDB loads an existing DB. If schema.DiskBacked is false, this is the same as NewDB. Otherwise,
@@ -110,6 +116,7 @@ func (db *DB) initialize() {
 	// The current StaticTable always needs a to have querySegmentJobs. We set that reference here, and wherever
 	// we create a new StaticTable (when flushing) we set it on that new one.
 	db.StaticTable.querySegmentJobs = db.querySegmentJobs
+	db.latestTimestampLock = new(sync.Mutex)
 
 	go db.HandleRequests()
 	go db.HandleInserts()
