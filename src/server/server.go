@@ -156,7 +156,7 @@ func (s *Server) HandleRoot(w http.ResponseWriter, r *http.Request) {
 
 type Statusz struct {
 	// Unix times, nullable
-	LastUpdated *int64
+	LastUpdated    *int64
 	OldestInterval *int64
 }
 
@@ -183,8 +183,8 @@ func NewServer(conf *config.Config, schema *gumshoe.Schema) *Server {
 	mux := pat.New()
 
 	mux.Put("/insert", s.HandleInsert)
-	mux.Get("/dimension_tables", s.HandleDimensionTables)
 	mux.Get("/dimension_tables/{name}", s.HandleSingleDimension)
+	mux.Get("/dimension_tables", s.HandleDimensionTables)
 	mux.Post("/query", s.HandleQuery)
 
 	mux.Get("/metricz", s.HandleMetricz)
