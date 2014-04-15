@@ -55,6 +55,33 @@ func runWithGroupBy(db *DB, grouping QueryGrouping) []RowMap {
 	return runQuery(db, query)
 }
 
+func TestQuerySums(t *testing.T) {
+	schema := schemaFixture()
+	schema.MetricColumns = append(schema.MetricColumns, makeMetricColumn("metric2", "float32"))
+	db, err := NewDB(schema)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer closeTestDB(db)
+
+	insertRows(db, []RowMap{
+		{"at": 0.0, "dim1": "string1", "metric1": 1.0, "metric2": 1.0},
+		{"at": 0.0, "dim1": "string2", "metric1": 2.0, "metric2": 2.0},
+	})
+	db.GetDebugPrint()
+
+	query := &Query{
+		Aggregates: []QueryAggregate{
+			{Type: AggregateSum, Column: "metric1", Name: "metric1"},
+			{Type: AggregateSum, Column: "metric2", Name: "metric2"},
+		},
+	}
+	results := runQuery(db, query)
+	Assert(t, results, utils.DeepConvertibleEquals, []RowMap{
+		{"metric1": 3, "metric2": 3, "rowCount": 2},
+	})
+}
+
 func TestQueryFiltersRowsUsingEqualsFilter(t *testing.T) {
 	db := createTestDBForFilterTests()
 	defer closeTestDB(db)

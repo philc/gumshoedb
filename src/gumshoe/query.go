@@ -151,7 +151,7 @@ func (s *StaticTable) InvokeQuery(query *Query) ([]RowMap, error) {
 	}
 
 	Log.Printf("Query: grouping=%t, %d timestamp filter funcs, %d sum columns, %d filter funcs",
-		grouping != nil, len(sumColumns), len(filterFuncs), len(timestampFilterFuncs))
+		grouping != nil, len(timestampFilterFuncs), len(sumColumns), len(filterFuncs))
 
 	start := time.Now()
 	var rows []*rowAggregate
@@ -192,14 +192,15 @@ func combineScanPartials(results []*scanPartial, params *scanParams, groupByValu
 		Sums:         make([]Untyped, len(params.SumColumns)),
 	}
 	for i, col := range params.SumColumns {
-		result.Sums[i] = untypedZero(col.Type)
+		result.Sums[i] = untypedZero(typeToBigType[col.Type])
 	}
 	for _, partial := range results {
 		for i, col := range params.SumColumns {
-			partialSum := numericCellValue(partial.Sums[i].Pointer(), col.Type)
-			result.Sums[i] = sumUntyped(result.Sums[i], partialSum, col.Type)
-			result.Count += partial.Count
+			typ := typeToBigType[col.Type]
+			partialSum := numericCellValue(partial.Sums[i].Pointer(), typ)
+			result.Sums[i] = sumUntyped(result.Sums[i], partialSum, typ)
 		}
+		result.Count += partial.Count
 	}
 	return result
 }
