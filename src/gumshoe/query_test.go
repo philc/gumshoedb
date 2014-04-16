@@ -68,7 +68,6 @@ func TestQuerySums(t *testing.T) {
 		{"at": 0.0, "dim1": "string1", "metric1": 1.0, "metric2": 1.0},
 		{"at": 0.0, "dim1": "string2", "metric1": 2.0, "metric2": 2.0},
 	})
-	db.GetDebugPrint()
 
 	query := &Query{
 		Aggregates: []QueryAggregate{
@@ -216,13 +215,34 @@ func TestQueryFilterUsingInWithNilValues(t *testing.T) {
 	Assert(t, results[0], utils.DeepConvertibleEquals, RowMap{"metric1": 6, "rowCount": 2})
 }
 
-func TestQueryGroupByWithNilValues(t *testing.T) {
+func TestQueryGroupByWithNilValuesBigDimensionColumn(t *testing.T) {
 	db := createTestDBForNilQueryTests()
 	defer closeTestDB(db)
 	results := runWithGroupBy(db, QueryGrouping{TimeTruncationNone, "dim1", "groupbykey"})
 	Assert(t, results, utils.DeepEqualsUnordered, []RowMap{
 		{"metric1": 1, "groupbykey": "a", "rowCount": 1},
 		{"metric1": 2, "groupbykey": "b", "rowCount": 1},
+		{"metric1": 4, "groupbykey": nil, "rowCount": 1},
+	})
+}
+
+func TestQueryGroupByWithNilValuesSmallDimensionColumn(t *testing.T) {
+	schema := schemaFixture()
+	schema.DimensionColumns = append(schema.DimensionColumns, makeDimensionColumn("dim2", "uint8", false))
+	db, err := NewDB(schema)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer closeTestDB(db)
+	insertRows(db, []RowMap{
+		{"at": 0.0, "dim2": 0.0, "metric1": 1.0},
+		{"at": 0.0, "dim2": 1.0, "metric1": 2.0},
+		{"at": 0.0, "dim2": nil, "metric1": 4.0},
+	})
+	results := runWithGroupBy(db, QueryGrouping{TimeTruncationNone, "dim2", "groupbykey"})
+	Assert(t, results, utils.DeepEqualsUnordered, []RowMap{
+		{"metric1": 1, "groupbykey": 0, "rowCount": 1},
+		{"metric1": 2, "groupbykey": 1, "rowCount": 1},
 		{"metric1": 4, "groupbykey": nil, "rowCount": 1},
 	})
 }

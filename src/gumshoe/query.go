@@ -319,13 +319,15 @@ intervalLoop:
 			stats.RowsScanned += len(segment.Bytes) / s.RowSize
 
 			var (
-				sliceGroupPartial []*scanPartial
-				nilGroupPartial   *scanPartial
-				mapGroupPartial   map[Untyped]*scanPartial
+				sliceGroupPartial    []*scanPartial
+				nilGroupPartial      *scanPartial
+				nilGroupPartialIndex int
+				mapGroupPartial      map[Untyped]*scanPartial
 			)
 			if useSlice {
 				sliceGroupPartial = make([]*scanPartial, sliceGroupSize)
 				sliceGroupPartials = append(sliceGroupPartials, sliceGroupPartial)
+				nilGroupPartialIndex = len(nilGroupPartials)
 				nilGroupPartials = append(nilGroupPartials, nilGroupPartial)
 			} else {
 				mapGroupPartial = make(map[Untyped]*scanPartial)
@@ -363,6 +365,7 @@ intervalLoop:
 							if partial == nil {
 								partial = makeScanPartial(params)
 								nilGroupPartial = partial
+								nilGroupPartials[nilGroupPartialIndex] = partial
 							}
 						} else {
 							cell := unsafe.Pointer(&row[valueOffset])
@@ -414,17 +417,17 @@ func mergeSliceGroupPartials(sliceGroupPartials [][]*scanPartial,
 	nilGroupPartials []*scanPartial, params *scanParams) []*rowAggregate {
 
 	var results []*rowAggregate
-	if len(nilGroupPartials) > 0 {
-		var partials []*scanPartial
-		for _, partial := range nilGroupPartials {
-			if partial != nil {
-				partials = append(partials, partial)
-			}
-		}
-		if len(partials) > 0 {
-			results = append(results, combineScanPartials(partials, params, nil))
+
+	var validNilGroupPartials []*scanPartial
+	for _, partial := range nilGroupPartials {
+		if partial != nil {
+			validNilGroupPartials = append(validNilGroupPartials, partial)
 		}
 	}
+	if len(validNilGroupPartials) > 0 {
+		results = append(results, combineScanPartials(validNilGroupPartials, params, nil))
+	}
+
 	if len(sliceGroupPartials) > 0 {
 		sliceGroupSize := len(sliceGroupPartials[0])
 		for i := 0; i < sliceGroupSize; i++ {
