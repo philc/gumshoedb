@@ -38,17 +38,17 @@ func (db *DB) insertRows(rows []RowMap) error {
 		if err != nil {
 			return err
 		}
+		db.latestTimestampLock.Lock()
+		if row.Timestamp.After(db.latestTimestamp) {
+			db.latestTimestamp = row.Timestamp
+		}
+		db.latestTimestampLock.Unlock()
 		timestamp := row.Timestamp.Truncate(db.IntervalDuration)
 		// Drop the row if it's out of retention
 		if db.FixedRetention && db.intervalStartOutOfRetention(timestamp) {
 			droppedOldRows++
 			continue
 		}
-		db.latestTimestampLock.Lock()
-		if timestamp.After(db.latestTimestamp) {
-			db.latestTimestamp = timestamp
-		}
-		db.latestTimestampLock.Unlock()
 
 		interval, ok := db.memTable.Intervals[timestamp]
 		if !ok {
