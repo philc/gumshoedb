@@ -30,9 +30,6 @@ type DB struct {
 	requests chan *Request
 	flushes  chan *FlushInfo
 
-	// Queries scan segments in parallel on a fixed goroutine pool pulling from querySegmentJobs
-	querySegmentJobs chan func()
-
 	latestTimestampLock *sync.Mutex
 	// Latest inserted row timestamp.
 	latestTimestamp time.Time
@@ -109,21 +106,10 @@ func (db *DB) initialize() {
 	db.flushSignals = make(chan chan error)
 	db.requests = make(chan *Request)
 	db.flushes = make(chan *FlushInfo)
-	// querySegmentJobs is a big buffered channel because we want to let queries enqueue all their segments
-	// segment funcs together rather than having them unpredictably distributed as many queries contend on a
-	// single unbuffered channel. This way queries should be able to roughly maintain their FIFO priority.
-	db.querySegmentJobs = make(chan func(), 1e5)
-	// The current StaticTable always needs a to have querySegmentJobs. We set that reference here, and wherever
-	// we create a new StaticTable (when flushing) we set it on that new one.
-	db.StaticTable.querySegmentJobs = db.querySegmentJobs
 	db.latestTimestampLock = new(sync.Mutex)
 
 	go db.HandleRequests()
 	go db.HandleInserts()
-
-	for i := 0; i < db.QueryParallelism; i++ {
-		go db.runQuerySegmentWorker()
-	}
 }
 
 // Flush triggers a DB flush and waits for it to complete.

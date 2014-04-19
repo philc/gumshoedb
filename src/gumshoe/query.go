@@ -22,17 +22,6 @@ type rowAggregate struct {
 	Count        uint32
 }
 
-func (db *DB) runQuerySegmentWorker() {
-	for {
-		select {
-		case fn := <-db.querySegmentJobs:
-			fn()
-		case <-db.shutdown:
-			return
-		}
-	}
-}
-
 type scanParams struct {
 	TimestampFilterFuncs []timestampFilterFunc
 	FilterFuncs          []filterFunc
@@ -154,23 +143,12 @@ func (s *StaticTable) InvokeQuery(query *Query) ([]RowMap, error) {
 		grouping != nil, len(timestampFilterFuncs), len(sumColumns), len(filterFuncs))
 
 	start := time.Now()
-	var rows []*rowAggregate
-	var stats *scanStats
-	if grouping == nil {
-		rows, stats = s.scan(params)
-	} else {
-		rows, stats = s.scanWithGrouping(params)
-	}
+	rows, stats := s.scan(params)
 	Log.Printf("Query: scan completed in %s; %d intervals skipped; %d intervals scanned; %d rows scanned",
-		time.Since(start), stats.IntervalsSkipped, stats.IntervalsScanned, stats.RowsScanned)
+		time.Since(start), stats.Get(statIntervalsSkipped), stats.Get(statIntervalsScanned),
+		stats.Get(statRowsScanned))
 
 	return s.postProcessScanRows(rows, query, grouping), nil
-}
-
-type scanStats struct {
-	IntervalsSkipped int
-	IntervalsScanned int
-	RowsScanned      int
 }
 
 type scanPartial struct {
@@ -205,235 +183,230 @@ func combineScanPartials(results []*scanPartial, params *scanParams, groupByValu
 	return result
 }
 
-func (s *StaticTable) scan(params *scanParams) ([]*rowAggregate, *scanStats) {
-	stats := new(scanStats)
-	var partials []*scanPartial
-	wg := new(sync.WaitGroup)
-
-intervalLoop:
-	for timestamp, interval := range s.Intervals {
-		if !params.AllTimestampFilterFuncsMatch(timestamp) {
-			stats.IntervalsSkipped++
-			continue intervalLoop
-		}
-		stats.IntervalsScanned++
-
-		for _, segment := range interval.Segments {
-			segment := segment // Create a fresh loop variable so the closure below captures the correct segment
-			stats.RowsScanned += len(segment.Bytes) / s.RowSize
-
-			partial := makeScanPartial(params)
-			partials = append(partials, partial)
-			wg.Add(1)
-
-			s.querySegmentJobs <- func() {
-				defer wg.Done()
-			rowLoop:
-				for i := 0; i < len(segment.Bytes); i += s.RowSize {
-					row := RowBytes(segment.Bytes[i : i+s.RowSize])
-
-					// Run each filter to see if we should skip this row.
-					for _, filter := range params.FilterFuncs {
-						if !filter(row) {
-							continue rowLoop
-						}
-					}
-
-					// Sum each aggregate metric.
-					metrics := MetricBytes(row[s.MetricStartOffset:])
-					for i, sumFn := range params.SumFuncs {
-						sumFn(partial.Sums[i], metrics)
-					}
-
-					partial.Count += row.count(s.Schema)
-				}
-			}
-		}
-	}
-
-	wg.Wait()
-	return []*rowAggregate{combineScanPartials(partials, params, nil)}, stats
+type intervalScanJob struct {
+	timestamp time.Time
+	interval  *Interval
 }
 
-func (s *StaticTable) scanWithGrouping(params *scanParams) ([]*rowAggregate, *scanStats) {
-	var groupingColumn Column
-	if params.Grouping.OnTimestampColumn {
-		groupingColumn = s.TimestampColumn
+type scanState struct {
+	stats     *scanStats
+	params    *scanParams
+	jobs      chan *intervalScanJob
+	partialCh chan interface{}
+	wg        *sync.WaitGroup
+}
+
+func (s *StaticTable) scan(params *scanParams) ([]*rowAggregate, *scanStats) {
+	state := &scanState{
+		stats:     newScanStats(),
+		params:    params,
+		jobs:      make(chan *intervalScanJob),
+		partialCh: make(chan interface{}),
+		wg:        new(sync.WaitGroup),
+	}
+
+	var scanFunc func(*scanState)
+	var combineFunc func(partials []interface{}, params *scanParams) []*rowAggregate
+
+	if params.Grouping == nil {
+		scanFunc = s.scanSimple
+		combineFunc = combineSimple
 	} else {
-		groupingColumn = s.DimensionColumns[params.Grouping.ColumnIndex].Column
+		var groupingColumn Column
+		if params.Grouping.OnTimestampColumn {
+			groupingColumn = s.TimestampColumn
+		} else {
+			groupingColumn = s.DimensionColumns[params.Grouping.ColumnIndex].Column
+		}
+		width := groupingColumn.Width
+		if width <= 2 && params.Grouping.TransformFunc == nil {
+			scanFunc = s.scanSliceGrouping
+			combineFunc = combineSliceGrouping
+		} else {
+			scanFunc = s.scanMapGrouping
+			combineFunc = combineMapGrouping
+		}
 	}
 
-	var nilOffset, valueOffset int
-	var nilMask byte
-	groupOnTimestampColumn := params.Grouping.OnTimestampColumn
-	transformFunc := params.Grouping.TransformFunc
-	if !groupOnTimestampColumn {
-		i := params.Grouping.ColumnIndex
-		nilOffset = s.DimensionStartOffset + i/8
-		nilMask = 1 << byte(i%8)
-		valueOffset = s.DimensionStartOffset + s.DimensionOffsets[i]
+	for i := 0; i < s.QueryParallelism; i++ {
+		state.wg.Add(1)
+		go scanFunc(state)
 	}
-	getDimensionValueFunc := makeGetDimensionValueFuncGen(groupingColumn.Type)
-	getDimensionValueAsIntFunc := makeGetDimensionValueAsIntFuncGen(groupingColumn.Type)
 
-	// Only support computing the max value of 8 and 16 bit unsigned types, since that set of values can
-	// efficiently be mapped to slice indices for the purposes of groupingOptions.
-	var sliceGroupPartials [][]*scanPartial
-	var nilGroupPartials []*scanPartial // used with sliceGroupPartials
-	var mapGroupPartials []map[Untyped]*scanPartial
-	stats := new(scanStats)
+	var partials []interface{}
+	done := make(chan struct{})
+	go func() {
+		for partial := range state.partialCh {
+			partials = append(partials, partial)
+		}
+		done <- struct{}{}
+	}()
 
+	for timestamp, interval := range s.Intervals {
+		if !params.AllTimestampFilterFuncsMatch(timestamp) {
+			state.stats.Inc(statIntervalsSkipped)
+			continue
+		}
+		state.stats.Inc(statIntervalsScanned)
+		state.jobs <- &intervalScanJob{timestamp, interval}
+	}
+
+	close(state.jobs)
+	state.wg.Wait()
+	close(state.partialCh)
+	<-done
+
+	return combineFunc(partials, params), state.stats
+}
+
+func (s *StaticTable) scanSimple(state *scanState) {
+	defer state.wg.Done()
+
+	filterFuncs := state.params.FilterFuncs
+	sumFuncs := state.params.SumFuncs
+	for job := range state.jobs {
+		partial := makeScanPartial(state.params)
+		for _, segment := range job.interval.Segments {
+			state.stats.Add(statRowsScanned, len(segment.Bytes)/s.RowSize)
+
+		rowLoop:
+			for i := 0; i < len(segment.Bytes); i += s.RowSize {
+				row := RowBytes(segment.Bytes[i : i+s.RowSize])
+
+				// Run each filter to see if we should skip this row.
+				for _, filter := range filterFuncs {
+					if !filter(row) {
+						continue rowLoop
+					}
+				}
+
+				// Sum each aggregate metric.
+				metrics := MetricBytes(row[s.MetricStartOffset:])
+				for i, sumFn := range sumFuncs {
+					sumFn(partial.Sums[i], metrics)
+				}
+
+				partial.Count += row.count(s.Schema)
+			}
+		}
+		state.partialCh <- partial
+	}
+}
+
+func combineSimple(partials []interface{}, params *scanParams) []*rowAggregate {
+	ps := make([]*scanPartial, len(partials))
+	for i, p := range partials {
+		ps[i] = p.(*scanPartial)
+	}
+	return []*rowAggregate{combineScanPartials(ps, params, nil)}
+}
+
+type sliceGroupPartials struct {
+	slicePartials []*scanPartial
+	nilPartial    *scanPartial
+}
+
+func (s *StaticTable) scanSliceGrouping(state *scanState) {
+	defer state.wg.Done()
+
+	groupingColumn := s.DimensionColumns[state.params.Grouping.ColumnIndex].Column
 	width := groupingColumn.Width
 	sliceGroupSize := 1 << uint(8*width)
-	useSlice := (width <= 2 && transformFunc == nil)
 
-	wg := new(sync.WaitGroup)
-
-	// A quick sanity check -- this should never be the case as long as timestamps are uint32.
-	if groupOnTimestampColumn && useSlice {
+	// Sanity checks
+	if state.params.Grouping.OnTimestampColumn {
 		panic("using slices for timestamp column group is unhandled")
 	}
+	if width > 2 {
+		panic("using slices for large width column grouping")
+	}
+	if state.params.Grouping.TransformFunc != nil {
+		panic("using slices for grouping with transform func")
+	}
 
-intervalLoop:
-	for timestamp, interval := range s.Intervals {
-		if !params.AllTimestampFilterFuncsMatch(timestamp) {
-			stats.IntervalsSkipped++
-			continue intervalLoop
-		}
-		stats.IntervalsScanned++
-		var timestampGroupMapKey Untyped
-		if groupOnTimestampColumn {
-			groupTimestamp := uint32(timestamp.Unix())
-			if transformFunc == nil {
-				timestampGroupMapKey = groupTimestamp
-			} else {
-				timestampGroupMapKey = transformFunc(unsafe.Pointer(&groupTimestamp))
-			}
-		}
-		// TODO(caleb): We can hoist the computation of the group row aggregate for timestamp groupings out to
-		// this level as well, but it causes code duplication without a huge amount of gain so I'm leaving it
-		// alone for now.
+	i := state.params.Grouping.ColumnIndex
+	nilOffset := s.DimensionStartOffset + i/8
+	nilMask := byte(1) << byte(i%8)
+	valueOffset := s.DimensionStartOffset + s.DimensionOffsets[i]
+	getDimensionValueAsIntFunc := makeGetDimensionValueAsIntFuncGen(groupingColumn.Type)
+	filterFuncs := state.params.FilterFuncs
+	sumFuncs := state.params.SumFuncs
 
-		for _, segment := range interval.Segments {
-			segment := segment
-			stats.RowsScanned += len(segment.Bytes) / s.RowSize
+	for job := range state.jobs {
 
-			var (
-				sliceGroupPartial    []*scanPartial
-				nilGroupPartial      *scanPartial
-				nilGroupPartialIndex int
-				mapGroupPartial      map[Untyped]*scanPartial
-			)
-			if useSlice {
-				sliceGroupPartial = make([]*scanPartial, sliceGroupSize)
-				sliceGroupPartials = append(sliceGroupPartials, sliceGroupPartial)
-				nilGroupPartialIndex = len(nilGroupPartials)
-				nilGroupPartials = append(nilGroupPartials, nilGroupPartial)
-			} else {
-				mapGroupPartial = make(map[Untyped]*scanPartial)
-				mapGroupPartials = append(mapGroupPartials, mapGroupPartial)
-			}
-			wg.Add(1)
+		slicePartials := make([]*scanPartial, sliceGroupSize)
+		var nilGroupPartial *scanPartial
+		var partial *scanPartial // The current partial at each iteration
 
-			var partial *scanPartial
-			var groupMapKey Untyped
+		for _, segment := range job.interval.Segments {
+			state.stats.Add(statRowsScanned, len(segment.Bytes)/s.RowSize)
 
-			s.querySegmentJobs <- func() {
-				defer wg.Done()
-			rowLoop:
-				for i := 0; i < len(segment.Bytes); i += s.RowSize {
-					row := RowBytes(segment.Bytes[i : i+s.RowSize])
+		rowLoop:
+			for i := 0; i < len(segment.Bytes); i += s.RowSize {
+				row := RowBytes(segment.Bytes[i : i+s.RowSize])
 
-					// Run each filter to see if we should skip this row.
-					for _, filter := range params.FilterFuncs {
-						if !filter(row) {
-							continue rowLoop
-						}
+				// Run each filter to see if we should skip this row.
+				for _, filter := range filterFuncs {
+					if !filter(row) {
+						continue rowLoop
 					}
-
-					// Perform grouping.
-					switch {
-					case groupOnTimestampColumn:
-						partial = mapGroupPartial[timestampGroupMapKey]
-						if partial == nil {
-							partial = makeScanPartial(params)
-							mapGroupPartial[timestampGroupMapKey] = partial
-						}
-					case useSlice:
-						if row[nilOffset]&nilMask > 0 {
-							partial = nilGroupPartial
-							if partial == nil {
-								partial = makeScanPartial(params)
-								nilGroupPartial = partial
-								nilGroupPartials[nilGroupPartialIndex] = partial
-							}
-						} else {
-							cell := unsafe.Pointer(&row[valueOffset])
-							index := getDimensionValueAsIntFunc(cell)
-							partial = sliceGroupPartial[index]
-							if partial == nil {
-								partial = makeScanPartial(params)
-								sliceGroupPartial[index] = partial
-							}
-						}
-					default: // map grouping, not on timestamp column
-						if row[nilOffset]&nilMask > 0 {
-							groupMapKey = nil // just to be explicit about things
-						} else {
-							cell := unsafe.Pointer(&row[valueOffset])
-							if transformFunc != nil {
-								groupMapKey = transformFunc(cell)
-							} else {
-								groupMapKey = getDimensionValueFunc(cell)
-							}
-						}
-						partial = mapGroupPartial[groupMapKey]
-						if partial == nil {
-							partial = makeScanPartial(params)
-							mapGroupPartial[groupMapKey] = partial
-						}
-					}
-
-					// Sum each aggregate metric.
-					metrics := MetricBytes(row[s.MetricStartOffset:])
-					for i, sumFn := range params.SumFuncs {
-						sumFn(partial.Sums[i], metrics)
-					}
-
-					partial.Count += row.count(s.Schema)
 				}
+
+				// Grouping
+				if row[nilOffset]&nilMask > 0 {
+					partial = nilGroupPartial
+					if partial == nil {
+						partial = makeScanPartial(state.params)
+						nilGroupPartial = partial
+					}
+				} else {
+					cell := unsafe.Pointer(&row[valueOffset])
+					index := getDimensionValueAsIntFunc(cell)
+					partial = slicePartials[index]
+					if partial == nil {
+						partial = makeScanPartial(state.params)
+						slicePartials[index] = partial
+					}
+				}
+
+				// Sum each aggregate metric.
+				metrics := MetricBytes(row[s.MetricStartOffset:])
+				for i, sumFn := range sumFuncs {
+					sumFn(partial.Sums[i], metrics)
+				}
+
+				partial.Count += row.count(s.Schema)
 			}
 		}
-	}
 
-	wg.Wait()
-	if useSlice {
-		return mergeSliceGroupPartials(sliceGroupPartials, nilGroupPartials, params), stats
+		state.partialCh <- &sliceGroupPartials{slicePartials, nilGroupPartial}
 	}
-	return mergeMapGroupPartials(mapGroupPartials, params), stats
 }
 
-func mergeSliceGroupPartials(sliceGroupPartials [][]*scanPartial,
-	nilGroupPartials []*scanPartial, params *scanParams) []*rowAggregate {
+func combineSliceGrouping(boxedPartials []interface{}, params *scanParams) []*rowAggregate {
+	partials := make([]*sliceGroupPartials, len(boxedPartials))
+	for i, p := range boxedPartials {
+		partials[i] = p.(*sliceGroupPartials)
+	}
 
 	var results []*rowAggregate
 
-	var validNilGroupPartials []*scanPartial
-	for _, partial := range nilGroupPartials {
-		if partial != nil {
-			validNilGroupPartials = append(validNilGroupPartials, partial)
+	var nilGroupPartials []*scanPartial
+	for _, slicePartials := range partials {
+		if slicePartials.nilPartial != nil {
+			nilGroupPartials = append(nilGroupPartials, slicePartials.nilPartial)
 		}
 	}
-	if len(validNilGroupPartials) > 0 {
-		results = append(results, combineScanPartials(validNilGroupPartials, params, nil))
+	if len(nilGroupPartials) > 0 {
+		results = append(results, combineScanPartials(nilGroupPartials, params, nil))
 	}
 
-	if len(sliceGroupPartials) > 0 {
-		sliceGroupSize := len(sliceGroupPartials[0])
+	if len(partials) > 0 {
+		sliceGroupSize := len(partials[0].slicePartials)
 		for i := 0; i < sliceGroupSize; i++ {
 			var singleIndexPartials []*scanPartial
-			for _, partials := range sliceGroupPartials {
-				if partial := partials[i]; partial != nil {
+			for _, slicePartials := range partials {
+				if partial := slicePartials.slicePartials[i]; partial != nil {
 					singleIndexPartials = append(singleIndexPartials, partial)
 				}
 			}
@@ -445,18 +418,113 @@ func mergeSliceGroupPartials(sliceGroupPartials [][]*scanPartial,
 	return results
 }
 
-func mergeMapGroupPartials(mapGroupPartials []map[Untyped]*scanPartial, params *scanParams) []*rowAggregate {
+func (s *StaticTable) scanMapGrouping(state *scanState) {
+	defer state.wg.Done()
+
+	var groupingColumn Column
+	if state.params.Grouping.OnTimestampColumn {
+		groupingColumn = s.TimestampColumn
+	} else {
+		groupingColumn = s.DimensionColumns[state.params.Grouping.ColumnIndex].Column
+	}
+
+	var nilOffset, valueOffset int
+	var nilMask byte
+	groupOnTimestampColumn := state.params.Grouping.OnTimestampColumn
+	transformFunc := state.params.Grouping.TransformFunc
+	if !groupOnTimestampColumn {
+		i := state.params.Grouping.ColumnIndex
+		nilOffset = s.DimensionStartOffset + i/8
+		nilMask = 1 << byte(i%8)
+		valueOffset = s.DimensionStartOffset + s.DimensionOffsets[i]
+	}
+	getDimensionValueFunc := makeGetDimensionValueFuncGen(groupingColumn.Type)
+	filterFuncs := state.params.FilterFuncs
+	sumFuncs := state.params.SumFuncs
+
+	for job := range state.jobs {
+
+		mapPartials := make(map[Untyped]*scanPartial)
+		var partial *scanPartial
+		var key Untyped
+
+		// If we're grouping on the timestamp column, do that work out here.
+		if groupOnTimestampColumn {
+			groupTimestamp := uint32(job.timestamp.Unix())
+			if transformFunc == nil {
+				key = groupTimestamp
+			} else {
+				key = transformFunc(unsafe.Pointer(&groupTimestamp))
+			}
+			partial = makeScanPartial(state.params)
+			mapPartials[key] = partial
+		}
+
+		for _, segment := range job.interval.Segments {
+			state.stats.Add(statRowsScanned, len(segment.Bytes)/s.RowSize)
+
+		rowLoop:
+			for i := 0; i < len(segment.Bytes); i += s.RowSize {
+				row := RowBytes(segment.Bytes[i : i+s.RowSize])
+
+				// Run each filter to see if we should skip this row.
+				for _, filter := range filterFuncs {
+					if !filter(row) {
+						continue rowLoop
+					}
+				}
+
+				// Perform grouping.
+				if !groupOnTimestampColumn {
+					if row[nilOffset]&nilMask > 0 {
+						key = nil // just to be explicit about things
+					} else {
+						cell := unsafe.Pointer(&row[valueOffset])
+						if transformFunc != nil {
+							key = transformFunc(cell)
+						} else {
+							key = getDimensionValueFunc(cell)
+						}
+					}
+					partial = mapPartials[key]
+					if partial == nil {
+						partial = makeScanPartial(state.params)
+						mapPartials[key] = partial
+					}
+				}
+
+				// Sum each aggregate metric.
+				metrics := MetricBytes(row[s.MetricStartOffset:])
+				for i, sumFn := range sumFuncs {
+					sumFn(partial.Sums[i], metrics)
+				}
+
+				partial.Count += row.count(s.Schema)
+			}
+		}
+
+		state.partialCh <- mapPartials
+	}
+}
+
+func combineMapGrouping(boxedPartials []interface{}, params *scanParams) []*rowAggregate {
+	mapPartials := make([]map[Untyped]*scanPartial, len(boxedPartials))
+	for i, p := range boxedPartials {
+		mapPartials[i] = p.(map[Untyped]*scanPartial)
+	}
+
 	allKeys := make(map[Untyped]struct{})
-	for _, partialMap := range mapGroupPartials {
-		for k := range partialMap {
+	for _, mapPartial := range mapPartials {
+		for k := range mapPartial {
 			allKeys[k] = struct{}{}
 		}
 	}
+
 	var results []*rowAggregate
 	for k := range allKeys {
 		var partials []*scanPartial
-		for _, partialMap := range mapGroupPartials {
-			if partial := partialMap[k]; partial != nil {
+		for _, mapPartial := range mapPartials {
+			if partial := mapPartial[k]; partial != nil {
 				partials = append(partials, partial)
 			}
 		}
@@ -704,4 +772,38 @@ func (s *StaticTable) makeMetricFilterFuncIn(filter QueryFilter, index int) (fil
 	// TODO(philc): A hash table may be more efficient for longer lists. We should determine what that list
 	// size is and use a hash table in that case.
 	return makeMetricFilterFuncInGen(col.Type)(floats, offset), nil
+}
+
+type scanStat int
+
+const (
+	statIntervalsSkipped scanStat = iota
+	statIntervalsScanned
+	statRowsScanned
+)
+
+type scanStats struct {
+	*sync.Mutex
+	m map[scanStat]int
+}
+
+func newScanStats() *scanStats {
+	return &scanStats{
+		Mutex: new(sync.Mutex),
+		m:     make(map[scanStat]int),
+	}
+}
+
+func (s *scanStats) Add(key scanStat, delta int) {
+	s.Lock()
+	s.m[key]++
+	s.Unlock()
+}
+
+func (s *scanStats) Inc(key scanStat) { s.Add(key, 1) }
+
+func (s *scanStats) Get(key scanStat) int {
+	s.Lock()
+	defer s.Unlock()
+	return s.m[key]
 }

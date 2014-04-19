@@ -302,7 +302,7 @@ func main() {
 	// Listen for signals so we can try to flush before shutdown
 	go func() {
 		c := make(chan os.Signal)
-		signal.Notify(c, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
+		signal.Notify(c, syscall.SIGINT, syscall.SIGTERM)
 		<-c
 		close(shutdown)
 	}()
