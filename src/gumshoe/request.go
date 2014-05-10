@@ -88,7 +88,7 @@ func (db *DB) GetDebugRows() []UnpackedRow {
 		for _, segment := range interval.Segments {
 			for i := 0; i < len(segment.Bytes); i += db.RowSize {
 				row := RowBytes(segment.Bytes[i : i+db.RowSize])
-				unpacked := db.deserializeRow(row)
+				unpacked := db.DeserializeRow(row)
 				// The RowMap doesn't have an attached timestamp column yet.
 				unpacked.RowMap[db.TimestampColumn.Name] = uint32(t.Unix())
 				results = append(results, unpacked)

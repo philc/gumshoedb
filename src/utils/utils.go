@@ -19,7 +19,7 @@ func DeepConvertibleEquals(args ...interface{}) (ok bool, message string) {
 		if message != "" {
 			return false, message
 		}
-		return false, fmt.Sprintf("deep equal: %+v does not equal %+v", params[0], params[1])
+		return false, fmt.Sprintf("deep equal: expected %+v; got %+v", params[0], params[1])
 	}
 	return true, ""
 }
@@ -61,6 +61,12 @@ outer:
 }
 
 func deepValueConvertibleEquals(v1, v2 reflect.Value) bool {
+	if !v1.IsValid() && !v2.IsValid() {
+		return true
+	}
+	if !v1.IsValid() || !v2.IsValid() {
+		return false
+	}
 	if !v1.Type().ConvertibleTo(v2.Type()) {
 		return false
 	}

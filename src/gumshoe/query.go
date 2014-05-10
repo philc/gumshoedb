@@ -159,7 +159,7 @@ type scanPartial struct {
 func makeScanPartial(params *scanParams) *scanPartial {
 	partial := &scanPartial{Sums: make([]UntypedBytes, len(params.SumColumns))}
 	for i, col := range params.SumColumns {
-		partial.Sums[i] = make(UntypedBytes, typeWidths[typeToBigType[col.Type]])
+		partial.Sums[i] = make(UntypedBytes, typeWidths[TypeToBigType[col.Type]])
 	}
 	return partial
 }
@@ -170,11 +170,11 @@ func combineScanPartials(results []*scanPartial, params *scanParams, groupByValu
 		Sums:         make([]Untyped, len(params.SumColumns)),
 	}
 	for i, col := range params.SumColumns {
-		result.Sums[i] = untypedZero(typeToBigType[col.Type])
+		result.Sums[i] = untypedZero(TypeToBigType[col.Type])
 	}
 	for _, partial := range results {
 		for i, col := range params.SumColumns {
-			typ := typeToBigType[col.Type]
+			typ := TypeToBigType[col.Type]
 			partialSum := numericCellValue(partial.Sums[i].Pointer(), typ)
 			result.Sums[i] = sumUntyped(result.Sums[i], partialSum, typ)
 		}

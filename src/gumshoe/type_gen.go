@@ -75,7 +75,7 @@ var NameToType = map[string]Type{
 	"float64": TypeFloat64,
 }
 
-var typeToBigType = []Type{
+var TypeToBigType = []Type{
 	TypeUint8:   TypeUint64,
 	TypeInt8:    TypeInt64,
 	TypeUint16:  TypeUint64,

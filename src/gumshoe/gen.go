@@ -136,7 +136,7 @@ var NameToType = map[string]Type{ {{range .Types}}
 "{{.GoName}}": {{.GumshoeTypeName}},{{end}}
 }
 
-var typeToBigType = []Type{ {{range .Types}}
+var TypeToBigType = []Type{ {{range .Types}}
 {{.GumshoeTypeName}}: {{.GumshoeBigTypeName}},{{end}}
 }
 

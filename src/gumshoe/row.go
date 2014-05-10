@@ -28,6 +28,8 @@ func UntypedToInt(u Untyped) int {
 	return int(reflect.ValueOf(u).Convert(reflect.TypeOf(int(0))).Int())
 }
 
+func (t Type) String() string { return typeNames[t] }
+
 func (t Type) MarshalJSON() ([]byte, error) { return []byte(fmt.Sprintf("%q", typeNames[t])), nil }
 
 func (t *Type) UnmarshalJSON(b []byte) error {
@@ -93,7 +95,7 @@ func (db *DB) setDimensionValue(dimensions DimensionBytes, index int, value Unty
 		return fmt.Errorf("expected numeric value for dimension %s", column.Name)
 	}
 	if float > typeMaxes[column.Type] {
-		return fmt.Errorf("value %v too large for dimension %s", value, column.Name)
+		return fmt.Errorf("value %v too large for dimension %s (type %s)", value, column.Name, column.Type)
 	}
 	setRowValue(unsafe.Pointer(&dimensions[db.DimensionOffsets[index]]), column.Type, float)
 	return nil
@@ -112,7 +114,7 @@ func (db *DB) setMetricValue(metrics MetricBytes, index int, value Untyped) erro
 		return fmt.Errorf("expected numeric value for metric %s", column.Name)
 	}
 	if float > typeMaxes[column.Type] {
-		return fmt.Errorf("value %v too large for column %s", value, column.Name)
+		return fmt.Errorf("value %v too large for column %s (type %s)", value, column.Name, column.Type)
 	}
 	setRowValue(unsafe.Pointer(&metrics[db.MetricOffsets[index]]), column.Type, value.(float64))
 	return nil
@@ -173,9 +175,9 @@ type UnpackedRow struct {
 	Count int
 }
 
-// deserializeRow unpacks a serialized Row, including nil and string dimensions. Note that the timestamp
+// DeserializeRow unpacks a serialized Row, including nil and string dimensions. Note that the timestamp
 // column is not present in the resulting RowMap.
-func (db *DB) deserializeRow(row RowBytes) UnpackedRow {
+func (db *DB) DeserializeRow(row RowBytes) UnpackedRow {
 	count := int(row.count(db.Schema))
 	rowMap := make(RowMap)
 

@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"runtime"
 	"sort"
 )
 
@@ -35,6 +36,9 @@ Run '%[1]s COMMAND -h to see how to use a particular command
 }
 
 func main() {
+	if os.Getenv("GOMAXPROCS") == "" {
+		runtime.GOMAXPROCS(runtime.NumCPU())
+	}
 	if len(os.Args) < 2 {
 		usage()
 	}
