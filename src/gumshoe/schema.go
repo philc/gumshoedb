@@ -68,8 +68,8 @@ type Schema struct {
 }
 
 type RunConfig struct {
-	FixedRetention bool          // Whether to truncate old data
-	Retention      time.Duration // How long to save data if FixedRetention is true
+	FixedRetention   bool          // Whether to truncate old data
+	Retention        time.Duration // How long to save data if FixedRetention is true
 	QueryParallelism int
 }
 
