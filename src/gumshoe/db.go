@@ -45,8 +45,15 @@ func OpenDB(schema *Schema) (*DB, error) {
 	if !schema.DiskBacked {
 		return NewDB(schema)
 	}
+	return openDBDir(schema.Dir, schema)
+}
 
-	f, err := os.Open(filepath.Join(schema.Dir, MetadataFilename))
+// OpenDBDir loads an existing DB, discovering the schema from the data there.
+func OpenDBDir(dir string) (*DB, error) { return openDBDir(dir, nil) }
+
+// openDBDir opens an existing DB directory. If schema is non-nil, it is checked against the schema in dir.
+func openDBDir(dir string, schema *Schema) (*DB, error) {
+	f, err := os.Open(filepath.Join(dir, MetadataFilename))
 	if err != nil {
 		return nil, err
 	}
@@ -56,13 +63,16 @@ func OpenDB(schema *Schema) (*DB, error) {
 	if err := decoder.Decode(db); err != nil {
 		return nil, err
 	}
-	if err := db.Schema.Equivalent(schema); err != nil {
+	db.Schema.DiskBacked = true
+	db.Schema.Dir = dir
+	if schema != nil {
+		if err := db.Schema.Equivalent(schema); err != nil {
+			return nil, err
+		}
+	}
+	if err := db.StaticTable.initialize(db.Schema); err != nil {
 		return nil, err
 	}
-	if err := db.StaticTable.initialize(schema); err != nil {
-		return nil, err
-	}
-	db.Schema = schema
 	if err := db.initialize(); err != nil {
 		return nil, err
 	}
