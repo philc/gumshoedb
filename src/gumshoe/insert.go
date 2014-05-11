@@ -29,12 +29,12 @@ func (db *DB) HandleInserts() {
 
 // insertRows puts each row into the memtable, combining with other rows if possible. This should only be
 // called by the insertion goroutine.
-func (db *DB) insertRows(rows []RowMap) error {
+func (db *DB) insertRows(rows []UnpackedRow) error {
 	Log.Printf("Inserting %d rows", len(rows))
 	insertedRows := 0
 	droppedOldRows := 0
-	for _, rowMap := range rows {
-		row, err := db.serializeRowMap(rowMap)
+	for _, unpackedRow := range rows {
+		row, err := db.serializeRowMap(unpackedRow.RowMap)
 		if err != nil {
 			return err
 		}
@@ -64,10 +64,10 @@ func (db *DB) insertRows(rows []RowMap) error {
 		if ok {
 			// This key already exists in the tree. Add the metrics; bump the count.
 			MetricBytes(value.Metric).add(db.Schema, row.Metrics)
-			value.Count++
+			value.Count += unpackedRow.Count
 		} else {
 			value = b.MetricWithCount{
-				Count:  1,
+				Count:  unpackedRow.Count,
 				Metric: []byte(row.Metrics),
 			}
 		}

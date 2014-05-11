@@ -166,7 +166,7 @@ func (db *DB) removeFlock() error {
 }
 
 type InsertRequest struct {
-	Rows []RowMap
+	Rows []UnpackedRow
 	Err  chan error
 }
 
@@ -222,10 +222,19 @@ func (db *DB) HandleRequests() {
 	}
 }
 
-// Insert adds some rows into the database. It returns (and stops) on the first error encountered. Note that
-// the data is only in the memtable (not necessarily on disk) when Insert returns.
-func (db *DB) Insert(rows []RowMap) error {
+// InsertUnpacked is like insert, but takes UnpackedRows (which have an associated count).
+func (db *DB) InsertUnpacked(rows []UnpackedRow) error {
 	errc := make(chan error)
 	db.inserts <- &InsertRequest{Rows: rows, Err: errc}
 	return <-errc
+}
+
+// Insert adds some rows into the database. It returns (and stops) on the first error encountered. Note that
+// the data is only in the memtable (not necessarily on disk) when Insert returns.
+func (db *DB) Insert(rows []RowMap) error {
+	unpacked := make([]UnpackedRow, len(rows))
+	for i, row := range rows {
+		unpacked[i] = UnpackedRow{row, 1}
+	}
+	return db.InsertUnpacked(unpacked)
 }
