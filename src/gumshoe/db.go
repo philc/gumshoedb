@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -17,6 +18,8 @@ var Log Logger = nopLogger{}
 
 type DB struct {
 	*Schema
+	dirFile *os.File // An open file handle to be flocked while the DB is open (nil unless disk-backed)
+
 	StaticTable *StaticTable // Owned by the request goroutine
 	memTable    *MemTable    // Owned by the inserter goroutine
 
@@ -60,7 +63,9 @@ func OpenDB(schema *Schema) (*DB, error) {
 		return nil, err
 	}
 	db.Schema = schema
-	db.initialize()
+	if err := db.initialize(); err != nil {
+		return nil, err
+	}
 	return db, nil
 }
 
@@ -72,7 +77,9 @@ func NewDB(schema *Schema) (*DB, error) {
 			Schema:      schema,
 			StaticTable: NewStaticTable(schema),
 		}
-		db.initialize()
+		if err := db.initialize(); err != nil {
+			return nil, err
+		}
 		return db, nil
 	}
 
@@ -94,11 +101,19 @@ func NewDB(schema *Schema) (*DB, error) {
 		Schema:      schema,
 		StaticTable: NewStaticTable(schema),
 	}
-	db.initialize()
+	if err := db.initialize(); err != nil {
+		return nil, err
+	}
 	return db, nil
 }
 
-func (db *DB) initialize() {
+func (db *DB) initialize() error {
+	if db.DiskBacked {
+		if err := db.addFlock(); err != nil {
+			return err
+		}
+	}
+
 	db.Schema.initialize()
 	db.memTable = NewMemTable(db.Schema)
 	db.shutdown = make(chan struct{})
@@ -110,6 +125,7 @@ func (db *DB) initialize() {
 
 	go db.HandleRequests()
 	go db.HandleInserts()
+	return nil
 }
 
 // Flush triggers a DB flush and waits for it to complete.
@@ -126,7 +142,27 @@ func (db *DB) Close() error {
 		return err
 	}
 	close(db.shutdown)
+	if db.DiskBacked {
+		return db.removeFlock()
+	}
 	return nil
+}
+
+func (db *DB) addFlock() error {
+	f, err := os.Open(db.Dir)
+	if err != nil {
+		return err
+	}
+	db.dirFile = f
+	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+		return fmt.Errorf("cannot lock database dir; is it currently in use? (err = %v)", err)
+	}
+	return nil
+}
+
+func (db *DB) removeFlock() error {
+	defer db.dirFile.Close()
+	return syscall.Flock(int(db.dirFile.Fd()), syscall.LOCK_UN)
 }
 
 type InsertRequest struct {
