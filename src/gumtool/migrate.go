@@ -63,6 +63,7 @@ func migrate(args []string) {
 	if err := migrateDBs(newDB, oldDB, *parallelism); err != nil {
 		log.Fatal(err)
 	}
+	fmt.Println("done")
 }
 
 type timestampSegment struct {
@@ -74,6 +75,9 @@ func migrateDBs(newDB, oldDB *gumshoe.DB, parallelism int) error {
 	resp := oldDB.MakeRequest()
 	defer resp.Done()
 
+	allSegments := findSegments(resp.StaticTable)
+	progress := NewProgress("segments processed", len(allSegments))
+	progress.Print()
 	segments := make(chan *timestampSegment)
 	shutdown := make(chan struct{})
 	var workerErr error
@@ -98,6 +102,7 @@ func migrateDBs(newDB, oldDB *gumshoe.DB, parallelism int) error {
 						}
 						return
 					}
+					progress.Add(1)
 				case <-shutdown:
 					return
 				}
@@ -106,27 +111,35 @@ func migrateDBs(newDB, oldDB *gumshoe.DB, parallelism int) error {
 	}
 
 outer:
-	for t, interval := range resp.StaticTable.Intervals {
-		for _, segment := range interval.Segments {
-			ts := &timestampSegment{segment, t}
+	for _, segment := range allSegments {
+		select {
+		case err := <-errc:
+			workerErr = err
+			break outer
+		default:
 			select {
+			case segments <- segment:
 			case err := <-errc:
 				workerErr = err
 				break outer
-			default:
-				select {
-				case segments <- ts:
-				case err := <-errc:
-					workerErr = err
-					break outer
-				}
 			}
 		}
 	}
 
 	close(shutdown)
 	wg.Wait()
+	progress.Clear()
 	return workerErr
+}
+
+func findSegments(staticTable *gumshoe.StaticTable) []*timestampSegment {
+	var segments []*timestampSegment
+	for t, interval := range staticTable.Intervals {
+		for _, segment := range interval.Segments {
+			segments = append(segments, &timestampSegment{segment, t})
+		}
+	}
+	return segments
 }
 
 func migrateSegment(newDB, oldDB *gumshoe.DB, segment *timestampSegment,
