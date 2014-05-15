@@ -10,6 +10,7 @@ import (
 
 type DimensionTable struct {
 	Generation   int
+	Size         int               // Tracked for sanity checking when dimension table is loaded from disk
 	Values       []string          `json:"-"`
 	ValueToIndex map[string]uint32 `json:"-"`
 }
@@ -21,6 +22,7 @@ func newDimensionTable(generation int, values []string) *DimensionTable {
 	}
 	return &DimensionTable{
 		Generation:   generation,
+		Size:         len(values),
 		Values:       values,
 		ValueToIndex: valueToIndex,
 	}
@@ -47,6 +49,7 @@ func (t *DimensionTable) GetAndMaybeSet(s string) (index uint32, alreadyExisted 
 		i = uint32(len(t.Values))
 		t.ValueToIndex[s] = i
 		t.Values = append(t.Values, s)
+		t.Size++
 	}
 	return i, ok
 }
@@ -58,10 +61,23 @@ func (t *DimensionTable) Filename(s *Schema, index int) string {
 }
 
 // Load reads a dimension table file identified by the schema directory, this dimension table's index, and the
-// table generation and loads it into t. t.Values and t.ValuesToIndex are overwritten.
-func (t *DimensionTable) Load(s *Schema, index int) error {
+// table generation and loads it into t. t.Values and t.ValuesToIndex are overwritten. The size is checked
+// against t.Size.
+func (t *DimensionTable) Load(s *Schema, index int) (err error) {
+	defer func() {
+		if err == nil && len(t.Values) != t.Size {
+			err = fmt.Errorf("dimension table %q has size %d but was loaded with %d values",
+				s.DimensionColumns[index].Name, t.Size, len(t.Values))
+		}
+	}()
+
+	t.ValueToIndex = make(map[string]uint32)
 	f, err := os.Open(t.Filename(s, index))
 	if err != nil {
+		if os.IsNotExist(err) {
+			t.Values = nil
+			return nil
+		}
 		return err
 	}
 	defer f.Close()
@@ -74,7 +90,6 @@ func (t *DimensionTable) Load(s *Schema, index int) error {
 	if err := decoder.Decode(&t.Values); err != nil {
 		return err
 	}
-	t.ValueToIndex = make(map[string]uint32)
 	for i, value := range t.Values {
 		t.ValueToIndex[value] = uint32(i)
 	}
