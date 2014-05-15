@@ -205,7 +205,7 @@ func (s *Server) loadDB(schema *gumshoe.Schema) {
 	Log.Printf(`Trying to load %q...`, dir)
 	db, err := gumshoe.OpenDB(schema)
 	if err != nil {
-		if !os.IsNotExist(err) {
+		if err != gumshoe.DBDoesNotExistErr {
 			Log.Fatal(err)
 		}
 		Log.Printf(`Database %q does not exist; creating`, dir)

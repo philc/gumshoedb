@@ -2,6 +2,7 @@ package gumshoe
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -51,10 +52,15 @@ func OpenDB(schema *Schema) (*DB, error) {
 // OpenDBDir loads an existing DB, discovering the schema from the data there.
 func OpenDBDir(dir string) (*DB, error) { return openDBDir(dir, nil) }
 
+var DBDoesNotExistErr = errors.New("db dir does not exist")
+
 // openDBDir opens an existing DB directory. If schema is non-nil, it is checked against the schema in dir.
 func openDBDir(dir string, schema *Schema) (*DB, error) {
 	f, err := os.Open(filepath.Join(dir, MetadataFilename))
 	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, DBDoesNotExistErr
+		}
 		return nil, err
 	}
 	defer f.Close()
