@@ -175,7 +175,7 @@ func combineScanPartials(results []*scanPartial, params *scanParams, groupByValu
 	for _, partial := range results {
 		for i, col := range params.SumColumns {
 			typ := TypeToBigType[col.Type]
-			partialSum := numericCellValue(partial.Sums[i].Pointer(), typ)
+			partialSum := NumericCellValue(partial.Sums[i].Pointer(), typ)
 			result.Sums[i] = sumUntyped(result.Sums[i], partialSum, typ)
 		}
 		result.Count += partial.Count

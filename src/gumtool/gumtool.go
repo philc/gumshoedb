@@ -2,9 +2,11 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"runtime"
 	"sort"
+	"syscall"
 )
 
 type command struct {
@@ -63,4 +65,11 @@ func fatalln(args ...interface{}) {
 func fatalf(format string, args ...interface{}) {
 	fmt.Printf(format, args...)
 	os.Exit(1)
+}
+
+func setRlimit(numOpenFiles int) {
+	rlimit := &syscall.Rlimit{uint64(numOpenFiles), uint64(numOpenFiles)}
+	if err := syscall.Setrlimit(syscall.RLIMIT_NOFILE, rlimit); err != nil {
+		log.Println("Error raising RLIMIT_NOFILE:", err)
+	}
 }

@@ -71,7 +71,7 @@ type DimensionBytes []byte
 type MetricBytes []byte
 
 func (d DimensionBytes) setNil(index int)     { d[index/8] |= 1 << byte(index%8) }
-func (d DimensionBytes) isNil(index int) bool { return d[index/8]&(1<<byte(index%8)) > 0 }
+func (d DimensionBytes) IsNil(index int) bool { return d[index/8]&(1<<byte(index%8)) > 0 }
 
 // count retrieves a row's count (the number of collapsed logical rows).
 func (r RowBytes) count(s *Schema) uint32 { return *(*uint32)(unsafe.Pointer(&r[0])) }
@@ -198,12 +198,12 @@ func (db *DB) DeserializeRow(row RowBytes) UnpackedRow {
 	dimensions := DimensionBytes(row[db.DimensionStartOffset:db.MetricStartOffset])
 	for i, col := range db.DimensionColumns {
 		name := col.Name
-		if dimensions.isNil(i) {
+		if dimensions.IsNil(i) {
 			rowMap[name] = nil
 			continue
 		}
 		cell := unsafe.Pointer(&dimensions[db.DimensionOffsets[i]])
-		value := numericCellValue(cell, col.Type)
+		value := NumericCellValue(cell, col.Type)
 		if col.String {
 			dimensionIndex := UntypedToInt(value)
 			value = db.StaticTable.DimensionTables[i].Values[dimensionIndex]
@@ -215,7 +215,7 @@ func (db *DB) DeserializeRow(row RowBytes) UnpackedRow {
 	for i, col := range db.MetricColumns {
 		name := col.Name
 		cell := unsafe.Pointer(&metrics[db.MetricOffsets[i]])
-		value := numericCellValue(cell, col.Type)
+		value := NumericCellValue(cell, col.Type)
 		rowMap[name] = value
 	}
 

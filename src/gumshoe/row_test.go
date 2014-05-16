@@ -31,14 +31,14 @@ func TestSerializeRowMap(t *testing.T) {
 	// Nils and 0s should be inserted automatically
 	row, err := db.serializeRowMap(RowMap{"at": 0.0})
 	Assert(t, err, IsNil)
-	Assert(t, row.Dimensions.isNil(0), IsTrue)
+	Assert(t, row.Dimensions.IsNil(0), IsTrue)
 	Assert(t, row.Dimensions[db.Schema.NilBytes:], utils.DeepConvertibleEquals, []byte{0})
 	Assert(t, row.Metrics, utils.DeepConvertibleEquals, []byte{0})
 
 	// Other values should be encoded directly
 	row, err = db.serializeRowMap(RowMap{"at": 0.0, "dim1": 1.0, "metric1": 1.0})
 	Assert(t, err, IsNil)
-	Assert(t, row.Dimensions.isNil(0), IsFalse)
+	Assert(t, row.Dimensions.IsNil(0), IsFalse)
 	Assert(t, row.Dimensions[db.Schema.NilBytes:], utils.DeepConvertibleEquals, []byte{1})
 	Assert(t, row.Metrics, utils.DeepConvertibleEquals, []byte{1})
 }

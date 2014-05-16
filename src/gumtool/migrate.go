@@ -11,7 +11,6 @@ import (
 	"os"
 	"reflect"
 	"sync"
-	"syscall"
 	"time"
 
 	"config"
@@ -26,7 +25,6 @@ func init() {
 }
 
 func migrate(args []string) {
-
 	flags := flag.NewFlagSet("gumtool migrate", flag.ExitOnError)
 	oldDBPath := flags.String("old-db-path", "", "Path of old DB directory")
 	newConfigFilename := flags.String("new-db-config", "", "Filename of new DB config file")
@@ -35,10 +33,7 @@ func migrate(args []string) {
 	flags.Parse(args)
 
 	// Attempt to raise the open file limit; necessary for big migrations
-	rlimit := &syscall.Rlimit{uint64(*numOpenFiles), uint64(*numOpenFiles)}
-	if err := syscall.Setrlimit(syscall.RLIMIT_NOFILE, rlimit); err != nil {
-		log.Println("Error raising RLIMIT_NOFILE:", err)
-	}
+	setRlimit(*numOpenFiles)
 
 	oldDB, err := gumshoe.OpenDBDir(*oldDBPath)
 	if err != nil {

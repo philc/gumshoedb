@@ -146,9 +146,9 @@ func setRowValue(pos unsafe.Pointer, typ Type, value float64) {
 	}
 }
 
-// numericCellValue decodes a numeric value from cell based on typ. It does not look into any dimension
+// NumericCellValue decodes a numeric value from cell based on typ. It does not look into any dimension
 // tables.
-func numericCellValue(cell unsafe.Pointer, typ Type) Untyped {
+func NumericCellValue(cell unsafe.Pointer, typ Type) Untyped {
 	switch typ {
 	case TypeUint8:
 		return *(*uint8)(cell)

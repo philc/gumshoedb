@@ -4,7 +4,7 @@
 //
 // Invoke as
 //
-//		go run gen.go | gofmt > types_gen.go
+//		go run gen.go | gofmt > type_gen.go
 //
 package main
 
@@ -162,9 +162,9 @@ func setRowValue(pos unsafe.Pointer, typ Type, value float64) {
 	}
 }
 
-// numericCellValue decodes a numeric value from cell based on typ. It does not look into any dimension
+// NumericCellValue decodes a numeric value from cell based on typ. It does not look into any dimension
 // tables.
-func numericCellValue(cell unsafe.Pointer, typ Type) Untyped {
+func NumericCellValue(cell unsafe.Pointer, typ Type) Untyped {
 	switch typ { {{range .Types}}
 	case {{.GumshoeTypeName}}:
 		return *(*{{.GoName}})(cell){{end}}

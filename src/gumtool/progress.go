@@ -18,7 +18,7 @@ func NewProgress(tag string, total int) *Progress { return &Progress{Tag: tag, T
 func (p *Progress) Clear() {
 	p.Lock()
 	defer p.Unlock()
-	fmt.Print("\r")
+	fmt.Print("\r                                                          \r")
 }
 
 func (p *Progress) Print() {
