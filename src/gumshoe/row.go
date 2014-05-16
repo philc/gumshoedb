@@ -16,16 +16,30 @@ type Untyped interface{}
 // A RowMap is the unpacked form of a gumshoeDB row with an implicit count of 1.
 type RowMap map[string]Untyped
 
+var (
+	float64Type = reflect.TypeOf(float64(0))
+	intType     = reflect.TypeOf(int(0))
+)
+
 // UntypedToFloat64 converts u to a float, if it has some numeric type. Otherwise, it panics. This function
 // should not be called in critical code paths.
 func UntypedToFloat64(u Untyped) float64 {
-	return reflect.ValueOf(u).Convert(reflect.TypeOf(float64(0))).Float()
+	return reflect.ValueOf(u).Convert(float64Type).Float()
 }
 
 // UntypedToInt converts u to an int, if it has some numeric type. Otherwise, it panics. This function should
 // not be called in critical code paths.
 func UntypedToInt(u Untyped) int {
-	return int(reflect.ValueOf(u).Convert(reflect.TypeOf(int(0))).Int())
+	return int(reflect.ValueOf(u).Convert(intType).Int())
+}
+
+// UntypedLess returns whether u1 < u2. u1 and u2 should have the same concrete type.
+func UntypedLess(u1, u2 Untyped) bool {
+	switch u1.(type) {
+	case float32, float64:
+		return UntypedToFloat64(u1) < UntypedToFloat64(u2)
+	}
+	return UntypedToInt(u1) < UntypedToInt(u2)
 }
 
 func (t Type) String() string { return typeNames[t] }
