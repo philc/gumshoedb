@@ -14,6 +14,10 @@ func TestSanity(t *testing.T) {
 listen_addr = ""
 database_dir = "MEMORY"
 flush_interval = "1h"
+statsd_addr = "localhost:8125"
+open_file_limit = 1000
+query_parallelism = 10
+retention_days = 7
 
 [schema]
 interval_duration = "1h"
@@ -32,8 +36,8 @@ metric_columns = [["metric1", "uint32"]]
 	if err != nil {
 		t.Fatal(err)
 	}
-	if resp.StatusCode != http.StatusNotFound {
-		t.Error("Expected 404 at /")
+	if resp.StatusCode != 200 {
+		t.Error("Expected 200 at /")
 	}
 	resp.Body.Close()
 }

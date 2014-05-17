@@ -81,11 +81,16 @@ func (s *Server) HandleInsert(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	Log.Printf("Inserting %d rows", len(rows))
-	statsd.Count("gumshoedb.insert", float64(len(rows)), 1)
-	if err := s.DB.Insert(rows); err != nil {
+
+	var success, failure float64
+	if err := s.DB.Insert(rows); err == nil {
+		success = float64(len(rows))
+	} else {
 		WriteError(w, err, http.StatusBadRequest)
-		return
+		failure = float64(len(rows))
 	}
+	statsd.Count("gumshoedb.insert.success", success, 1)
+	statsd.Count("gumshoedb.insert.failure", failure, 1)
 }
 
 // HandleDebugRows responds to the client with a JSON representation of the physical rows. It returns up to
