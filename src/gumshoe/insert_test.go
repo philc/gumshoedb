@@ -123,6 +123,29 @@ func TestInsertAndReadNilValues(t *testing.T) {
 	Assert(t, db.GetDebugRows(), utils.DeepEqualsUnordered, []UnpackedRow{{rows[0], 1}, {rows[1], 1}})
 }
 
+func TestInsertOverflow(t *testing.T) {
+	schema := schemaFixture()
+	schema.DimensionColumns = []DimensionColumn{makeDimensionColumn("dim1", "uint8", true)}
+	schema.MetricColumns = []MetricColumn{makeMetricColumn("metric1", "uint8")}
+	db, err := NewDB(schema)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Fatal(err)
+		}
+	}()
+
+	var rows []RowMap
+	for i := 0; i < 257; i++ {
+		rows = append(rows, RowMap{"at": hour(0), "dim1": strconv.Itoa(i), "metric1": 1.0})
+	}
+	Assert(t, db.Insert(rows), NotNil)
+	rows = []RowMap{{"at": hour(0), "dim1": "0", "metric1": 1000.0}}
+	Assert(t, db.Insert(rows), NotNil)
+}
+
 func TestInsertDropsRowsOutOfRetention(t *testing.T) {
 	db := makeTestDB()
 	db.FixedRetention = true
