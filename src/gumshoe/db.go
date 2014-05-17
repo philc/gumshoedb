@@ -69,13 +69,15 @@ func openDBDir(dir string, schema *Schema) (*DB, error) {
 	if err := decoder.Decode(db); err != nil {
 		return nil, err
 	}
-	db.Schema.DiskBacked = true
-	db.Schema.Dir = dir
 	if schema != nil {
 		if err := db.Schema.Equivalent(schema); err != nil {
 			return nil, err
 		}
+		// We need to use the given Schema because the on-disk one has a blank RunConfig.
+		db.Schema = schema
 	}
+	db.Schema.DiskBacked = true
+	db.Schema.Dir = dir
 	if err := db.StaticTable.initialize(db.Schema); err != nil {
 		return nil, err
 	}
