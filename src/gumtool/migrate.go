@@ -30,6 +30,7 @@ func migrate(args []string) {
 	newConfigFilename := flags.String("new-db-config", "", "Filename of new DB config file")
 	parallelism := flags.Int("parallelism", 4, "Parallelism for reading old DB")
 	numOpenFiles := flags.Int("rlimit-nofile", 10000, "The value to set RLIMIT_NOFILE")
+	flushSegments := flags.Int("flush-segments", 10, "Flush after every N (old) segments")
 	flags.Parse(args)
 
 	// Attempt to raise the open file limit; necessary for big migrations
@@ -55,7 +56,7 @@ func migrate(args []string) {
 	}
 	defer newDB.Close()
 
-	if err := migrateDBs(newDB, oldDB, *parallelism); err != nil {
+	if err := migrateDBs(newDB, oldDB, *parallelism, *flushSegments); err != nil {
 		log.Fatal(err)
 	}
 	fmt.Println("done")
@@ -66,7 +67,7 @@ type timestampSegment struct {
 	at time.Time
 }
 
-func migrateDBs(newDB, oldDB *gumshoe.DB, parallelism int) error {
+func migrateDBs(newDB, oldDB *gumshoe.DB, parallelism, flushSegments int) error {
 	resp := oldDB.MakeRequest()
 	defer resp.Done()
 
@@ -105,6 +106,8 @@ func migrateDBs(newDB, oldDB *gumshoe.DB, parallelism int) error {
 		}()
 	}
 
+	flushSegmentCount := 0
+
 outer:
 	for _, segment := range allSegments {
 		select {
@@ -114,6 +117,14 @@ outer:
 		default:
 			select {
 			case segments <- segment:
+				flushSegmentCount++
+				if flushSegmentCount == flushSegments {
+					flushSegmentCount = 0
+					if err := newDB.Flush(); err != nil {
+						workerErr = err
+						break outer
+					}
+				}
 			case err := <-errc:
 				workerErr = err
 				break outer
@@ -124,7 +135,10 @@ outer:
 	close(shutdown)
 	wg.Wait()
 	progress.Clear()
-	return workerErr
+	if workerErr != nil {
+		return workerErr
+	}
+	return newDB.Flush()
 }
 
 func findSegments(staticTable *gumshoe.StaticTable) []*timestampSegment {
@@ -150,10 +164,7 @@ func migrateSegment(newDB, oldDB *gumshoe.DB, segment *timestampSegment,
 		convert(unpacked)
 		rows = append(rows, unpacked)
 	}
-	if err := newDB.InsertUnpacked(rows); err != nil {
-		return err
-	}
-	return newDB.Flush()
+	return newDB.InsertUnpacked(rows)
 }
 
 func makeConversionFunc(newDB, oldDB *gumshoe.DB) (func(gumshoe.UnpackedRow), error) {
