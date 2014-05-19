@@ -20,6 +20,9 @@ retention_days = 7
 
 [schema]
 
+# DB segments are no larger than this
+segment_size = "1MB"
+
 # Data is partitioned into time intervals this large.
 interval_duration = "1h"
 

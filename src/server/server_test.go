@@ -20,6 +20,7 @@ query_parallelism = 10
 retention_days = 7
 
 [schema]
+segment_size = "1MB"
 interval_duration = "1h"
 timestamp_column = ["at", "uint32"]
 dimension_columns = [["dim1", "uint32"]]

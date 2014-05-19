@@ -10,11 +10,13 @@ import (
 	"gumshoe"
 
 	"github.com/BurntSushi/toml"
+	"github.com/dustin/go-humanize"
 )
 
 // All struct fields with a toml tag are required (see checkUndefinedFields).
 
 type Schema struct {
+	SegmentSize      string      `toml:"segment_size"`
 	IntervalDuration Duration    `toml:"interval_duration"`
 	TimestampColumn  [2]string   `toml:"timestamp_column"`
 	DimensionColumns [][2]string `toml:"dimension_columns"`
@@ -43,6 +45,11 @@ func (c *Config) makeSchema() (*gumshoe.Schema, error) {
 		diskBacked = false
 	default:
 		dir = c.DatabaseDir
+	}
+
+	segmentSize, err := humanize.ParseBytes(c.Schema.SegmentSize)
+	if err != nil {
+		return nil, err
 	}
 
 	name, typ, isString := parseColumn(c.Schema.TimestampColumn)
@@ -115,6 +122,9 @@ func (c *Config) makeSchema() (*gumshoe.Schema, error) {
 	if c.RetentionDays < 1 {
 		return nil, fmt.Errorf("retention days is too small: %d", c.RetentionDays)
 	}
+	if segmentSize < 100 {
+		return nil, fmt.Errorf("segment size seems too small: %s", c.Schema.SegmentSize)
+	}
 	if c.Schema.IntervalDuration.Duration < time.Minute {
 		return nil, fmt.Errorf("interval duration is too short: %s", c.Schema.IntervalDuration)
 	}
@@ -123,7 +133,7 @@ func (c *Config) makeSchema() (*gumshoe.Schema, error) {
 		TimestampColumn:  timestampColumn.Column,
 		DimensionColumns: dimensions,
 		MetricColumns:    metrics,
-		SegmentSize:      1e6,
+		SegmentSize:      int(segmentSize),
 		IntervalDuration: c.Schema.IntervalDuration.Duration,
 		DiskBacked:       diskBacked,
 		Dir:              dir,
