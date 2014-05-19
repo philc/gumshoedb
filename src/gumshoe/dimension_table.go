@@ -65,9 +65,12 @@ func (t *DimensionTable) Filename(s *Schema, index int) string {
 // against t.Size.
 func (t *DimensionTable) Load(s *Schema, index int) (err error) {
 	defer func() {
-		if err == nil && len(t.Values) != t.Size {
-			err = fmt.Errorf("dimension table %q has size %d but was loaded with %d values",
-				s.DimensionColumns[index].Name, t.Size, len(t.Values))
+		//if err == nil && len(t.Values) != t.Size {
+			//err = fmt.Errorf("dimension table %q has size %d but was loaded with %d values",
+				//s.DimensionColumns[index].Name, t.Size, len(t.Values))
+		//}
+		if err == nil {
+			t.Size = len(t.Values)
 		}
 	}()
 

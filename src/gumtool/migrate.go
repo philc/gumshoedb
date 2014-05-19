@@ -161,10 +161,32 @@ func migrateSegment(newDB, oldDB *gumshoe.DB, segment *timestampSegment,
 		unpacked := oldDB.DeserializeRow(row)
 		// Attach a timestamp
 		unpacked.RowMap[oldDB.TimestampColumn.Name] = at
+		oneOffFixMetrics(unpacked)
 		convert(unpacked)
 		rows = append(rows, unpacked)
 	}
 	return newDB.InsertUnpacked(rows)
+}
+
+func oneOffFixMetrics(row gumshoe.UnpackedRow) {
+	m := row.RowMap
+	for k, v := range m {
+		switch k {
+		case "bid":
+			m[k] = uint64(v.(uint16)) * 40
+		case "bid_per_positive", "bid_price":
+			m[k] = v.(float32) * 40
+		case "no_bid":
+			m[k] = v.(uint32) * 2000
+		case "impression":
+			m[k] = v.(uint32) * 4
+		case "auction_price", "impression_revenue", "predicted_imp_to_install_rate",
+			"predicted_imp_to_click_rate", "predicted_imp_to_preferred_app_event_rate":
+			m[k] = v.(float32) * 4
+		}
+	}
+	m["revenue"] = m["revenue"].(float32) + m["impression_revenue"].(float32)
+	delete(m, "impression_revenue")
 }
 
 func makeConversionFunc(newDB, oldDB *gumshoe.DB) (func(gumshoe.UnpackedRow), error) {
