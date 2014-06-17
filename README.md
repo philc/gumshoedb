@@ -32,7 +32,7 @@ Here's a representative query, assuming the columns "country", "age", and "click
       "aggregates":[
           {"type": "sum", "name": "clicks", "column": "clicks"},
           {"type": "average", "name": "avgAge", "column": "age"}],
-      "filters": [{"type": "greaterThan", "column": "age", "value": 20},
+      "filters": [{"type": ">", "column": "age", "value": 20},
                   {"type": "in", "column": "country", "value": ["USA", "CAN"]}],
       "groupings": [{"column": "country", "name":"country"}]
     }
