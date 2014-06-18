@@ -1,9 +1,10 @@
 package gumshoe
 
 import (
-	"errors"
 	"fmt"
 	"time"
+
+	"github.com/dustin/go-humanize"
 )
 
 type Column struct {
@@ -130,29 +131,33 @@ func (c *RunConfig) fillDefaults() {
 func (s *Schema) Equivalent(other *Schema) (err error) {
 	defer func() {
 		if err != nil {
-			err = fmt.Errorf("Expected schema: %#v; got: %#v", s, other)
+			err = fmt.Errorf("Schemas do not match: %s", err)
 		}
 	}()
 
-	err = errors.New("")
 	if s.TimestampColumn != other.TimestampColumn {
-		return err
+		return fmt.Errorf("expected timestamp column %v; got %v",
+			s.TimestampColumn, other.TimestampColumn)
 	}
 	if len(s.DimensionColumns) != len(other.DimensionColumns) {
-		return err
+		return fmt.Errorf("expected %d dimension columns; got %d",
+			len(s.DimensionColumns), len(other.DimensionColumns))
 	}
 	for i, col := range s.DimensionColumns {
 		if col != other.DimensionColumns[i] {
-			return err
+			return fmt.Errorf("expected dimension column at index %d to be %v; got %v",
+				i, col, other.DimensionColumns[i])
 		}
 	}
 	for i, col := range s.MetricColumns {
 		if col != other.MetricColumns[i] {
-			return err
+			return fmt.Errorf("expected metric column at index %d to be %v; got %v",
+				i, col, other.MetricColumns[i])
 		}
 	}
 	if s.SegmentSize != other.SegmentSize {
-		return err
+		return fmt.Errorf("expected segment size of %s; got %s",
+			humanize.Bytes(uint64(s.SegmentSize)), humanize.Bytes(uint64(other.SegmentSize)))
 	}
 	return nil
 }
