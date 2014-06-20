@@ -23,11 +23,11 @@ func TestDimensionTablesArePersisted(t *testing.T) {
 		{"dim1": "b", "metric1": 7, "rowCount": 1},
 	}
 	result := runWithGroupBy(db, QueryGrouping{TimeTruncationNone, "dim1", "dim1"})
-	Assert(t, result, utils.DeepConvertibleEquals, expected)
+	Assert(t, result, utils.DeepEqualsUnordered, expected)
 
 	db = reopenTestDB(db)
 	result = runWithGroupBy(db, QueryGrouping{TimeTruncationNone, "dim1", "dim1"})
-	Assert(t, result, utils.DeepConvertibleEquals, expected)
+	Assert(t, result, utils.DeepEqualsUnordered, expected)
 }
 
 func TestOldDimensionTablesAreDeleted(t *testing.T) {

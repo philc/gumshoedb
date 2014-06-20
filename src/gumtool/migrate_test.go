@@ -103,7 +103,7 @@ func runMigrateTestCase(t *testing.T, testCase *migrateTestCase) {
 		t.Fatal(err)
 	}
 
-	if err := migrateDBs(newDB, oldDB, 4); err != nil {
+	if err := migrateDBs(newDB, oldDB, 4, 10); err != nil {
 		t.Fatal(err)
 	}
 
