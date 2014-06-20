@@ -7,8 +7,8 @@ import (
 	. "github.com/cespare/a"
 )
 
-// DeepConvertibleEquals is a checker like DeepEqual which converts all numeric types to float64 before comparing.
-// DeepConvertibleEquals only handles simple types, slices, and maps (but it is recursive).
+// DeepConvertibleEquals is a checker like DeepEqual which converts all numeric types to float64 before
+// comparing. DeepConvertibleEquals only handles simple types, slices, and maps (but it is recursive).
 // NOTE(caleb): Add more types as needed.
 func DeepConvertibleEquals(args ...interface{}) (ok bool, message string) {
 	params, message, err := ExpectNArgs(2, args)
@@ -19,13 +19,13 @@ func DeepConvertibleEquals(args ...interface{}) (ok bool, message string) {
 		if message != "" {
 			return false, message
 		}
-		return false, fmt.Sprintf("deep equal: expected %+v; got %+v", params[0], params[1])
+		return false, fmt.Sprintf("deep equal: expected %+v; got %+v", params[1], params[0])
 	}
 	return true, ""
 }
 
-// DeepEqualsUnordered is a checker similar to DeepConvertibleEquals but expects two top-level slices, and does
-// order-independent comparisons (for the top level only).
+// DeepEqualsUnordered is a checker similar to DeepConvertibleEquals but expects two top-level slices, and
+// does order-independent comparisons (for the top level only).
 func DeepEqualsUnordered(args ...interface{}) (ok bool, message string) {
 	params, message, err := ExpectNArgs(2, args)
 	if err != nil {
