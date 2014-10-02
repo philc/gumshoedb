@@ -27,7 +27,7 @@ GumshoeDB can be interacted with over HTTP. Test data can be imported into the d
 
 Here's a representative query, assuming the columns "country", "age", and "clicks".
 
-    curl -iX POST localhost:9000/tables/facts/query -d '
+    curl -iX POST localhost:9000/query -d '
     {
       "aggregates":[
           {"type": "sum", "name": "clicks", "column": "clicks"},
