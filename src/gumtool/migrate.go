@@ -204,6 +204,10 @@ func makeConversionFunc(newDB, oldDB *gumshoe.DB) (func(gumshoe.UnpackedRow), er
 		}
 		metricsToConvert = append(metricsToConvert, newMetric)
 	}
+	fmt.Printf("\033[01;34m>>>> dimensionsToConvert: %v\x1B[m\n", dimensionsToConvert)
+	fmt.Printf("\033[01;34m>>>> dimensionsToDelete: %v\x1B[m\n", dimensionsToDelete)
+	fmt.Printf("\033[01;34m>>>> metricsToConvert: %v\x1B[m\n", metricsToConvert)
+	fmt.Printf("\033[01;34m>>>> metricsToDelete: %v\x1B[m\n", metricsToDelete)
 
 	fn := func(row gumshoe.UnpackedRow) {
 		convertValueToFloat64(row.RowMap, newDB.TimestampColumn.Name)

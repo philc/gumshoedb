@@ -27,7 +27,8 @@ type TestConfig struct {
 }
 
 const (
-	workingDir = "/mnt/data/gumshoe"
+	workingDir  = "/mnt/data/gumshoe"
+	logFileName = "dimanalysis.log"
 )
 
 var (
@@ -36,6 +37,7 @@ var (
 	oldDBDir   = filepath.Join(workingDir, "db")
 	oldDBSize  uint64
 	dimensions []Dimension
+	logf       *os.File
 )
 
 func dirSize(dir string) (uint64, error) {
@@ -49,7 +51,7 @@ func dirSize(dir string) (uint64, error) {
 
 func runTest(dims []Dimension, name string) error {
 	dir := filepath.Join(testDir, name)
-	if err := os.MkdirAll(dir, 0600); err != nil {
+	if err := os.MkdirAll(dir, 0755); err != nil {
 		return err
 	}
 	configFilePath := filepath.Join(dir, "config.toml")
@@ -57,20 +59,16 @@ func runTest(dims []Dimension, name string) error {
 	if err != nil {
 		return err
 	}
-	//var dims []Dimension
-	//for _, d := range dimensions {
-	//if dim.Name != d.Name {
-	//dims = append(dims, d)
-	//}
-	//}
 	if err := configTmpl.Execute(configFile, TestConfig{dir, dims}); err != nil {
 		return err
 	}
 	configFile.Close()
 
-	if output, err := exec.Command("./gumtool", "migrate", "-parallelism", "8", "-flush-segments", "100",
-		"-old-db-path", oldDBDir, "-new-db-config", configFilePath).CombinedOutput(); err != nil {
-		fmt.Println(string(output))
+	cmd := exec.Command("./gumtool", "migrate", "-parallelism", "8", "-flush-segments", "200",
+		"-old-db-path", oldDBDir, "-new-db-config", configFilePath)
+	cmd.Stdout = logf
+	cmd.Stderr = logf
+	if err := cmd.Run(); err != nil {
 		return err
 	}
 	size, err := dirSize(dir)
@@ -95,17 +93,27 @@ func main() {
 		log.Fatal(err)
 	}
 
-	var dims []Dimension
-	for _, dim := range dimensions {
-		if dim.Name == "hostname" || dim.Name == "os_version" {
-			continue
-		}
-		dims = append(dims, dim)
-	}
-
 	fmt.Printf("old DB size: %s\n", humanize.Bytes(oldDBSize))
-	if err := runTest(dims, "hostname_os_version"); err != nil {
+
+	logf, err = os.Create(logFileName)
+	if err != nil {
 		log.Fatal(err)
+	}
+	defer func() {
+		if err := logf.Close(); err != nil {
+			log.Fatal(err)
+		}
+	}()
+	for _, dim1 := range dimensions {
+		var dims []Dimension
+		for _, dim2 := range dimensions {
+			if dim2 != dim1 {
+				dims = append(dims, dim2)
+			}
+		}
+		if err := runTest(dims, dim1.Name); err != nil {
+			log.Fatal(err)
+		}
 	}
 }
 
@@ -135,7 +143,7 @@ retention_days = 100
 segment_size = "10MB"
 
 # Data is partitioned by time intervals of this size.
-interval_duration = "24h"
+interval_duration = "1h"
 
 # Every row must have a timestamp column.
 timestamp_column = ["at", "uint32"]

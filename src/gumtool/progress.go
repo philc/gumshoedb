@@ -28,7 +28,7 @@ func (p *Progress) Print() {
 }
 
 func (p *Progress) print() {
-	fmt.Printf("\r%s: %6d/%d (%.1f%%)", p.Tag, p.N, p.Total, float64(p.N)/float64(p.Total)*100)
+	fmt.Printf("%s: %6d/%d (%.1f%%)\n", p.Tag, p.N, p.Total, float64(p.N)/float64(p.Total)*100)
 }
 
 func (p *Progress) Add(delta int) {
