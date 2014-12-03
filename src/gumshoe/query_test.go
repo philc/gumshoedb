@@ -3,7 +3,7 @@ package gumshoe
 import (
 	"testing"
 
-	"utils"
+	"util"
 
 	. "github.com/cespare/a"
 )
@@ -76,7 +76,7 @@ func TestQuerySums(t *testing.T) {
 		},
 	}
 	results := runQuery(db, query)
-	Assert(t, results, utils.DeepConvertibleEquals, []RowMap{
+	Assert(t, results, util.DeepConvertibleEquals, []RowMap{
 		{"metric1": 3, "metric2": 3, "rowCount": 2},
 	})
 }
@@ -86,23 +86,23 @@ func TestQueryFiltersRowsUsingEqualsFilter(t *testing.T) {
 	defer closeTestDB(db)
 
 	results := runWithFilter(db, QueryFilter{FilterEqual, "metric1", 2.0})
-	Assert(t, results[0]["metric1"], utils.DeepConvertibleEquals, 2)
+	Assert(t, results[0]["metric1"], util.DeepConvertibleEquals, 2)
 
 	results = runWithFilter(db, QueryFilter{FilterEqual, "dim1", "string2"})
-	Assert(t, results[0]["metric1"], utils.DeepConvertibleEquals, 2)
+	Assert(t, results[0]["metric1"], util.DeepConvertibleEquals, 2)
 
 	results = runWithFilter(db, QueryFilter{FilterEqual, "at", 0.0})
-	Assert(t, results[0]["metric1"], utils.DeepConvertibleEquals, 3)
+	Assert(t, results[0]["metric1"], util.DeepConvertibleEquals, 3)
 
 	results = runWithFilter(db, QueryFilter{FilterEqual, "at", 1.0})
-	Assert(t, results[0]["metric1"], utils.DeepConvertibleEquals, 0)
+	Assert(t, results[0]["metric1"], util.DeepConvertibleEquals, 0)
 
 	// These match zero rows.
 	results = runWithFilter(db, QueryFilter{FilterEqual, "metric1", 3.0})
-	Assert(t, results[0]["metric1"], utils.DeepConvertibleEquals, 0)
+	Assert(t, results[0]["metric1"], util.DeepConvertibleEquals, 0)
 
 	results = runWithFilter(db, QueryFilter{FilterEqual, "dim1", "non-existent"})
-	Assert(t, results[0]["metric1"], utils.DeepConvertibleEquals, 0)
+	Assert(t, results[0]["metric1"], util.DeepConvertibleEquals, 0)
 }
 
 func TestQueryFiltersRowsUsingLessThan(t *testing.T) {
@@ -110,14 +110,14 @@ func TestQueryFiltersRowsUsingLessThan(t *testing.T) {
 	defer closeTestDB(db)
 
 	results := runWithFilter(db, QueryFilter{FilterLessThan, "metric1", 2.0})
-	Assert(t, results[0]["metric1"], utils.DeepConvertibleEquals, 1)
+	Assert(t, results[0]["metric1"], util.DeepConvertibleEquals, 1)
 
 	results = runWithFilter(db, QueryFilter{FilterLessThan, "at", 10.0})
-	Assert(t, results[0]["metric1"], utils.DeepConvertibleEquals, 3)
+	Assert(t, results[0]["metric1"], util.DeepConvertibleEquals, 3)
 
 	// Matches zero rows.
 	results = runWithFilter(db, QueryFilter{FilterLessThan, "metric1", 1.0})
-	Assert(t, results[0]["metric1"], utils.DeepConvertibleEquals, 0)
+	Assert(t, results[0]["metric1"], util.DeepConvertibleEquals, 0)
 }
 
 func inList(items ...interface{}) []interface{} {
@@ -139,21 +139,21 @@ func TestQueryFiltersRowsUsingIn(t *testing.T) {
 	db := createTestDBForFilterTests()
 	defer closeTestDB(db)
 
-	Assert(t, runWithFilter(db, QueryFilter{FilterIn, "metric1", inList(2)})[0]["metric1"], utils.DeepConvertibleEquals, 2)
+	Assert(t, runWithFilter(db, QueryFilter{FilterIn, "metric1", inList(2)})[0]["metric1"], util.DeepConvertibleEquals, 2)
 	results := runWithFilter(db, QueryFilter{FilterIn, "metric1", inList(2, 1)})
-	Assert(t, results[0]["metric1"], utils.DeepConvertibleEquals, 3)
+	Assert(t, results[0]["metric1"], util.DeepConvertibleEquals, 3)
 
 	results = runWithFilter(db, QueryFilter{FilterIn, "dim1", inList("string1")})
-	Assert(t, results[0]["metric1"], utils.DeepConvertibleEquals, 1)
+	Assert(t, results[0]["metric1"], util.DeepConvertibleEquals, 1)
 
 	results = runWithFilter(db, QueryFilter{FilterIn, "at", inList(0, 10, 100)})
-	Assert(t, results[0]["metric1"], utils.DeepConvertibleEquals, 3)
+	Assert(t, results[0]["metric1"], util.DeepConvertibleEquals, 3)
 
 	// These match zero rows.
 	results = runWithFilter(db, QueryFilter{FilterIn, "metric1", inList(3)})
-	Assert(t, results[0]["metric1"], utils.DeepConvertibleEquals, 0)
+	Assert(t, results[0]["metric1"], util.DeepConvertibleEquals, 0)
 	results = runWithFilter(db, QueryFilter{FilterIn, "dim1", inList("non-existent")})
-	Assert(t, results[0]["metric1"], utils.DeepConvertibleEquals, 0)
+	Assert(t, results[0]["metric1"], util.DeepConvertibleEquals, 0)
 }
 
 func TestQueryGroupingByAStringColumn(t *testing.T) {
@@ -166,7 +166,7 @@ func TestQueryGroupingByAStringColumn(t *testing.T) {
 	})
 
 	result := runWithGroupBy(db, QueryGrouping{TimeTruncationNone, "dim1", "groupbykey"})
-	Assert(t, result, utils.DeepEqualsUnordered, []RowMap{
+	Assert(t, result, util.DeepEqualsUnordered, []RowMap{
 		{"groupbykey": "string1", "rowCount": 2, "metric1": 3},
 		{"groupbykey": "string2", "rowCount": 1, "metric1": 5},
 	})
@@ -184,7 +184,7 @@ func TestQueryGroupingWithATimeTransformFunction(t *testing.T) {
 	})
 
 	result := runWithGroupBy(db, QueryGrouping{TimeTruncationDay, "at", "groupbykey"})
-	Assert(t, result, utils.DeepEqualsUnordered, []RowMap{
+	Assert(t, result, util.DeepEqualsUnordered, []RowMap{
 		{"groupbykey": 0, "rowCount": 1, "metric1": 0},
 		{"groupbykey": twoDays, "rowCount": 2, "metric1": 22},
 	})
@@ -194,7 +194,7 @@ func TestQueryAggregateWithNilValues(t *testing.T) {
 	db := createTestDBForNilQueryTests()
 	defer closeTestDB(db)
 	results := runQuery(db, createQuery())
-	Assert(t, results[0], utils.DeepConvertibleEquals, RowMap{"metric1": 7, "rowCount": 3})
+	Assert(t, results[0], util.DeepConvertibleEquals, RowMap{"metric1": 7, "rowCount": 3})
 }
 
 func TestQueryFilterWithNilValues(t *testing.T) {
@@ -202,24 +202,24 @@ func TestQueryFilterWithNilValues(t *testing.T) {
 	defer closeTestDB(db)
 
 	results := runWithFilter(db, QueryFilter{FilterEqual, "dim1", "a"})
-	Assert(t, results[0], utils.DeepConvertibleEquals, RowMap{"metric1": 1, "rowCount": 1})
+	Assert(t, results[0], util.DeepConvertibleEquals, RowMap{"metric1": 1, "rowCount": 1})
 
 	results = runWithFilter(db, QueryFilter{FilterEqual, "dim1", nil})
-	Assert(t, results[0], utils.DeepConvertibleEquals, RowMap{"metric1": 4, "rowCount": 1})
+	Assert(t, results[0], util.DeepConvertibleEquals, RowMap{"metric1": 4, "rowCount": 1})
 }
 
 func TestQueryFilterUsingInWithNilValues(t *testing.T) {
 	db := createTestDBForNilQueryTests()
 	defer closeTestDB(db)
 	results := runWithFilter(db, QueryFilter{FilterIn, "dim1", inList("b", nil)})
-	Assert(t, results[0], utils.DeepConvertibleEquals, RowMap{"metric1": 6, "rowCount": 2})
+	Assert(t, results[0], util.DeepConvertibleEquals, RowMap{"metric1": 6, "rowCount": 2})
 }
 
 func TestQueryGroupByWithNilValuesBigDimensionColumn(t *testing.T) {
 	db := createTestDBForNilQueryTests()
 	defer closeTestDB(db)
 	results := runWithGroupBy(db, QueryGrouping{TimeTruncationNone, "dim1", "groupbykey"})
-	Assert(t, results, utils.DeepEqualsUnordered, []RowMap{
+	Assert(t, results, util.DeepEqualsUnordered, []RowMap{
 		{"metric1": 1, "groupbykey": "a", "rowCount": 1},
 		{"metric1": 2, "groupbykey": "b", "rowCount": 1},
 		{"metric1": 4, "groupbykey": nil, "rowCount": 1},
@@ -240,7 +240,7 @@ func TestQueryGroupByWithNilValuesSmallDimensionColumn(t *testing.T) {
 		{"at": 0.0, "dim2": nil, "metric1": 4.0},
 	})
 	results := runWithGroupBy(db, QueryGrouping{TimeTruncationNone, "dim2", "groupbykey"})
-	Assert(t, results, utils.DeepEqualsUnordered, []RowMap{
+	Assert(t, results, util.DeepEqualsUnordered, []RowMap{
 		{"metric1": 1, "groupbykey": 0, "rowCount": 1},
 		{"metric1": 2, "groupbykey": 1, "rowCount": 1},
 		{"metric1": 4, "groupbykey": nil, "rowCount": 1},
@@ -259,5 +259,5 @@ func TestQuerySumsOverflowIndividualColumnTypes(t *testing.T) {
 	})
 
 	results := runQuery(db, createQuery())
-	Assert(t, results[0]["metric1"], utils.DeepConvertibleEquals, 8589934590)
+	Assert(t, results[0]["metric1"], util.DeepConvertibleEquals, 8589934590)
 }

@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"utils"
+	"util"
 
 	. "github.com/cespare/a"
 )
@@ -50,7 +50,7 @@ func TestRowsGetCollapsedUponInsertion(t *testing.T) {
 	}
 
 	insertRows(db, rows)
-	Assert(t, db.GetDebugRows(), utils.DeepEqualsUnordered, []UnpackedRow{
+	Assert(t, db.GetDebugRows(), util.DeepEqualsUnordered, []UnpackedRow{
 		{RowMap: RowMap{"at": 0.0, "dim1": "string1", "metric1": 4}, Count: 2},
 		{RowMap: rows[2], Count: 1},
 		{RowMap: rows[3], Count: 1},
@@ -81,7 +81,7 @@ func TestMemAndStaticIntervalsAreCombined(t *testing.T) {
 	})
 	Assert(t, len(db.StaticTable.Intervals), Equals, 3)
 
-	Assert(t, db.GetDebugRows(), utils.DeepEqualsUnordered, []UnpackedRow{
+	Assert(t, db.GetDebugRows(), util.DeepEqualsUnordered, []UnpackedRow{
 		{RowMap: RowMap{"at": start.hoursBack(0), "dim1": "string1", "metric1": 1}, Count: 1},
 		{RowMap: RowMap{"at": start.hoursBack(1), "dim1": "string1", "metric1": 2}, Count: 2},
 		{RowMap: RowMap{"at": start.hoursBack(2), "dim1": "string1", "metric1": 1}, Count: 1},
@@ -106,7 +106,7 @@ func TestDeleteSegmentsOutOfRetention(t *testing.T) {
 		{"at": start.hoursBack(12), "dim1": "string1", "metric1": 1.0},
 	})
 
-	Assert(t, db.GetDebugRows(), utils.DeepEqualsUnordered, []UnpackedRow{
+	Assert(t, db.GetDebugRows(), util.DeepEqualsUnordered, []UnpackedRow{
 		{RowMap: RowMap{"at": start.hoursBack(12), "dim1": "string1", "metric1": 2}, Count: 2},
 	})
 }
@@ -120,7 +120,7 @@ func TestInsertAndReadNilValues(t *testing.T) {
 		{"at": hour(1), "dim1": nil, "metric1": 1.0},
 	}
 	insertRows(db, rows)
-	Assert(t, db.GetDebugRows(), utils.DeepEqualsUnordered, []UnpackedRow{{rows[0], 1}, {rows[1], 1}})
+	Assert(t, db.GetDebugRows(), util.DeepEqualsUnordered, []UnpackedRow{{rows[0], 1}, {rows[1], 1}})
 }
 
 func TestInsertOverflow(t *testing.T) {
@@ -158,7 +158,7 @@ func TestInsertDropsRowsOutOfRetention(t *testing.T) {
 	}
 
 	insertRows(db, rows)
-	Assert(t, db.GetDebugRows(), utils.DeepEqualsUnordered, []UnpackedRow{{rows[0], 1}})
+	Assert(t, db.GetDebugRows(), util.DeepEqualsUnordered, []UnpackedRow{{rows[0], 1}})
 }
 
 func makeTestPersistentDB() *DB {
@@ -201,14 +201,14 @@ func TestPersistenceEndToEnd(t *testing.T) {
 	// Query the data
 	Assert(t, physicalRows(db), Equals, 100)
 	result := runQuery(db, createQuery())
-	Assert(t, result[0]["metric1"], utils.DeepConvertibleEquals, 10000)
+	Assert(t, result[0]["metric1"], util.DeepConvertibleEquals, 10000)
 
 	// Reopen the DB and try again
 	db = reopenTestDB(db)
 	defer closeTestDB(db)
 	Assert(t, physicalRows(db), Equals, 100)
 	result = runQuery(db, createQuery())
-	Assert(t, result[0]["metric1"], utils.DeepConvertibleEquals, 10000)
+	Assert(t, result[0]["metric1"], util.DeepConvertibleEquals, 10000)
 }
 
 func TestOldIntervalsAreDeleted(t *testing.T) {

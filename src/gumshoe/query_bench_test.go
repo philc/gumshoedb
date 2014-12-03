@@ -6,7 +6,7 @@ package gumshoe
 import (
 	"fmt"
 	"testing"
-	"utils"
+	"util"
 
 	. "github.com/cespare/a"
 )
@@ -43,7 +43,7 @@ func BenchmarkAggregateQuery(b *testing.B) {
 		results = mustGetBenchmarkQueryResult(query)
 	}
 
-	Assert(b, results[0], utils.DeepConvertibleEquals,
+	Assert(b, results[0], util.DeepConvertibleEquals,
 		RowMap{"metric001": BenchmarkRows, "rowCount": BenchmarkRows})
 }
 
@@ -57,7 +57,7 @@ func BenchmarkFilterQuery(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		results = mustGetBenchmarkQueryResult(query)
 	}
-	Assert(b, results[0], utils.DeepConvertibleEquals,
+	Assert(b, results[0], util.DeepConvertibleEquals,
 		RowMap{"metric001": BenchmarkRows / 2, "rowCount": BenchmarkRows / 2})
 }
 
@@ -79,7 +79,7 @@ func BenchmarkGroupByQuery(b *testing.B) {
 			"metric001": BenchmarkRows / groupCount, "dim3": i, "rowCount": BenchmarkRows / groupCount,
 		}
 	}
-	Assert(b, results, utils.DeepConvertibleEquals, expectedResult)
+	Assert(b, results, util.DeepConvertibleEquals, expectedResult)
 }
 
 // A query which groups by a column that is transformed using a time transform function.

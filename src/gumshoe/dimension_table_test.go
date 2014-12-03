@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"utils"
+	"util"
 
 	. "github.com/cespare/a"
 )
@@ -23,11 +23,11 @@ func TestDimensionTablesArePersisted(t *testing.T) {
 		{"dim1": "b", "metric1": 7, "rowCount": 1},
 	}
 	result := runWithGroupBy(db, QueryGrouping{TimeTruncationNone, "dim1", "dim1"})
-	Assert(t, result, utils.DeepEqualsUnordered, expected)
+	Assert(t, result, util.DeepEqualsUnordered, expected)
 
 	db = reopenTestDB(db)
 	result = runWithGroupBy(db, QueryGrouping{TimeTruncationNone, "dim1", "dim1"})
-	Assert(t, result, utils.DeepEqualsUnordered, expected)
+	Assert(t, result, util.DeepEqualsUnordered, expected)
 }
 
 func TestOldDimensionTablesAreDeleted(t *testing.T) {

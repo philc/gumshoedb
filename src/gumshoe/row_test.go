@@ -3,7 +3,7 @@ package gumshoe
 import (
 	"testing"
 
-	"utils"
+	"util"
 
 	. "github.com/cespare/a"
 )
@@ -32,13 +32,13 @@ func TestSerializeRowMap(t *testing.T) {
 	row, err := db.serializeRowMap(RowMap{"at": 0.0})
 	Assert(t, err, IsNil)
 	Assert(t, row.Dimensions.IsNil(0), IsTrue)
-	Assert(t, row.Dimensions[db.Schema.NilBytes:], utils.DeepConvertibleEquals, []byte{0})
-	Assert(t, row.Metrics, utils.DeepConvertibleEquals, []byte{0})
+	Assert(t, row.Dimensions[db.Schema.NilBytes:], util.DeepConvertibleEquals, []byte{0})
+	Assert(t, row.Metrics, util.DeepConvertibleEquals, []byte{0})
 
 	// Other values should be encoded directly
 	row, err = db.serializeRowMap(RowMap{"at": 0.0, "dim1": 1.0, "metric1": 1.0})
 	Assert(t, err, IsNil)
 	Assert(t, row.Dimensions.IsNil(0), IsFalse)
-	Assert(t, row.Dimensions[db.Schema.NilBytes:], utils.DeepConvertibleEquals, []byte{1})
-	Assert(t, row.Metrics, utils.DeepConvertibleEquals, []byte{1})
+	Assert(t, row.Dimensions[db.Schema.NilBytes:], util.DeepConvertibleEquals, []byte{1})
+	Assert(t, row.Metrics, util.DeepConvertibleEquals, []byte{1})
 }

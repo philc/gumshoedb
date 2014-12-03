@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"gumshoe"
-	"utils"
+	"util"
 
 	"github.com/cespare/a"
 )
@@ -107,7 +107,7 @@ func runMigrateTestCase(t *testing.T, testCase *migrateTestCase) {
 		t.Fatal(err)
 	}
 
-	a.Assert(t, testCase.ExpectedRows, utils.DeepConvertibleEquals, newDB.GetDebugRows())
+	a.Assert(t, testCase.ExpectedRows, util.DeepConvertibleEquals, newDB.GetDebugRows())
 }
 
 func schemaFixture(testSchema *migrateTestSchema) *gumshoe.Schema {
