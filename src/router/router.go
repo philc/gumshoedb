@@ -1,5 +1,12 @@
 package main
 
+// How to run:
+//
+// $ glp build router
+// $ ./router -interval-duration 1h -shards 'host1:8080,host2:8080'
+//
+// (or just test with -shards 'localhost:8080,localhost:8080' and verify you get 2x results)
+
 import (
 	"bytes"
 	"encoding/json"
