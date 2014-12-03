@@ -13,8 +13,8 @@
 ## Optimizations
 
 * See if removing all the `:=` (predeclaring everything) in the inner loops helps
-* Implement slice grouping
-  - Use slice grouping for dimension columsn with fewer than N values (say N = 1M)
+* Expand the use of slice grouping
+  - Use slice grouping for all dimension columsn with fewer than N values (say N = 1M)
   - Preallocate all the slots
   - See if axing the (Row,Metric)Bytes conversions helps (probably not)
 * Presize the grouping maps
