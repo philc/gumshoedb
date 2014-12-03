@@ -8,7 +8,7 @@ import (
 	"io"
 )
 
-func (db *DB) ParseJSONQuery(r io.Reader) (*Query, error) {
+func ParseJSONQuery(r io.Reader) (*Query, error) {
 	query := new(Query)
 	decoder := json.NewDecoder(r)
 	if err := decoder.Decode(query); err != nil {

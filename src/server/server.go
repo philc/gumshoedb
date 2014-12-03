@@ -123,7 +123,7 @@ func (s *Server) HandleSingleDimension(w http.ResponseWriter, r *http.Request) {
 // See the README for the query JSON structure and the structure of the reuslts.
 func (s *Server) HandleQuery(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
-	query, err := s.DB.ParseJSONQuery(r.Body)
+	query, err := gumshoe.ParseJSONQuery(r.Body)
 	if err != nil {
 		WriteError(w, err, http.StatusBadRequest)
 		return

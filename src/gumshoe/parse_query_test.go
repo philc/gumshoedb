@@ -14,8 +14,7 @@ func TestParseQuery(t *testing.T) {
 	   "groupings": [{"column": "dim1", "name":"grouping-name"}],
      "filters": [{"type": "!=", "column": "at", "value": 1}]
 		}`
-	db := new(DB)
-	query, err := db.ParseJSONQuery(strings.NewReader(queryString))
+	query, err := ParseJSONQuery(strings.NewReader(queryString))
 	Assert(t, err, IsNil)
 
 	// Spot checks
