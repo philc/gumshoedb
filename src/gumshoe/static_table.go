@@ -25,15 +25,33 @@ type StaticTable struct {
 // normally because encoding/json does not encode map keys -- they must be strings).
 type IntervalMap map[time.Time]*Interval
 
-type intervalByTime struct {
+type byTime []*Interval
+
+func (t byTime) Len() int           { return len(t) }
+func (t byTime) Less(i, j int) bool { return t[i].Start.Before(t[j].Start) }
+func (t byTime) Swap(i, j int)      { t[i], t[j] = t[j], t[i] }
+
+func (m IntervalMap) sorted() []*Interval {
+	var intervals []*Interval
+	for _, interval := range m {
+		intervals = append(intervals, interval)
+	}
+	sort.Sort(byTime(intervals))
+	return intervals
+}
+
+// TODO(caleb): We shouldn't bother with saving a dedicated Time field. We just need the intervals; the map
+// key can be pulled from interval.Start. The only problem with changing it is migrating the database.
+
+type intervalAndTime struct {
 	Time     time.Time
 	Interval *Interval
 }
 
 func (m IntervalMap) MarshalJSON() ([]byte, error) {
-	var intervals []*intervalByTime
-	for t, interval := range m {
-		intervals = append(intervals, &intervalByTime{Time: t, Interval: interval})
+	var intervals []*intervalAndTime
+	for _, interval := range m.sorted() {
+		intervals = append(intervals, &intervalAndTime{interval.Start, interval})
 	}
 	return json.Marshal(intervals)
 }
@@ -43,12 +61,12 @@ func (m *IntervalMap) UnmarshalJSON(b []byte) error {
 		im := make(IntervalMap)
 		*m = im
 	}
-	var intervals []*intervalByTime
+	var intervals []*intervalAndTime
 	if err := json.Unmarshal(b, &intervals); err != nil {
 		return err
 	}
-	for _, intervalAndTime := range intervals {
-		(*m)[intervalAndTime.Time] = intervalAndTime.Interval
+	for _, interval := range intervals {
+		(*m)[interval.Time] = interval.Interval
 	}
 	return nil
 }
@@ -123,26 +141,10 @@ func (s *StaticTable) handleRequests() {
 	}
 }
 
-type byTime []time.Time
-
-func (t byTime) Len() int           { return len(t) }
-func (t byTime) Less(i, j int) bool { return t[i].Before(t[j]) }
-func (t byTime) Swap(i, j int)      { t[i], t[j] = t[j], t[i] }
-
-func (s *StaticTable) sortedIntervalTimes() []time.Time {
-	var times []time.Time
-	for t := range s.Intervals {
-		times = append(times, t)
-	}
-	sort.Sort(byTime(times))
-	return times
-}
-
 func (s *StaticTable) debugPrint() {
 	fmt.Println("STATE DEBUG ----------------------------------")
-	for _, t := range s.sortedIntervalTimes() {
-		interval := s.Intervals[t]
-		fmt.Printf("Interval [t = %s]\n\n", t)
+	for _, interval := range s.Intervals.sorted() {
+		fmt.Printf("Interval [start = %s]\n\n", interval.Start)
 		for i, segment := range interval.Segments {
 			fmt.Printf("  Segment %d\n", i)
 			for j := 0; j < len(segment.Bytes); j += s.RowSize {

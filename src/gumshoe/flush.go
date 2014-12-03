@@ -2,6 +2,7 @@ package gumshoe
 
 import (
 	"encoding/json"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"sort"
@@ -249,17 +250,13 @@ func (db *DB) combineDimensionTables() ([]*DimensionTable, error) {
 // writeMetadataFile serializes db to JSON and atomically writes it to disk by using an intermediate tempfile
 // and moving it into place.
 func (db *DB) writeMetadataFile() error {
-	filename := filepath.Join(db.Dir, MetadataFilename)
-	tmpFilename := filename + ".tmp"
-	f, err := os.Create(tmpFilename)
+	b, err := json.MarshalIndent(db, "", "  ")
 	if err != nil {
 		return err
 	}
-	encoder := json.NewEncoder(f)
-	if err := encoder.Encode(db); err != nil {
-		return err
-	}
-	if err := f.Close(); err != nil {
+	filename := filepath.Join(db.Dir, MetadataFilename)
+	tmpFilename := filename + ".tmp"
+	if err := ioutil.WriteFile(tmpFilename, b, 0666); err != nil {
 		return err
 	}
 	return os.Rename(tmpFilename, filename)

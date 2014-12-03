@@ -83,14 +83,13 @@ func (db *DB) GetDebugRows() []UnpackedRow {
 	defer resp.Done()
 
 	var results []UnpackedRow
-	for _, t := range resp.StaticTable.sortedIntervalTimes() {
-		interval := resp.StaticTable.Intervals[t]
+	for _, interval := range resp.StaticTable.Intervals.sorted() {
 		for _, segment := range interval.Segments {
 			for i := 0; i < len(segment.Bytes); i += db.RowSize {
 				row := RowBytes(segment.Bytes[i : i+db.RowSize])
 				unpacked := db.DeserializeRow(row)
 				// The RowMap doesn't have an attached timestamp column yet.
-				unpacked.RowMap[db.TimestampColumn.Name] = uint32(t.Unix())
+				unpacked.RowMap[db.TimestampColumn.Name] = uint32(interval.Start.Unix())
 				results = append(results, unpacked)
 				if len(results) == max {
 					return results
