@@ -21,6 +21,10 @@
 			"rev": "f97b077d4c710f9563843775684db5dc7826ca51"
 		},
 		{
+			"name": "github.com/cespare/wait",
+			"rev": "3217a2925bae46f12aa7b95e052db469ed286233"
+		},
+		{
 			"name": "github.com/dustin/go-humanize",
 			"rev": "152bd44907e2ce04ecfb87d783ebf98160ada012"
 		},

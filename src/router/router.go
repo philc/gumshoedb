@@ -17,12 +17,12 @@ import (
 	"net/http"
 	"os"
 	"strings"
-	"sync"
 	"time"
 
 	"gumshoe"
 
 	"github.com/cespare/hutil/apachelog"
+	"github.com/cespare/wait"
 	"github.com/gorilla/pat"
 )
 
@@ -66,14 +66,12 @@ func (r *Router) HandleInsert(w http.ResponseWriter, req *http.Request) {
 		shardIdx := intervalIdx % len(r.Shards)
 		shardedRows[shardIdx] = append(shardedRows[shardIdx], row)
 	}
-	var wg sync.WaitGroup
-	wg.Add(len(shardedRows))
-	errc := make(chan error)
-	for i, rows := range shardedRows {
+	var wg wait.Group
+	for i := range shardedRows {
 		i := i
-		go func() {
+		wg.Go(func(_ <-chan struct{}) error {
 			shard := r.Shards[i]
-			b, err := json.Marshal(rows)
+			b, err := json.Marshal(shardedRows[i])
 			if err != nil {
 				panic("unexpected marshal error")
 			}
@@ -84,33 +82,17 @@ func (r *Router) HandleInsert(w http.ResponseWriter, req *http.Request) {
 			shardReq.Header.Set("Content-Type", "application/json")
 			resp, err := r.Client.Do(shardReq)
 			if err != nil {
-				select {
-				case errc <- err:
-				default:
-				}
-				return
+				return err
 			}
 			defer resp.Body.Close()
 			if resp.StatusCode != 200 {
-				select {
-				case errc <- fmt.Errorf("non-200 response from shard %s: %d", shard, resp.StatusCode):
-				default:
-				}
-				return
+				return fmt.Errorf("non-200 response from shard %s: %d", shard, resp.StatusCode)
 			}
-			wg.Done()
-		}()
+			return nil
+		})
 	}
-	done := make(chan struct{})
-	go func() {
-		wg.Wait()
-		close(done)
-	}()
-	select {
-	case <-done:
-	case err := <-errc:
+	if err := wg.Wait(); err != nil {
 		WriteError(w, err, http.StatusInternalServerError) // TODO(caleb): Better status?
-		return
 	}
 }
 
@@ -132,43 +114,25 @@ func (r *Router) HandleQuery(w http.ResponseWriter, req *http.Request) {
 	if err != nil {
 		panic("unexpected marshal error")
 	}
-	var wg sync.WaitGroup
-	wg.Add(len(r.Shards))
-	errc := make(chan error)
+	var wg wait.Group
 	results := make([]Result, len(r.Shards))
-	for i, shard := range r.Shards {
+	for i := range r.Shards {
 		i := i
-		shard := shard
-		go func() {
-			resp, err := r.Client.Post("http://"+shard+"/query", "application/json", bytes.NewReader(b))
+		wg.Go(func(_ <-chan struct{}) error {
+			resp, err := r.Client.Post("http://"+r.Shards[i]+"/query", "application/json", bytes.NewReader(b))
 			if err != nil {
-				select {
-				case errc <- err:
-				default:
-				}
-				return
+				return err
 			}
 			var result Result
 			decoder := json.NewDecoder(resp.Body)
 			if err := decoder.Decode(&result); err != nil {
-				select {
-				case errc <- err:
-				default:
-				}
-				return
+				return err
 			}
-			wg.Done()
 			results[i] = result
-		}()
+			return nil
+		})
 	}
-	done := make(chan struct{})
-	go func() {
-		wg.Wait()
-		close(done)
-	}()
-	select {
-	case <-done:
-	case err := <-errc:
+	if err := wg.Wait(); err != nil {
 		WriteError(w, err, http.StatusInternalServerError) // TODO(caleb): Better status?
 		return
 	}
