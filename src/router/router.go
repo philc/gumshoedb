@@ -16,7 +16,9 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"gumshoe"
@@ -40,11 +42,9 @@ type Router struct {
 	Client           *http.Client
 }
 
-// TODO(caleb): This route is totally untested and probably won't work the first time.
 func (r *Router) HandleInsert(w http.ResponseWriter, req *http.Request) {
-	decoder := json.NewDecoder(req.Body)
 	var rows []gumshoe.RowMap
-	if err := decoder.Decode(&rows); err != nil {
+	if err := json.NewDecoder(req.Body).Decode(&rows); err != nil {
 		WriteError(w, err, http.StatusBadRequest)
 		return
 	}
@@ -57,12 +57,12 @@ func (r *Router) HandleInsert(w http.ResponseWriter, req *http.Request) {
 			WriteError(w, errors.New("row must have a value for the timestamp column"), http.StatusBadRequest)
 			return
 		}
-		timestampMillis, ok := timestamp.(float64)
+		timestampUnix, ok := timestamp.(float64)
 		if !ok {
 			WriteError(w, errors.New("timestamp column must have a numeric value"), http.StatusBadRequest)
 			return
 		}
-		intervalIdx := int(time.Duration(timestampMillis) * time.Millisecond / r.IntervalDuration)
+		intervalIdx := int(time.Duration(timestampUnix) * time.Second / r.IntervalDuration)
 		shardIdx := intervalIdx % len(r.Shards)
 		shardedRows[shardIdx] = append(shardedRows[shardIdx], row)
 	}
@@ -92,7 +92,7 @@ func (r *Router) HandleInsert(w http.ResponseWriter, req *http.Request) {
 		})
 	}
 	if err := wg.Wait(); err != nil {
-		WriteError(w, err, http.StatusInternalServerError) // TODO(caleb): Better status?
+		WriteError(w, err, http.StatusInternalServerError)
 	}
 }
 
@@ -123,9 +123,9 @@ func (r *Router) HandleQuery(w http.ResponseWriter, req *http.Request) {
 			if err != nil {
 				return err
 			}
+			defer resp.Body.Close()
 			var result Result
-			decoder := json.NewDecoder(resp.Body)
-			if err := decoder.Decode(&result); err != nil {
+			if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 				return err
 			}
 			results[i] = result
@@ -133,7 +133,7 @@ func (r *Router) HandleQuery(w http.ResponseWriter, req *http.Request) {
 		})
 	}
 	if err := wg.Wait(); err != nil {
-		WriteError(w, err, http.StatusInternalServerError) // TODO(caleb): Better status?
+		WriteError(w, err, http.StatusInternalServerError)
 		return
 	}
 
@@ -197,12 +197,96 @@ type Result struct {
 	DurationMS int              `json:"duration_ms"`
 }
 
+func (r *Router) HandleSingleDimension(w http.ResponseWriter, req *http.Request) {
+	name := req.URL.Query().Get(":name")
+	if name == "" {
+		http.Error(w, "must provide dimension name", http.StatusBadRequest)
+		return
+	}
+
+	var wg wait.Group
+	dimValues := make(map[string]struct{})
+	var mu sync.Mutex
+	for i := range r.Shards {
+		i := i
+		wg.Go(func(_ <-chan struct{}) error {
+			resp, err := r.Client.Get("http://" + r.Shards[i] + "/dimension_tables/" + name)
+			if err != nil {
+				return err
+			}
+			defer resp.Body.Close()
+			var result []string
+			if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+				return err
+			}
+			mu.Lock()
+			for _, s := range result {
+				dimValues[s] = struct{}{}
+			}
+			mu.Unlock()
+			return nil
+		})
+	}
+	if err := wg.Wait(); err != nil {
+		WriteError(w, err, http.StatusInternalServerError)
+		return
+	}
+
+	var results []string
+	for s := range dimValues {
+		results = append(results, s)
+	}
+	sort.Strings(results)
+	WriteJSONResponse(w, results)
+}
+
+type Statusz struct {
+	LastUpdated    *int64
+	OldestInterval *int64
+}
+
+func (r *Router) HandleStatusz(w http.ResponseWriter, req *http.Request) {
+	var status Statusz
+	var failed []string
+	for _, shard := range r.Shards {
+		resp, err := r.Client.Get("http://" + shard + "/statusz")
+		if err != nil {
+			failed = append(failed, shard)
+			continue
+		}
+		defer resp.Body.Close()
+		var status2 Statusz
+		if err := json.NewDecoder(resp.Body).Decode(&status2); err != nil {
+			failed = append(failed, shard)
+			continue
+		}
+		if status.LastUpdated == nil ||
+			(status2.LastUpdated != nil && *status2.LastUpdated > *status.LastUpdated) {
+			status.LastUpdated = status2.LastUpdated
+		}
+		if status.OldestInterval == nil ||
+			(status2.OldestInterval != nil && *status2.OldestInterval < *status.OldestInterval) {
+			status.OldestInterval = status2.OldestInterval
+		}
+	}
+	if len(failed) > 0 {
+		var buf bytes.Buffer
+		fmt.Fprintln(&buf, "Could not contact shards:")
+		for _, shard := range failed {
+			fmt.Fprintln(&buf, shard)
+		}
+		WriteError(w, errors.New(buf.String()), http.StatusInternalServerError)
+		return
+	}
+	WriteJSONResponse(w, status)
+}
+
 func (r *Router) HandleUnimplemented(w http.ResponseWriter, req *http.Request) {
-	http.Error(w, "unimplemented", http.StatusInternalServerError)
+	http.Error(w, "this route is not implemented in gumshoe router", http.StatusInternalServerError)
 }
 
 func (*Router) HandleRoot(w http.ResponseWriter, req *http.Request) {
-	w.Write([]byte("Gumshoe router is alive!"))
+	w.Write([]byte("gumshoe router is alive"))
 }
 
 func WriteJSONResponse(w http.ResponseWriter, objectToSerialize interface{}) {
@@ -220,23 +304,24 @@ func WriteError(w http.ResponseWriter, err error, status int) {
 }
 
 func NewRouter(shards []string, intervalDuration time.Duration, timestampColName string) *Router {
+	transport := &http.Transport{MaxIdleConnsPerHost: 8}
 	r := &Router{
 		IntervalDuration: intervalDuration,
 		TimestampColName: timestampColName,
 		Shards:           shards,
-		Client:           &http.Client{}, // TODO(caleb): better non-default settings
+		Client:           &http.Client{Transport: transport},
 	}
 
 	mux := pat.New()
 
 	mux.Put("/insert", r.HandleInsert)
-	mux.Get("/dimension_tables/{name}", r.HandleUnimplemented) // TODO(caleb)
-	mux.Get("/dimension_tables", r.HandleUnimplemented)        // TODO(caleb)
+	mux.Get("/dimension_tables/{name}", r.HandleSingleDimension)
+	mux.Get("/dimension_tables", r.HandleUnimplemented)
 	mux.Post("/query", r.HandleQuery)
 
 	mux.Get("/metricz", r.HandleUnimplemented)
 	mux.Get("/debug/rows", r.HandleUnimplemented)
-	mux.Get("/statusz", r.HandleUnimplemented) // TODO(caleb)
+	mux.Get("/statusz", r.HandleStatusz)
 	mux.Get("/", r.HandleRoot)
 
 	r.Handler = apachelog.NewDefaultHandler(mux)
