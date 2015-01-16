@@ -21,6 +21,7 @@ import (
 	"sync"
 	"time"
 
+	"config"
 	"gumshoe"
 
 	"github.com/cespare/hutil/apachelog"
@@ -36,10 +37,9 @@ var (
 
 type Router struct {
 	http.Handler
-	IntervalDuration time.Duration
-	TimestampColName string
-	Shards           []string
-	Client           *http.Client
+	Schema *gumshoe.Schema
+	Shards []string
+	Client *http.Client
 }
 
 func (r *Router) HandleInsert(w http.ResponseWriter, req *http.Request) {
@@ -52,7 +52,7 @@ func (r *Router) HandleInsert(w http.ResponseWriter, req *http.Request) {
 
 	shardedRows := make([][]gumshoe.RowMap, len(r.Shards))
 	for _, row := range rows {
-		timestamp, ok := row[r.TimestampColName]
+		timestamp, ok := row[r.Schema.TimestampColumn.Name]
 		if !ok {
 			WriteError(w, errors.New("row must have a value for the timestamp column"), http.StatusBadRequest)
 			return
@@ -62,7 +62,7 @@ func (r *Router) HandleInsert(w http.ResponseWriter, req *http.Request) {
 			WriteError(w, errors.New("timestamp column must have a numeric value"), http.StatusBadRequest)
 			return
 		}
-		intervalIdx := int(time.Duration(timestampUnix) * time.Second / r.IntervalDuration)
+		intervalIdx := int(time.Duration(timestampUnix) * time.Second / r.Schema.IntervalDuration)
 		shardIdx := intervalIdx % len(r.Shards)
 		shardedRows[shardIdx] = append(shardedRows[shardIdx], row)
 	}
@@ -303,13 +303,12 @@ func WriteError(w http.ResponseWriter, err error, status int) {
 	http.Error(w, err.Error(), status)
 }
 
-func NewRouter(shards []string, intervalDuration time.Duration, timestampColName string) *Router {
+func NewRouter(shards []string, schema *gumshoe.Schema) *Router {
 	transport := &http.Transport{MaxIdleConnsPerHost: 8}
 	r := &Router{
-		IntervalDuration: intervalDuration,
-		TimestampColName: timestampColName,
-		Shards:           shards,
-		Client:           &http.Client{Transport: transport},
+		Schema: schema,
+		Shards: shards,
+		Client: &http.Client{Transport: transport},
 	}
 
 	mux := pat.New()
@@ -329,20 +328,25 @@ func NewRouter(shards []string, intervalDuration time.Duration, timestampColName
 }
 
 func main() {
-	intervalDuration := flag.Duration("interval-duration", 0, "interval size (should match shard configs)")
-	timestampColName := flag.String("timestamp-column-name", "at", "name of the timestamp column")
+	configFile := flag.String("config", "config.toml", "path to a DB config (to get the schema)")
 	shardsFlag := flag.String("shards", "", "comma-separated list of shard addresses (with ports)")
 	listenAddr := flag.String("addr", "localhost:9090", "address on which to listen")
 	flag.Parse()
-	if *intervalDuration == 0 {
-		log.Fatal("-interval-duration must be provided")
-	}
 	shardAddrs := strings.Split(*shardsFlag, ",")
 	if len(shardAddrs) == 0 {
-		log.Fatal("At least one shard required")
+		Log.Fatal("At least one shard required")
+	}
+	f, err := os.Open(*configFile)
+	if err != nil {
+		Log.Fatal(err)
+	}
+	defer f.Close()
+	_, schema, err := config.LoadTOMLConfig(f)
+	if err != nil {
+		Log.Fatal(err)
 	}
 
-	r := NewRouter(shardAddrs, *intervalDuration, *timestampColName)
+	r := NewRouter(shardAddrs, schema)
 	server := &http.Server{
 		Addr:    *listenAddr,
 		Handler: r,
