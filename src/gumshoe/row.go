@@ -143,7 +143,7 @@ func (db *DB) serializeRowMap(rowMap RowMap) (*insertionRow, error) {
 	if !ok {
 		return nil, fmt.Errorf("row must have a value for the timestamp column (%q)", timestampColumnName)
 	}
-	timestampMillis, ok := timestamp.(float64)
+	timestampUnix, ok := timestamp.(float64)
 	if !ok {
 		return nil, fmt.Errorf("timestamp column (%q) must have a numeric value", timestampColumnName)
 	}
@@ -177,7 +177,7 @@ func (db *DB) serializeRowMap(rowMap RowMap) (*insertionRow, error) {
 	}
 
 	row := &insertionRow{
-		Timestamp:  time.Unix(int64(timestampMillis), 0),
+		Timestamp:  time.Unix(int64(timestampUnix), 0),
 		Dimensions: dimensions,
 		Metrics:    metrics,
 	}
