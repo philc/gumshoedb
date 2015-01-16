@@ -62,6 +62,13 @@ func (r *Router) HandleInsert(w http.ResponseWriter, req *http.Request) {
 			WriteError(w, errors.New("timestamp column must have a numeric value"), http.StatusBadRequest)
 			return
 		}
+		// Check that the columns match the schema we have
+		for col := range row {
+			if !r.validColumnName(col) {
+				writeInvalidColumnError(w, col)
+				return
+			}
+		}
 		intervalIdx := int(time.Duration(timestampUnix) * time.Second / r.Schema.IntervalDuration)
 		shardIdx := intervalIdx % len(r.Shards)
 		shardedRows[shardIdx] = append(shardedRows[shardIdx], row)
@@ -109,6 +116,22 @@ func (r *Router) HandleQuery(w http.ResponseWriter, req *http.Request) {
 			WriteError(w, errors.New("average aggregates not handled by the router"), http.StatusInternalServerError)
 			return
 		}
+		if !r.validColumnName(agg.Column) {
+			writeInvalidColumnError(w, agg.Column)
+			return
+		}
+	}
+	for _, grouping := range query.Groupings {
+		if !r.validColumnName(grouping.Column) {
+			writeInvalidColumnError(w, grouping.Column)
+			return
+		}
+	}
+	for _, filter := range query.Filters {
+		if !r.validColumnName(filter.Column) {
+			writeInvalidColumnError(w, filter.Column)
+			return
+		}
 	}
 	b, err := json.Marshal(query)
 	if err != nil {
@@ -148,7 +171,7 @@ func (r *Router) HandleQuery(w http.ResponseWriter, req *http.Request) {
 					cur = make(gumshoe.RowMap)
 					cur[query.Groupings[0].Name] = groupByValue
 				}
-				mergeRows(cur, row, query)
+				r.mergeRows(cur, row, query)
 				resultMap[groupByValue] = cur
 			}
 		}
@@ -158,7 +181,7 @@ func (r *Router) HandleQuery(w http.ResponseWriter, req *http.Request) {
 	} else {
 		finalResult = []gumshoe.RowMap{results[0].Results[0]}
 		for _, result := range results[1:] {
-			mergeRows(finalResult[0], result.Results[0], query)
+			r.mergeRows(finalResult[0], result.Results[0], query)
 		}
 	}
 
@@ -169,18 +192,18 @@ func (r *Router) HandleQuery(w http.ResponseWriter, req *http.Request) {
 }
 
 // mergeRows merges row2 into row1.
-func mergeRows(row1, row2 gumshoe.RowMap, q *gumshoe.Query) {
+func (r *Router) mergeRows(row1, row2 gumshoe.RowMap, q *gumshoe.Query) {
 	for _, agg := range q.Aggregates {
-		row1[agg.Name] = sumColumn(row1, row2, agg.Name)
+		row1[agg.Name] = r.sumColumn(row1, row2, agg.Name)
 	}
-	row1["rowCount"] = sumColumn(row1, row2, "rowCount")
+	row1["rowCount"] = r.sumColumn(row1, row2, "rowCount")
 }
 
-func sumColumn(row1, row2 gumshoe.RowMap, col string) float64 {
-	// TODO(caleb): Sigh. The neverending scourge of JSON having no integer type.
-	// We shouldn't use floats here if the column types are ints. I think the right way to do this is to just
-	// load the DB config into the router. That way we get the interval duration and the 'at' column, plus we
-	// also get the types for all the metrics which we can make use of here to coerce these results into ints.
+// sumColumn figures out the appropriate types and sums the column from row1 and row2 using either int64s or
+// float64s.
+func (r *Router) sumColumn(row1, row2 gumshoe.RowMap, col string) interface{} {
+	// NOTE(caleb): this function is pretty gross because of the JSON interface here. This should get cleaned up
+	// when we do a general JSON purge of gumshoeDB.
 	val1, ok := row1[col]
 	if !ok {
 		val1 = float64(0)
@@ -189,7 +212,29 @@ func sumColumn(row1, row2 gumshoe.RowMap, col string) float64 {
 	if !ok {
 		val2 = float64(0)
 	}
-	return val1.(float64) + val2.(float64)
+
+	var typ gumshoe.Type
+	if col == "rowCount" {
+		typ = gumshoe.TypeInt64
+	} else if i, ok := r.Schema.DimensionNameToIndex[col]; ok {
+		typ = r.Schema.DimensionColumns[i].Type
+	} else if i, ok := r.Schema.MetricNameToIndex[col]; ok {
+		typ = r.Schema.MetricColumns[i].Type
+	} else {
+		panic("bad column in sumColumn: " + col)
+	}
+	switch typ {
+	case gumshoe.TypeUint8, gumshoe.TypeInt8, gumshoe.TypeUint16, gumshoe.TypeInt16, gumshoe.TypeUint32, gumshoe.TypeInt32, gumshoe.TypeUint64, gumshoe.TypeInt64:
+		switch v1 := val1.(type) {
+		case int64:
+			return v1 + int64(val2.(float64))
+		case float64:
+			return int64(v1) + int64(val2.(float64))
+		}
+	case gumshoe.TypeFloat32, gumshoe.TypeFloat64:
+		return val1.(float64) + val2.(float64)
+	}
+	panic("unexpected type")
 }
 
 type Result struct {
@@ -303,6 +348,21 @@ func WriteError(w http.ResponseWriter, err error, status int) {
 	http.Error(w, err.Error(), status)
 }
 
+func (r *Router) validColumnName(name string) bool {
+	if name == r.Schema.TimestampColumn.Name {
+		return true
+	}
+	if _, ok := r.Schema.DimensionNameToIndex[name]; ok {
+		return true
+	}
+	_, ok := r.Schema.MetricNameToIndex[name]
+	return ok
+}
+
+func writeInvalidColumnError(w http.ResponseWriter, name string) {
+	WriteError(w, fmt.Errorf("%q is not a valid column name", name), http.StatusBadRequest)
+}
+
 func NewRouter(shards []string, schema *gumshoe.Schema) *Router {
 	transport := &http.Transport{MaxIdleConnsPerHost: 8}
 	r := &Router{
@@ -345,6 +405,7 @@ func main() {
 	if err != nil {
 		Log.Fatal(err)
 	}
+	schema.Initialize()
 
 	r := NewRouter(shardAddrs, schema)
 	server := &http.Server{

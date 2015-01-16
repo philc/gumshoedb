@@ -16,7 +16,7 @@ func TestSerializeRowMap(t *testing.T) {
 			MetricColumns:    []MetricColumn{makeMetricColumn("metric1", "uint8")},
 		},
 	}
-	db.Schema.initialize()
+	db.Schema.Initialize()
 
 	badRows := []RowMap{
 		{"at": "three", "dim1": "string1", "metric1": 1.2},                  // bad type

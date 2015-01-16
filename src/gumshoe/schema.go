@@ -74,8 +74,8 @@ type RunConfig struct {
 	QueryParallelism int
 }
 
-// initialize fills in the derived fields of s.
-func (s *Schema) initialize() {
+// Initialize fills in the derived fields of s.
+func (s *Schema) Initialize() {
 	s.RunConfig.fillDefaults()
 
 	s.DimensionNameToIndex = make(map[string]int)

@@ -132,7 +132,7 @@ func (db *DB) initialize() error {
 		}
 	}
 
-	db.Schema.initialize()
+	db.Schema.Initialize()
 	db.memTable = NewMemTable(db.Schema)
 	db.shutdown = make(chan struct{})
 	db.inserts = make(chan *InsertRequest)
