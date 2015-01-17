@@ -390,7 +390,7 @@ func NewRouter(shards []string, schema *gumshoe.Schema) *Router {
 func main() {
 	configFile := flag.String("config", "config.toml", "path to a DB config (to get the schema)")
 	shardsFlag := flag.String("shards", "", "comma-separated list of shard addresses (with ports)")
-	listenAddr := flag.String("addr", "localhost:9090", "address on which to listen")
+	port := flag.Int("port", 9090, "port on which to listen")
 	flag.Parse()
 	shardAddrs := strings.Split(*shardsFlag, ",")
 	if len(shardAddrs) == 0 {
@@ -408,10 +408,11 @@ func main() {
 	schema.Initialize()
 
 	r := NewRouter(shardAddrs, schema)
+	addr := fmt.Sprintf(":%d", *port)
 	server := &http.Server{
-		Addr:    *listenAddr,
+		Addr:    addr,
 		Handler: r,
 	}
-	Log.Println("Now serving on", *listenAddr)
+	Log.Println("Now serving on", addr)
 	Log.Fatal(server.ListenAndServe())
 }
