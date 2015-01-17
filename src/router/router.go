@@ -330,8 +330,12 @@ func (r *Router) HandleUnimplemented(w http.ResponseWriter, req *http.Request) {
 	http.Error(w, "this route is not implemented in gumshoe router", http.StatusInternalServerError)
 }
 
-func (*Router) HandleRoot(w http.ResponseWriter, req *http.Request) {
-	w.Write([]byte("gumshoe router is alive"))
+func (r *Router) HandleRoot(w http.ResponseWriter, req *http.Request) {
+	fmt.Fprintln(w, "shards:")
+	for _, shard := range r.Shards {
+		fmt.Fprintln(w, shard)
+	}
+
 }
 
 func WriteJSONResponse(w http.ResponseWriter, objectToSerialize interface{}) {
@@ -393,7 +397,7 @@ func main() {
 	port := flag.Int("port", 9090, "port on which to listen")
 	flag.Parse()
 	shardAddrs := strings.Split(*shardsFlag, ",")
-	if len(shardAddrs) == 0 {
+	if *shardsFlag == "" || len(shardAddrs) == 0 {
 		Log.Fatal("At least one shard required")
 	}
 	f, err := os.Open(*configFile)
