@@ -194,7 +194,7 @@ func (r *Router) HandleQuery(w http.ResponseWriter, req *http.Request) {
 // mergeRows merges row2 into row1.
 func (r *Router) mergeRows(row1, row2 gumshoe.RowMap, q *gumshoe.Query) {
 	for _, agg := range q.Aggregates {
-		row1[agg.Name] = r.sumColumn(row1, row2, agg.Name)
+		row1[agg.Name] = r.sumColumn(row1, row2, agg.Column)
 	}
 	row1["rowCount"] = r.sumColumn(row1, row2, "rowCount")
 }
