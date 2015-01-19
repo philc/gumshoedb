@@ -194,14 +194,24 @@ func (r *Router) HandleQuery(w http.ResponseWriter, req *http.Request) {
 // mergeRows merges row2 into row1.
 func (r *Router) mergeRows(row1, row2 gumshoe.RowMap, q *gumshoe.Query) {
 	for _, agg := range q.Aggregates {
-		row1[agg.Name] = r.sumColumn(row1, row2, agg.Column)
+		row1[agg.Name] = r.sumColumn(row1, row2, agg.Name, r.typeForCol(agg.Column))
 	}
-	row1["rowCount"] = r.sumColumn(row1, row2, "rowCount")
+	row1["rowCount"] = r.sumColumn(row1, row2, "rowCount", gumshoe.TypeInt64)
+}
+
+func (r *Router) typeForCol(col string) gumshoe.Type {
+	if i, ok := r.Schema.DimensionNameToIndex[col]; ok {
+		return r.Schema.DimensionColumns[i].Type
+	}
+	if i, ok := r.Schema.MetricNameToIndex[col]; ok {
+		return r.Schema.MetricColumns[i].Type
+	}
+	panic("bad column in sumColumn: " + col)
 }
 
 // sumColumn figures out the appropriate types and sums the column from row1 and row2 using either int64s or
 // float64s.
-func (r *Router) sumColumn(row1, row2 gumshoe.RowMap, col string) interface{} {
+func (r *Router) sumColumn(row1, row2 gumshoe.RowMap, col string, typ gumshoe.Type) interface{} {
 	// NOTE(caleb): this function is pretty gross because of the JSON interface here. This should get cleaned up
 	// when we do a general JSON purge of gumshoeDB.
 	val1, ok := row1[col]
@@ -213,16 +223,6 @@ func (r *Router) sumColumn(row1, row2 gumshoe.RowMap, col string) interface{} {
 		val2 = float64(0)
 	}
 
-	var typ gumshoe.Type
-	if col == "rowCount" {
-		typ = gumshoe.TypeInt64
-	} else if i, ok := r.Schema.DimensionNameToIndex[col]; ok {
-		typ = r.Schema.DimensionColumns[i].Type
-	} else if i, ok := r.Schema.MetricNameToIndex[col]; ok {
-		typ = r.Schema.MetricColumns[i].Type
-	} else {
-		panic("bad column in sumColumn: " + col)
-	}
 	switch typ {
 	case gumshoe.TypeUint8, gumshoe.TypeInt8, gumshoe.TypeUint16, gumshoe.TypeInt16, gumshoe.TypeUint32, gumshoe.TypeInt32, gumshoe.TypeUint64, gumshoe.TypeInt64:
 		switch v1 := val1.(type) {
