@@ -242,7 +242,7 @@ func (s *Server) RunPeriodicFlushes() {
 
 func (s *Server) RunPeriodicStatsChecks() {
 	// NOTE(caleb): For now, hardcode the interval. We can adjust it or make it a configuration option later.
-	for _ = range time.Tick(time.Minute) {
+	for range time.Tick(time.Minute) {
 		stats := s.DB.GetDebugStats()
 		statsd.Gauge("gumshoedb.static-table.intervals", float64(stats.Intervals))
 		statsd.Gauge("gumshoedb.static-table.segments", float64(stats.Segments))
