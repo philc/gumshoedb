@@ -13,6 +13,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
@@ -93,7 +94,7 @@ func (r *Router) HandleInsert(w http.ResponseWriter, req *http.Request) {
 			}
 			defer resp.Body.Close()
 			if resp.StatusCode != 200 {
-				return fmt.Errorf("non-200 response from shard %s: %d", shard, resp.StatusCode)
+				return NewHTTPError(resp, shard)
 			}
 			return nil
 		})
@@ -142,11 +143,15 @@ func (r *Router) HandleQuery(w http.ResponseWriter, req *http.Request) {
 	for i := range r.Shards {
 		i := i
 		wg.Go(func(_ <-chan struct{}) error {
-			resp, err := r.Client.Post("http://"+r.Shards[i]+"/query", "application/json", bytes.NewReader(b))
+			shard := r.Shards[i]
+			resp, err := r.Client.Post("http://"+shard+"/query", "application/json", bytes.NewReader(b))
 			if err != nil {
 				return err
 			}
 			defer resp.Body.Close()
+			if resp.StatusCode != 200 {
+				return NewHTTPError(resp, shard)
+			}
 			var result Result
 			if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 				return err
@@ -255,11 +260,15 @@ func (r *Router) HandleSingleDimension(w http.ResponseWriter, req *http.Request)
 	for i := range r.Shards {
 		i := i
 		wg.Go(func(_ <-chan struct{}) error {
-			resp, err := r.Client.Get("http://" + r.Shards[i] + "/dimension_tables/" + name)
+			shard := r.Shards[i]
+			resp, err := r.Client.Get("http://" + shard + "/dimension_tables/" + name)
 			if err != nil {
 				return err
 			}
 			defer resp.Body.Close()
+			if resp.StatusCode != 200 {
+				return NewHTTPError(resp, shard)
+			}
 			var result []string
 			if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 				return err
@@ -347,7 +356,32 @@ func WriteJSONResponse(w http.ResponseWriter, objectToSerialize interface{}) {
 	}
 }
 
+type httpError struct {
+	msg  string
+	code int
+}
+
+func (e httpError) Error() string {
+	return e.msg
+}
+
+func NewHTTPError(resp *http.Response, shard string) error {
+	body, _ := ioutil.ReadAll(resp.Body) // ignore any error; this is best-effort at this point
+	msg := fmt.Sprintf("non-200 response from shard %s: %d", shard, resp.StatusCode)
+	if len(body) > 0 {
+		if body[len(body)-1] == '\n' {
+			body = body[:len(body)-1]
+		}
+		msg += "\n" + string(body)
+	}
+	return httpError{msg, resp.StatusCode}
+}
+
 func WriteError(w http.ResponseWriter, err error, status int) {
+	// a code from an httpError overrides status
+	if he, ok := err.(httpError); ok {
+		status = he.code
+	}
 	Log.Print(err)
 	http.Error(w, err.Error(), status)
 }
