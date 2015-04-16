@@ -9,9 +9,8 @@ design choices are coming soon.
 
 To run:
 
-* Install [glp](https://github.com/cespare/glp)
-* `glp sync`
-* `glp build -o bin/server server`
+* Clone this repo to the appropriate location in your `$GOPATH`
+* `go build github.com/philc/gumshoedb/server`
 * `./server`
 
 This starts a GumshoeDB daemon at [localhost:9000](http://localhost:9000).
