@@ -101,12 +101,12 @@ position 1, so dimension column 1 (d1) is the only nil column.
 Schema Changes
 ==============
 
-The migrator tool can be used to modify the schema of gumshoedb without losing data. Sample usage:
+Use gumtool migrate to modify the schema of gumshoedb without losing data. Sample usage:
 
-    make migrator
-    ./bin/migrator -old-table db/table -new-table db/new-table -config new_config.toml
+    go build github.com/philc/gumshoedb/gumtool
+    ./gumtool migrate -old-db-path=db -new-db-config=new_config.toml
 
-Migrator will add columns, delete columns, or increase column sizes. The behavior for decreasing column sizes
+migrate will add columns, delete columns, or increase column sizes. The behavior for decreasing column sizes
 (int32 -> int16) is currently undefined.
 
 Notes
