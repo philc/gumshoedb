@@ -69,13 +69,6 @@ func (db *DB) flush() error {
 		return err
 	}
 
-	// Figure out the row count
-	for _, interval := range intervals {
-		for _, segment := range interval.Segments {
-			newStaticTable.Count += len(segment.Bytes) / db.RowSize
-		}
-	}
-
 	// Create the FlushInfo and send it over to the request handling goroutine which will make the swap and then
 	// return a chan to wait on all requests currently running on the old StaticTable.
 	allRequestsFinishedChan := make(chan chan struct{})

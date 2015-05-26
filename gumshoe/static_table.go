@@ -16,7 +16,6 @@ type StaticTable struct {
 	*Schema         `json:"-"`
 	Intervals       IntervalMap
 	DimensionTables []*DimensionTable // Same length as the number of dimensions; non-string columns are nil
-	Count           int               // Number of logical rows
 	requests        chan *Request     // The request workers pull from this channel
 	wg              *sync.WaitGroup   // For outstanding requests, to know when we can GC this StaticTable
 }
