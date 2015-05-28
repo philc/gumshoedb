@@ -101,13 +101,32 @@ position 1, so dimension column 1 (d1) is the only nil column.
 Schema Changes
 ==============
 
-Use gumtool migrate to modify the schema of gumshoedb without losing data. Sample usage:
+Use `gumtool migrate` to modify the schema of gumshoedb without losing data. Sample usage:
 
     go build github.com/philc/gumshoedb/gumtool
     ./gumtool migrate -old-db-path=db -new-db-config=new_config.toml
 
-migrate will add columns, delete columns, or increase column sizes. The behavior for decreasing column sizes
-(int32 -> int16) is currently undefined.
+`gumtool migrate` will add columns, delete columns, or increase column sizes. The behavior for decreasing
+column sizes (int32 -> int16) is currently undefined.
+
+Distribution
+============
+
+There is a simple distribution mechanism implemented: the router. Build with
+
+    go build github.com/philc/gumshoedb/router
+
+and run `./router -h` for usage info. It needs a copy of the schema and a list of all the shards to which to
+route inserts and queries.
+
+There is a tool, `gumtool balance`, which runs over SSH and reads databases on many shards and then partitions
+them into a new set of small databases which it SCPs to the destination shards. This is useful for rebalancing
+unevenly distributed shards, or consolidating data down to fewer shards. Build gumtool as above and then run
+`gumtool balance -h` for usage information.
+
+Note that this requires gumtool to be present on every shard (see the `-bindir` arg of `gumtool balance`)
+because it uses another gumtool subcommand, `gumtool merge`, to do the final merge of multiple partial DBs
+into complete shard DBs.
 
 Notes
 =====
