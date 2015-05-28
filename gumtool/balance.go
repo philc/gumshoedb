@@ -17,9 +17,9 @@ import (
 	"github.com/philc/gumshoedb/gumshoe"
 	"github.com/philc/gumshoedb/internal/config"
 
-	"github.com/pkg/sftp"
-	"golang.org/x/crypto/ssh"
-	"golang.org/x/crypto/ssh/agent"
+	"github.com/philc/gumshoedb/internal/github.com/pkg/sftp"
+	"github.com/philc/gumshoedb/internal/golang.org/x/crypto/ssh"
+	"github.com/philc/gumshoedb/internal/golang.org/x/crypto/ssh/agent"
 )
 
 func init() {

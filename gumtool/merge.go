@@ -5,10 +5,10 @@ import (
 	"log"
 	"os"
 
-	"github.com/cespare/wait"
-
 	"github.com/philc/gumshoedb/gumshoe"
 	"github.com/philc/gumshoedb/internal/config"
+
+	"github.com/philc/gumshoedb/internal/github.com/cespare/wait"
 )
 
 func init() {
