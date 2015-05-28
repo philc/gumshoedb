@@ -15,12 +15,6 @@ type Progress struct {
 
 func NewProgress(tag string, total int) *Progress { return &Progress{Tag: tag, Total: total} }
 
-func (p *Progress) Clear() {
-	p.Lock()
-	defer p.Unlock()
-	fmt.Print("\r                                                          \r")
-}
-
 func (p *Progress) Print() {
 	p.Lock()
 	defer p.Unlock()
@@ -28,12 +22,21 @@ func (p *Progress) Print() {
 }
 
 func (p *Progress) print() {
-	fmt.Printf("\r%s: %6d/%d (%.1f%%)", p.Tag, p.N, p.Total, float64(p.N)/float64(p.Total)*100)
+	fmt.Printf("%s: %6d/%d (%.1f%%)\n", p.Tag, p.N, p.Total, percent(p.N, p.Total))
 }
 
 func (p *Progress) Add(delta int) {
 	p.Lock()
 	defer p.Unlock()
+	p1 := percent(p.N, p.Total)
 	p.N += delta
-	p.print()
+	p2 := percent(p.N, p.Total)
+	// only print every 5%
+	if int(p1)/20 > int(p2)/20 {
+		p.print()
+	}
+}
+
+func percent(n, d int) float64 {
+	return float64(n) / float64(d) * 100
 }

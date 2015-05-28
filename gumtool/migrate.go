@@ -30,7 +30,7 @@ func migrate(args []string) {
 	newConfigFilename := flags.String("new-db-config", "", "Filename of new DB config file")
 	parallelism := flags.Int("parallelism", 4, "Parallelism for reading old DB")
 	numOpenFiles := flags.Int("rlimit-nofile", 10000, "The value to set RLIMIT_NOFILE")
-	flushSegments := flags.Int("flush-segments", 10, "Flush after every N (old) segments")
+	flushSegments := flags.Int("flush-segments", 500, "Flush after every N (old) segments")
 	flags.Parse(args)
 
 	// Attempt to raise the open file limit; necessary for big migrations
@@ -46,6 +46,7 @@ func migrate(args []string) {
 	if err != nil {
 		log.Fatal(err)
 	}
+	defer f.Close()
 	_, schema, err := config.LoadTOMLConfig(f)
 	if err != nil {
 		log.Fatal(err)
@@ -134,7 +135,6 @@ outer:
 
 	close(shutdown)
 	wg.Wait()
-	progress.Clear()
 	if workerErr != nil {
 		return workerErr
 	}

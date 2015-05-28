@@ -107,7 +107,6 @@ func getColumnExtrema(db *gumshoe.DB, parallelism int) (mins, maxes []gumshoe.Un
 	}
 	close(segments)
 	wg.Wait()
-	progress.Clear()
 
 	return combinePartialStats(partialResults)
 }
