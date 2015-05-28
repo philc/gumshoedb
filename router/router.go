@@ -13,6 +13,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"hash/crc32"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -53,16 +54,6 @@ func (r *Router) HandleInsert(w http.ResponseWriter, req *http.Request) {
 
 	shardedRows := make([][]gumshoe.RowMap, len(r.Shards))
 	for _, row := range rows {
-		timestamp, ok := row[r.Schema.TimestampColumn.Name]
-		if !ok {
-			WriteError(w, errors.New("row must have a value for the timestamp column"), http.StatusBadRequest)
-			return
-		}
-		timestampUnix, ok := timestamp.(float64)
-		if !ok {
-			WriteError(w, errors.New("timestamp column must have a numeric value"), http.StatusBadRequest)
-			return
-		}
 		// Check that the columns match the schema we have
 		for col := range row {
 			if !r.validColumnName(col) {
@@ -70,8 +61,7 @@ func (r *Router) HandleInsert(w http.ResponseWriter, req *http.Request) {
 				return
 			}
 		}
-		intervalIdx := int(time.Duration(timestampUnix) * time.Second / r.Schema.IntervalDuration)
-		shardIdx := intervalIdx % len(r.Shards)
+		shardIdx := r.Hash(row)
 		shardedRows[shardIdx] = append(shardedRows[shardIdx], row)
 	}
 	var wg wait.Group
@@ -102,6 +92,21 @@ func (r *Router) HandleInsert(w http.ResponseWriter, req *http.Request) {
 	if err := wg.Wait(); err != nil {
 		WriteError(w, err, http.StatusInternalServerError)
 	}
+}
+
+// Hash hashes the dimensions of the row to assign to a particular shard.
+func (r *Router) Hash(row gumshoe.RowMap) int {
+	crc := crc32.NewIEEE()
+	encoder := json.NewEncoder(crc)
+	if err := encoder.Encode(row[r.Schema.TimestampColumn.Name]); err != nil {
+		panic(err)
+	}
+	for _, col := range r.Schema.DimensionColumns {
+		if err := encoder.Encode(row[col.Name]); err != nil {
+			panic(err)
+		}
+	}
+	return int(crc.Sum32()) % len(r.Shards)
 }
 
 func (r *Router) HandleQuery(w http.ResponseWriter, req *http.Request) {
