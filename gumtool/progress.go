@@ -32,7 +32,7 @@ func (p *Progress) Add(delta int) {
 	p.N += delta
 	p2 := percent(p.N, p.Total)
 	// only print every 5%
-	if int(p1)/20 > int(p2)/20 {
+	if int(p1)/5 < int(p2)/5 {
 		p.print()
 	}
 }
