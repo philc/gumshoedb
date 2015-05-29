@@ -172,6 +172,28 @@ func TestQueryGroupingByAStringColumn(t *testing.T) {
 	})
 }
 
+func TestQueryGroupingByAHighCardinalityStringColumn(t *testing.T) {
+	limit := sliceGroupingSizeLimit
+	defer func() {
+		sliceGroupingSizeLimit = limit
+	}()
+	sliceGroupingSizeLimit = 0
+
+	db := makeTestDB()
+	defer closeTestDB(db)
+	insertRows(db, []RowMap{
+		{"at": 0.0, "dim1": "string1", "metric1": 1.0},
+		{"at": 0.0, "dim1": "string1", "metric1": 2.0},
+		{"at": 0.0, "dim1": "string2", "metric1": 5.0},
+	})
+
+	result := runWithGroupBy(db, QueryGrouping{TimeTruncationNone, "dim1", "groupbykey"})
+	Assert(t, result, util.DeepEqualsUnordered, []RowMap{
+		{"groupbykey": "string1", "rowCount": 2, "metric1": 3},
+		{"groupbykey": "string2", "rowCount": 1, "metric1": 5},
+	})
+}
+
 func TestQueryGroupingWithATimeTransformFunction(t *testing.T) {
 	db := makeTestDB()
 	defer closeTestDB(db)

@@ -208,24 +208,16 @@ func (s *StaticTable) scan(params *scanParams) ([]*rowAggregate, *scanStats) {
 	var scanFunc func(*scanState)
 	var combineFunc func(partials []interface{}, params *scanParams) []*rowAggregate
 
-	if params.Grouping == nil {
+	switch {
+	case params.Grouping == nil:
 		scanFunc = s.scanSimple
 		combineFunc = combineSimple
-	} else {
-		var groupingColumn Column
-		if params.Grouping.OnTimestampColumn {
-			groupingColumn = s.TimestampColumn
-		} else {
-			groupingColumn = s.DimensionColumns[params.Grouping.ColumnIndex].Column
-		}
-		width := groupingColumn.Width
-		if width <= 2 && params.Grouping.TransformFunc == nil {
-			scanFunc = s.scanSliceGrouping
-			combineFunc = combineSliceGrouping
-		} else {
-			scanFunc = s.scanMapGrouping
-			combineFunc = combineMapGrouping
-		}
+	case s.useSliceGrouping(params):
+		scanFunc = s.scanSliceGrouping
+		combineFunc = combineSliceGrouping
+	default:
+		scanFunc = s.scanMapGrouping
+		combineFunc = combineMapGrouping
 	}
 
 	for i := 0; i < s.QueryParallelism; i++ {
@@ -257,6 +249,33 @@ func (s *StaticTable) scan(params *scanParams) ([]*rowAggregate, *scanStats) {
 	<-done
 
 	return combineFunc(partials, params), state.stats
+}
+
+// sliceGroupingSizeLimit is the cardinality of string dimension
+// beyond which we use a map, rather than a slice, for grouping.
+// It's a var rather than a const so tests can adjust it.
+// This value was chosen as:
+//   500k * 8 bytes / pointer = 4MB max slice allocation per partial.
+var sliceGroupingSizeLimit int = 500e3
+
+func (s *StaticTable) useSliceGrouping(params *scanParams) bool {
+	// TODO(caleb): We should be able to use slice groupings here.
+	// It requires a two-phase grouping:
+	// - Scan using a slice to group on the un-transformed dimension value
+	// - Collapse into the final result by grouping on the transformed values
+	if params.Grouping.TransformFunc != nil {
+		return false
+	}
+	// TODO(caleb): We should definitely be able to use a slice for timestamp grouping.
+	if params.Grouping.OnTimestampColumn {
+		return false
+	}
+	groupingColumn := s.DimensionColumns[params.Grouping.ColumnIndex]
+	if groupingColumn.Width <= 2 {
+		return true
+	}
+	return groupingColumn.String &&
+		s.DimensionTables[params.Grouping.ColumnIndex].Size <= sliceGroupingSizeLimit
 }
 
 func (s *StaticTable) scanSimple(state *scanState) {
@@ -309,16 +328,21 @@ type sliceGroupPartials struct {
 func (s *StaticTable) scanSliceGrouping(state *scanState) {
 	defer state.wg.Done()
 
-	groupingColumn := s.DimensionColumns[state.params.Grouping.ColumnIndex].Column
+	groupingColumn := s.DimensionColumns[state.params.Grouping.ColumnIndex]
 	width := groupingColumn.Width
-	sliceGroupSize := 1 << uint(8*width)
+	var sliceGroupSize int
+	if groupingColumn.String {
+		sliceGroupSize = s.DimensionTables[state.params.Grouping.ColumnIndex].Size
+	} else if width <= 2 {
+		sliceGroupSize = 1 << uint(8*width)
+	}
 
 	// Sanity checks
+	if sliceGroupSize == 0 {
+		panic("trying to use slice grouping for wide (>2 byte), non-string column")
+	}
 	if state.params.Grouping.OnTimestampColumn {
 		panic("using slices for timestamp column group is unhandled")
-	}
-	if width > 2 {
-		panic("using slices for large width column grouping")
 	}
 	if state.params.Grouping.TransformFunc != nil {
 		panic("using slices for grouping with transform func")
