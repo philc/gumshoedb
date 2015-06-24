@@ -142,18 +142,7 @@ func (r *Router) HandleQuery(w http.ResponseWriter, req *http.Request) {
 	}
 	convertGroupingColToIntegral := false
 	if len(query.Groupings) > 0 {
-		i, ok := r.Schema.DimensionNameToIndex[query.Groupings[0].Column]
-		if !ok {
-			panic("grouping column doesn't exist")
-		}
-		col := r.Schema.DimensionColumns[i]
-		if !col.String {
-			switch col.Type {
-			case gumshoe.TypeUint8, gumshoe.TypeInt8, gumshoe.TypeUint16, gumshoe.TypeInt16,
-				gumshoe.TypeUint32, gumshoe.TypeInt32, gumshoe.TypeUint64, gumshoe.TypeInt64:
-				convertGroupingColToIntegral = true
-			}
-		}
+		convertGroupingColToIntegral = r.convertColumnToIntegral(query.Groupings[0].Column)
 	}
 	b, err := json.Marshal(query)
 	if err != nil {
@@ -224,6 +213,29 @@ func (r *Router) HandleQuery(w http.ResponseWriter, req *http.Request) {
 		Results:    finalResult,
 		DurationMS: int(time.Since(start).Seconds() * 1000),
 	})
+}
+
+func (r *Router) convertColumnToIntegral(name string) bool {
+	var col gumshoe.Column
+	i, ok := r.Schema.DimensionNameToIndex[name]
+	switch {
+	case ok:
+		dimCol := r.Schema.DimensionColumns[i]
+		if dimCol.String {
+			return false
+		}
+		col = dimCol.Column
+	case name == r.Schema.TimestampColumn.Name:
+		col = r.Schema.TimestampColumn
+	default:
+		panic("grouping column doesn't exist")
+	}
+	switch col.Type {
+	case gumshoe.TypeUint8, gumshoe.TypeInt8, gumshoe.TypeUint16, gumshoe.TypeInt16,
+		gumshoe.TypeUint32, gumshoe.TypeInt32, gumshoe.TypeUint64, gumshoe.TypeInt64:
+		return true
+	}
+	return false
 }
 
 // mergeRows merges row2 into row1.
