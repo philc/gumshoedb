@@ -140,6 +140,21 @@ func (r *Router) HandleQuery(w http.ResponseWriter, req *http.Request) {
 			return
 		}
 	}
+	convertGroupingColToIntegral := false
+	if len(query.Groupings) > 0 {
+		i, ok := r.Schema.DimensionNameToIndex[query.Groupings[0].Column]
+		if !ok {
+			panic("grouping column doesn't exist")
+		}
+		col := r.Schema.DimensionColumns[i]
+		if !col.String {
+			switch col.Type {
+			case gumshoe.TypeUint8, gumshoe.TypeInt8, gumshoe.TypeUint16, gumshoe.TypeInt16,
+				gumshoe.TypeUint32, gumshoe.TypeInt32, gumshoe.TypeUint64, gumshoe.TypeInt64:
+				convertGroupingColToIntegral = true
+			}
+		}
+	}
 	b, err := json.Marshal(query)
 	if err != nil {
 		panic("unexpected marshal error")
@@ -161,6 +176,15 @@ func (r *Router) HandleQuery(w http.ResponseWriter, req *http.Request) {
 			var result Result
 			if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 				return err
+			}
+			if convertGroupingColToIntegral {
+				col := query.Groupings[0].Name
+				for _, row := range result.Results {
+					val := row[col]
+					if val != nil {
+						row[col] = int64(val.(float64))
+					}
+				}
 			}
 			results[i] = result
 			return nil
@@ -235,7 +259,8 @@ func (r *Router) sumColumn(row1, row2 gumshoe.RowMap, col string, typ gumshoe.Ty
 	}
 
 	switch typ {
-	case gumshoe.TypeUint8, gumshoe.TypeInt8, gumshoe.TypeUint16, gumshoe.TypeInt16, gumshoe.TypeUint32, gumshoe.TypeInt32, gumshoe.TypeUint64, gumshoe.TypeInt64:
+	case gumshoe.TypeUint8, gumshoe.TypeInt8, gumshoe.TypeUint16, gumshoe.TypeInt16,
+		gumshoe.TypeUint32, gumshoe.TypeInt32, gumshoe.TypeUint64, gumshoe.TypeInt64:
 		switch v1 := val1.(type) {
 		case int64:
 			return v1 + int64(val2.(float64))
