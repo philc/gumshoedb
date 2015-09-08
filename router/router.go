@@ -18,7 +18,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -469,9 +468,6 @@ func NewRouter(shards []string, schema *gumshoe.Schema) *Router {
 }
 
 func main() {
-	if os.Getenv("GOMAXPROCS") == "" {
-		runtime.GOMAXPROCS(runtime.NumCPU())
-	}
 	configFile := flag.String("config", "config.toml", "path to a DB config (to get the schema)")
 	shardsFlag := flag.String("shards", "", "comma-separated list of shard addresses (with ports)")
 	port := flag.Int("port", 9090, "port on which to listen")

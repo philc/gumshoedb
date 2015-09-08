@@ -11,7 +11,6 @@ import (
 	_ "net/http/pprof"
 	"os"
 	"os/signal"
-	"runtime"
 	"syscall"
 	"time"
 
@@ -272,11 +271,6 @@ func main() {
 	conf, schema, err := config.LoadTOMLConfig(f)
 	if err != nil {
 		Log.Fatal(err)
-	}
-
-	// Use all available cores for servicing requests in parallel.
-	if os.Getenv("GOMAXPROCS") == "" {
-		runtime.GOMAXPROCS(runtime.NumCPU())
 	}
 
 	// Try to set the RLIMIT_NOFILE to the config value. This might fail if the binary lacks sufficient
