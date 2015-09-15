@@ -165,7 +165,7 @@ func (iv *writeOnlyInterval) openFreshSegment(s *Schema) error {
 	}
 
 	filename := iv.SegmentFilename(s, iv.NumSegments)
-	f, err := os.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0666)
+	f, err := os.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0666)
 	if err != nil {
 		return err
 	}
