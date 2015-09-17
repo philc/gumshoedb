@@ -9,6 +9,8 @@ package main
 
 import (
 	"bytes"
+	"crypto/rand"
+	"encoding/base32"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -114,12 +116,13 @@ func (r *Router) Hash(row gumshoe.RowMap) int {
 
 func (r *Router) HandleQuery(w http.ResponseWriter, req *http.Request) {
 	start := time.Now()
+	queryID := randomID() // used to make tracking a single query throught he logs easier
 	query, err := gumshoe.ParseJSONQuery(req.Body)
 	if err != nil {
 		WriteError(w, err, http.StatusBadRequest)
 		return
 	}
-	Log.Println("Got query:", query)
+	Log.Printf("[%s] got query: %s", queryID, query)
 	for _, agg := range query.Aggregates {
 		if agg.Type == gumshoe.AggregateAvg {
 			// TODO(caleb): Handle as described in the doc.
@@ -189,8 +192,8 @@ func (r *Router) HandleQuery(w http.ResponseWriter, req *http.Request) {
 		WriteError(w, err, http.StatusInternalServerError)
 		return
 	}
-	Log.Printf("Loaded partial query results from %d shards in %s (total size: %s)",
-		len(r.Shards), time.Since(start), humanize.Bytes(totalSize))
+	Log.Printf("[%s] loaded partial query results from %d shards in %s (total size: %s)",
+		queryID, len(r.Shards), time.Since(start), humanize.Bytes(totalSize))
 	combineStart := time.Now()
 
 	var finalResult []gumshoe.RowMap
@@ -218,8 +221,8 @@ func (r *Router) HandleQuery(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 
-	Log.Printf("Combined query results in %s (%s elapsed since query start)",
-		time.Since(combineStart), time.Since(start))
+	Log.Printf("[%s] combined query results in %s (%s elapsed since query start)",
+		queryID, time.Since(combineStart), time.Since(start))
 	WriteJSONResponse(w, Result{
 		Results:    finalResult,
 		DurationMS: int(time.Since(start).Seconds() * 1000),
@@ -518,4 +521,12 @@ func (r *countReader) Read(b []byte) (int, error) {
 	n, err := r.r.Read(b)
 	r.N += n
 	return n, err
+}
+
+func randomID() string {
+	b := make([]byte, 5)
+	if _, err := rand.Read(b); err != nil {
+		panic("can't read from crypto/rand")
+	}
+	return strings.ToLower(base32.StdEncoding.EncodeToString(b))
 }
