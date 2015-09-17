@@ -331,16 +331,16 @@ func (s *StaticTable) scanSliceGrouping(state *scanState) {
 	groupingColumn := s.DimensionColumns[state.params.Grouping.ColumnIndex]
 	width := groupingColumn.Width
 	var sliceGroupSize int
-	if groupingColumn.String {
+	switch {
+	case groupingColumn.String:
 		sliceGroupSize = s.DimensionTables[state.params.Grouping.ColumnIndex].Size
-	} else if width <= 2 {
+	case width <= 2:
 		sliceGroupSize = 1 << uint(8*width)
-	}
-
-	// Sanity checks
-	if sliceGroupSize == 0 {
+	default:
 		panic("trying to use slice grouping for wide (>2 byte), non-string column")
 	}
+
+	// Sanity checks.
 	if state.params.Grouping.OnTimestampColumn {
 		panic("using slices for timestamp column group is unhandled")
 	}
