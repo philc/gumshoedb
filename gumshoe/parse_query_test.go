@@ -22,3 +22,18 @@ func TestParseQuery(t *testing.T) {
 	Assert(t, query.Groupings[0].Name, Equals, "grouping-name")
 	Assert(t, query.Filters[0].Type, Equals, FilterNotEqual)
 }
+
+func TestParseQueryDefaultNames(t *testing.T) {
+	const queryString = `
+		{
+	   "aggregates": [{"type": "sum", "column": "metric1"}],
+	   "groupings": [{"column": "dim1"}, "dim2"]
+		}`
+	query, err := ParseJSONQuery(strings.NewReader(queryString))
+	Assert(t, err, IsNil)
+
+	Assert(t, query.Aggregates[0].Name, Equals, "metric1")
+	Assert(t, query.Groupings[0].Name, Equals, "dim1")
+	Assert(t, query.Groupings[1].Column, Equals, "dim2")
+	Assert(t, query.Groupings[1].Name, Equals, "dim2")
+}

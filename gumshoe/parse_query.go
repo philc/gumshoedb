@@ -43,6 +43,50 @@ type QueryFilter struct {
 	Value  Untyped
 }
 
+func (a *QueryAggregate) UnmarshalJSON(b []byte) error {
+	var agg struct {
+		Type   AggregateType
+		Column string
+		Name   string
+	}
+	if err := json.Unmarshal(b, &agg); err != nil {
+		return err
+	}
+	*a = QueryAggregate(agg)
+	if a.Name == "" {
+		a.Name = a.Column
+	}
+	return nil
+}
+
+func (g *QueryGrouping) UnmarshalJSON(b []byte) error {
+	errInvalid := fmt.Errorf("invalid grouping: %q", b)
+	if len(b) < 2 {
+		return errInvalid
+	}
+	if b[0] == '"' {
+		var s string
+		if err := json.Unmarshal(b, &s); err != nil {
+			return errInvalid
+		}
+		*g = QueryGrouping{Column: s}
+	} else {
+		var grouping struct {
+			TimeTransform TimeTruncationType
+			Column        string
+			Name          string
+		}
+		if err := json.Unmarshal(b, &grouping); err != nil {
+			return fmt.Errorf("invalid grouping: %q (%s)", b, err)
+		}
+		*g = QueryGrouping(grouping)
+	}
+	if g.Name == "" {
+		g.Name = g.Column
+	}
+	return nil
+}
+
 type AggregateType int
 
 const (
