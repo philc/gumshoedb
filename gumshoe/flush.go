@@ -54,7 +54,7 @@ func (db *DB) flush() error {
 	}
 	Log.Printf("Flushing %d mem intervals into %d static intervals", len(memKeys), len(staticKeys))
 
-	// Walk the keys together to produce the new static intervals
+	// Walk the keys together to produce the new static intervals.
 	intervals, cleanup, err := db.combineSortedMemStaticIntervals(memKeys, staticKeys)
 	if err != nil {
 		return fmt.Errorf("error combining mem+static intervals: %s", err)
@@ -63,12 +63,16 @@ func (db *DB) flush() error {
 	Log.Printf("Flushing %d total intervals and cleaning up %d obsolete or out-of-retention intervals",
 		len(intervals), len(intervalsForCleanup))
 
-	// Make the new StaticTable
-	newStaticTable := NewStaticTable(db.Schema)
-	newStaticTable.Intervals = intervals
-	if newStaticTable.DimensionTables, err = db.combineDimensionTables(); err != nil {
+	// Combine and write out new generations of the dimension tables.
+	newDimTables, oldDimTables, err := db.combineDimensionTables()
+	if err != nil {
 		return fmt.Errorf("cannot combine dimension tables: %s", err)
 	}
+
+	// Make the new StaticTable.
+	newStaticTable := NewStaticTable(db.Schema)
+	newStaticTable.Intervals = intervals
+	newStaticTable.DimensionTables = newDimTables
 
 	// Create the FlushInfo and send it over to the request handling goroutine which will make the swap and then
 	// return a chan to wait on all requests currently running on the old StaticTable.
@@ -80,12 +84,17 @@ func (db *DB) flush() error {
 	<-allRequestsFinished
 
 	if db.DiskBacked {
-		// Write out the metadata
+		// Write out the metadata.
 		if err := db.writeMetadataFile(); err != nil {
 			return fmt.Errorf("error writing metadata: %s", err)
 		}
 
-		// Clean up any now-unused intervals (only associated with previous StaticTable).
+		// Clean up any now-unused intervals and dimension tables (only associated with previous StaticTable).
+		for _, dimTable := range oldDimTables {
+			if err := os.Remove(dimTable.Filename(db.Schema, dimTable.i)); err != nil {
+				Log.Println("cleanup error deleting dimension table file:", err)
+			}
+		}
 		db.cleanUpOldIntervals(intervalsForCleanup)
 	}
 
@@ -212,42 +221,43 @@ func (db *DB) combineSortedMemStaticIntervals(memKeys, staticKeys []time.Time) (
 	return intervals, intervalsForCleanup, nil
 }
 
-// combineDimensionTables returns a combined set of dimension tables appropriate for the schema from the
-// memtable and static table's dimension tables. Any dimensions in which the memtable has no new entries are
-// reused from the static table. Changed dimensions have a new dimension table created with the combined
-// values and incremented generation and are written to disk.
-func (db *DB) combineDimensionTables() ([]*DimensionTable, error) {
-	dimTables := make([]*DimensionTable, len(db.DimensionColumns))
+// combineDimensionTables returns a combined set of dimension tables
+// appropriate for the schema from the memtable and static table's dimension tables.
+// Any dimensions in which the memtable has no new entries are reused from the static table.
+// Changed dimensions have a new dimension table created with the combined values
+// and incremented generation. The new dimension tables are written to disk.
+//
+// This function also returns oldTables, which are all the old static dimension tables
+// which should be deleted from disk.
+func (db *DB) combineDimensionTables() (newTables []*DimensionTable, oldTables []indexedDimensionTable, err error) {
+	newTables = make([]*DimensionTable, len(db.DimensionColumns))
 	for i, col := range db.DimensionColumns {
 		if !col.String {
 			continue
 		}
-		memDimTable := db.memTable.DimensionTables[i]
-		staticDimTable := db.StaticTable.DimensionTables[i]
-		if len(memDimTable.Values) == 0 {
+		memTable := db.memTable.DimensionTables[i]
+		staticTable := db.StaticTable.DimensionTables[i]
+		if len(memTable.Values) == 0 {
 			// No changes. Just use the old dimension table.
-			dimTables[i] = staticDimTable
+			newTables[i] = staticTable
 			continue
 		}
-		generation := staticDimTable.Generation + 1
-		newDimTable := newDimensionTable(generation, append(staticDimTable.Values, memDimTable.Values...))
-		dimTables[i] = newDimTable
-
+		generation := staticTable.Generation + 1
+		newTable := newDimensionTable(generation, append(staticTable.Values, memTable.Values...))
+		newTables[i] = newTable
+		oldTables = append(oldTables, indexedDimensionTable{staticTable, i})
 		if db.DiskBacked {
-			if err := newDimTable.Store(db.Schema, i); err != nil {
-				return nil, fmt.Errorf("error storing dimension table: %s", err)
-			}
-
-			// Delete the old dimension table's file. If the old generation is 0, then there is no corresponding
-			// file.
-			if staticDimTable.Generation > 0 {
-				if err := os.Remove(staticDimTable.Filename(db.Schema, i)); err != nil {
-					Log.Println("cleanup error deleting dimension table file:", err)
-				}
+			if err := newTable.Store(db.Schema, i); err != nil {
+				return nil, nil, fmt.Errorf("error storing dimension table: %s", err)
 			}
 		}
 	}
-	return dimTables, nil
+	return newTables, oldTables, nil
+}
+
+type indexedDimensionTable struct {
+	*DimensionTable
+	i int
 }
 
 // writeMetadataFile serializes db to JSON and atomically writes it to disk by using an intermediate tempfile
@@ -263,6 +273,23 @@ func (db *DB) writeMetadataFile() error {
 		return err
 	}
 	return os.Rename(tmpFilename, filename)
+}
+
+func (db *DB) cleanUpOldIntervals(intervals []*Interval) {
+	for _, interval := range intervals {
+		// Unmap, close, and delete all the segment files
+		for i, segment := range interval.Segments {
+			if err := segment.Bytes.Unmap(); err != nil {
+				Log.Println("cleanup error unmapping segment file:", err)
+			}
+			if err := segment.File.Close(); err != nil {
+				Log.Println("cleanup error closing segment file:", err)
+			}
+			if err := os.Remove(interval.SegmentFilename(db.Schema, i)); err != nil {
+				Log.Println("cleanup error deleting segment file:", err)
+			}
+		}
+	}
 }
 
 func (db *DB) partitionIntervalStartsByRetention(keys []time.Time) (outdated, current []time.Time) {

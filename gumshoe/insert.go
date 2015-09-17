@@ -2,7 +2,6 @@ package gumshoe
 
 import (
 	"bytes"
-	"os"
 	"time"
 
 	"github.com/philc/gumshoedb/internal/b"
@@ -76,23 +75,6 @@ func (db *DB) insertRows(rows []UnpackedRow) error {
 	}
 	Log.Printf("Inserted %d rows succesfully; dropped %d out-of-retention rows", insertedRows, droppedOldRows)
 	return nil
-}
-
-func (db *DB) cleanUpOldIntervals(intervals []*Interval) {
-	for _, interval := range intervals {
-		// Unmap, close, and delete all the segment files
-		for i, segment := range interval.Segments {
-			if err := segment.Bytes.Unmap(); err != nil {
-				Log.Println("cleanup error unmapping segment file:", err)
-			}
-			if err := segment.File.Close(); err != nil {
-				Log.Println("cleanup error closing segment file:", err)
-			}
-			if err := os.Remove(interval.SegmentFilename(db.Schema, i)); err != nil {
-				Log.Println("cleanup error deleting segment file:", err)
-			}
-		}
-	}
 }
 
 func (db *DB) intervalStartOutOfRetention(timestamp time.Time) bool {
