@@ -14,6 +14,7 @@ import (
 	"flag"
 	"fmt"
 	"hash/crc32"
+	"io"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -21,6 +22,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/philc/gumshoedb/gumshoe"
@@ -28,6 +30,7 @@ import (
 
 	"github.com/philc/gumshoedb/internal/github.com/cespare/hutil/apachelog"
 	"github.com/philc/gumshoedb/internal/github.com/cespare/wait"
+	"github.com/philc/gumshoedb/internal/github.com/dustin/go-humanize"
 	"github.com/philc/gumshoedb/internal/github.com/gorilla/pat"
 )
 
@@ -150,6 +153,7 @@ func (r *Router) HandleQuery(w http.ResponseWriter, req *http.Request) {
 	}
 	var wg wait.Group
 	results := make([]Result, len(r.Shards))
+	var totalSize uint64 // atomic
 	for i := range r.Shards {
 		i := i
 		wg.Go(func(_ <-chan struct{}) error {
@@ -163,9 +167,11 @@ func (r *Router) HandleQuery(w http.ResponseWriter, req *http.Request) {
 				return NewHTTPError(resp, shard)
 			}
 			var result Result
-			if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+			cr := &countReader{r: resp.Body}
+			if err := json.NewDecoder(cr).Decode(&result); err != nil {
 				return err
 			}
+			atomic.AddUint64(&totalSize, uint64(cr.N))
 			if convertGroupingColToIntegral {
 				col := query.Groupings[0].Name
 				for _, row := range result.Results {
@@ -183,6 +189,9 @@ func (r *Router) HandleQuery(w http.ResponseWriter, req *http.Request) {
 		WriteError(w, err, http.StatusInternalServerError)
 		return
 	}
+	Log.Printf("Loaded partial query results from %d shards in %s (total size: %s)",
+		len(r.Shards), time.Since(start), humanize.Bytes(totalSize))
+	combineStart := time.Now()
 
 	var finalResult []gumshoe.RowMap
 	if len(query.Groupings) > 0 {
@@ -209,6 +218,8 @@ func (r *Router) HandleQuery(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 
+	Log.Printf("Combined query results in %s (%s elapsed since query start)",
+		time.Since(combineStart), time.Since(start))
 	WriteJSONResponse(w, Result{
 		Results:    finalResult,
 		DurationMS: int(time.Since(start).Seconds() * 1000),
@@ -496,4 +507,15 @@ func main() {
 	}
 	Log.Println("Now serving on", addr)
 	Log.Fatal(server.ListenAndServe())
+}
+
+type countReader struct {
+	r io.Reader
+	N int
+}
+
+func (r *countReader) Read(b []byte) (int, error) {
+	n, err := r.r.Read(b)
+	r.N += n
+	return n, err
 }
