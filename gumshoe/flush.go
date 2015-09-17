@@ -2,6 +2,7 @@ package gumshoe
 
 import (
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -56,7 +57,7 @@ func (db *DB) flush() error {
 	// Walk the keys together to produce the new static intervals
 	intervals, cleanup, err := db.combineSortedMemStaticIntervals(memKeys, staticKeys)
 	if err != nil {
-		return err
+		return fmt.Errorf("error combining mem+static intervals: %s", err)
 	}
 	intervalsForCleanup = append(intervalsForCleanup, cleanup...)
 	Log.Printf("Flushing %d total intervals and cleaning up %d obsolete or out-of-retention intervals",
@@ -66,7 +67,7 @@ func (db *DB) flush() error {
 	newStaticTable := NewStaticTable(db.Schema)
 	newStaticTable.Intervals = intervals
 	if newStaticTable.DimensionTables, err = db.combineDimensionTables(); err != nil {
-		return err
+		return fmt.Errorf("cannot combine dimension tables: %s", err)
 	}
 
 	// Create the FlushInfo and send it over to the request handling goroutine which will make the swap and then
@@ -81,7 +82,7 @@ func (db *DB) flush() error {
 	if db.DiskBacked {
 		// Write out the metadata
 		if err := db.writeMetadataFile(); err != nil {
-			return err
+			return fmt.Errorf("error writing metadata: %s", err)
 		}
 
 		// Clean up any now-unused intervals (only associated with previous StaticTable).
@@ -157,6 +158,9 @@ func (db *DB) combineSortedMemStaticIntervals(memKeys, staticKeys []time.Time) (
 			numMemIntervals++
 			intervalWriterRequests <- func() *intervalWriterResponse {
 				iv, err := db.WriteMemInterval(db.memTable.Intervals[memKey])
+				if err != nil {
+					err = fmt.Errorf("cannot write mem interval: %s", err)
+				}
 				return &intervalWriterResponse{memKey, iv, err}
 			}
 			memKeys = memKeys[1:]
@@ -166,6 +170,9 @@ func (db *DB) combineSortedMemStaticIntervals(memKeys, staticKeys []time.Time) (
 			memInterval := db.memTable.Intervals[memKey]
 			intervalWriterRequests <- func() *intervalWriterResponse {
 				iv, err := db.WriteCombinedInterval(memInterval, staticInterval)
+				if err != nil {
+					err = fmt.Errorf("cannot write combined interval: %s", err)
+				}
 				return &intervalWriterResponse{staticKey, iv, err}
 			}
 			staticKeys = staticKeys[1:]
@@ -185,6 +192,9 @@ func (db *DB) combineSortedMemStaticIntervals(memKeys, staticKeys []time.Time) (
 		key := memKey
 		intervalWriterRequests <- func() *intervalWriterResponse {
 			iv, err := db.WriteMemInterval(db.memTable.Intervals[key])
+			if err != nil {
+				err = fmt.Errorf("cannot write mem interval: %s", err)
+			}
 			return &intervalWriterResponse{key, iv, err}
 		}
 	}
@@ -225,7 +235,7 @@ func (db *DB) combineDimensionTables() ([]*DimensionTable, error) {
 
 		if db.DiskBacked {
 			if err := newDimTable.Store(db.Schema, i); err != nil {
-				return nil, err
+				return nil, fmt.Errorf("error storing dimension table: %s", err)
 			}
 
 			// Delete the old dimension table's file. If the old generation is 0, then there is no corresponding
@@ -245,7 +255,7 @@ func (db *DB) combineDimensionTables() ([]*DimensionTable, error) {
 func (db *DB) writeMetadataFile() error {
 	b, err := json.MarshalIndent(db, "", "  ")
 	if err != nil {
-		return err
+		return fmt.Errorf("error marshalling metadata JSON: %s", err)
 	}
 	filename := filepath.Join(db.Dir, MetadataFilename)
 	tmpFilename := filename + ".tmp"
