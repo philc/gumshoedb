@@ -116,6 +116,7 @@ func (r *Router) HandleQuery(w http.ResponseWriter, req *http.Request) {
 		WriteError(w, err, http.StatusBadRequest)
 		return
 	}
+	Log.Println("Got query:", query)
 	for _, agg := range query.Aggregates {
 		if agg.Type == gumshoe.AggregateAvg {
 			// TODO(caleb): Handle as described in the doc.
