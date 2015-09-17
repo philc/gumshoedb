@@ -99,7 +99,7 @@ func (t *DimensionTable) Load(s *Schema, index int) (err error) {
 // Store writes this dimension table to a new file identified by the schema directory, the provided dimension
 // table index, and the table generation. It is an error if the file already exists.
 func (t *DimensionTable) Store(s *Schema, index int) error {
-	f, err := os.OpenFile(t.Filename(s, index), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0666)
+	f, err := os.OpenFile(t.Filename(s, index), os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0666)
 	if err != nil {
 		return err
 	}
