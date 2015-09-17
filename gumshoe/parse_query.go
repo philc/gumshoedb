@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"strings"
 )
 
 func ParseJSONQuery(r io.Reader) (*Query, error) {
@@ -23,6 +24,17 @@ type Query struct {
 	Filters    []QueryFilter
 }
 
+func (q *Query) String() string {
+	j, err := json.Marshal(q)
+	if err != nil {
+		return fmt.Sprintf("%#v", q)
+	}
+	// Unescape HTML stuff to make the output easier for humans to read.
+	return htmlUnescape.Replace(string(j))
+}
+
+var htmlUnescape = strings.NewReplacer(`\u003c`, "<", `\u003e`, ">", `\u0026`, "&")
+
 type QueryAggregate struct {
 	Type   AggregateType
 	Column string
@@ -32,7 +44,7 @@ type QueryAggregate struct {
 type QueryGrouping struct {
 	// This provides a means of specifying an optional date truncation function, assuming the column is a
 	// timestamp. It makes it possible to group by time intervals (minute, hour, day).
-	TimeTransform TimeTruncationType
+	TimeTransform TimeTruncationType `json:",omitempty"`
 	Column        string
 	Name          string
 }
@@ -72,7 +84,7 @@ func (g *QueryGrouping) UnmarshalJSON(b []byte) error {
 		*g = QueryGrouping{Column: s}
 	} else {
 		var grouping struct {
-			TimeTransform TimeTruncationType
+			TimeTransform TimeTruncationType `json:",omitempty"`
 			Column        string
 			Name          string
 		}

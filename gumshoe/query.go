@@ -59,6 +59,7 @@ func (p *scanParams) AllTimestampFilterFuncsMatch(intervalTimestamp time.Time) b
 
 // InvokeQuery runs query on a StaticTable. It returns a slice of aggregated row results.
 func (s *StaticTable) InvokeQuery(query *Query) ([]RowMap, error) {
+	Log.Println("Running query:", query)
 	sumColumns := make([]MetricColumn, len(query.Aggregates))
 	sumFuncs := make([]sumFunc, len(query.Aggregates))
 	for i, aggregate := range query.Aggregates {
