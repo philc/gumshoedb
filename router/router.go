@@ -2,8 +2,8 @@ package main
 
 // How to run:
 //
-// $ glp build router
-// $ ./router -interval-duration 1h -shards 'host1:8080,host2:8080'
+// $ go build -o bin/router ./router
+// $ bin/router -interval-duration 1h -shards 'host1:8080,host2:8080'
 //
 // (or just test with -shards 'localhost:8080,localhost:8080' and verify you get 2x results)
 
@@ -29,7 +29,6 @@ import (
 
 	"github.com/philc/gumshoedb/gumshoe"
 	"github.com/philc/gumshoedb/internal/config"
-
 	"github.com/philc/gumshoedb/internal/github.com/cespare/hutil/apachelog"
 	"github.com/philc/gumshoedb/internal/github.com/cespare/wait"
 	"github.com/philc/gumshoedb/internal/github.com/dustin/go-humanize"
