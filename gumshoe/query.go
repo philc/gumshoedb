@@ -560,8 +560,7 @@ func combineMapGrouping(boxedPartials []interface{}, params *scanParams) []*rowA
 	return results
 }
 
-func (s *StaticTable) postProcessScanRows(aggregates []*rowAggregate, query *Query,
-	grouping *groupingParams) []RowMap {
+func (s *StaticTable) postProcessScanRows(aggregates []*rowAggregate, query *Query, grouping *groupingParams) []RowMap {
 	rows := make([]RowMap, len(aggregates))
 	for i, aggregate := range aggregates {
 		row := make(RowMap)
@@ -598,8 +597,7 @@ func (s *StaticTable) makeSumFunc(aggregate QueryAggregate, index int) sumFunc {
 
 // makeTimeTruncationFunc returns a function which, given a cell, performs a date truncation transformation.
 // intervalName should be one of "minute", "hour", or "day".
-func (s *StaticTable) makeTimeTruncationFunc(truncationType TimeTruncationType,
-	column Column) (transformFunc, error) {
+func (s *StaticTable) makeTimeTruncationFunc(truncationType TimeTruncationType, column Column) (transformFunc, error) {
 	if column.Type != TypeUint32 {
 		return nil, errors.New("cannot apply timestamp truncation to non-uint32 column")
 	}
