@@ -116,6 +116,10 @@ func (r *Router) Hash(row gumshoe.RowMap) int {
 func (r *Router) HandleQuery(w http.ResponseWriter, req *http.Request) {
 	start := time.Now()
 	queryID := randomID() // used to make tracking a single query throught he logs easier
+	if req.URL.Query().Get("format") != "" {
+		WriteError(w, errors.New("non-standard query formats not supported"), 500)
+		return
+	}
 	query, err := gumshoe.ParseJSONQuery(req.Body)
 	if err != nil {
 		WriteError(w, err, http.StatusBadRequest)

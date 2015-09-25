@@ -18,7 +18,6 @@ import (
 	"github.com/philc/gumshoedb/internal/config"
 
 	"github.com/philc/gumshoedb/internal/github.com/cespare/gostc"
-	"github.com/philc/gumshoedb/internal/github.com/cespare/hutil/apachelog"
 	"github.com/philc/gumshoedb/internal/github.com/gorilla/pat"
 )
 
@@ -119,7 +118,7 @@ func (s *Server) HandleSingleDimension(w http.ResponseWriter, r *http.Request) {
 }
 
 // HandleQuery evaluates a query and returns an aggregated result set.
-// See the README for the query JSON structure and the structure of the reuslts.
+// See the README for the query JSON structure and the structure of the results.
 func (s *Server) HandleQuery(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 	query, err := gumshoe.ParseJSONQuery(r.Body)
@@ -134,9 +133,37 @@ func (s *Server) HandleQuery(w http.ResponseWriter, r *http.Request) {
 	}
 	elapsed := time.Since(start)
 	statsd.Time("gumshoedb.query", elapsed)
+	durationMS := int(elapsed.Seconds() * 1000)
+	if r.URL.Query().Get("format") == "stream" {
+		// Streaming format:
+		// Header object: {"duration_ms": 123, "num_results", 234}
+		// Then num_rows row objects.
+		header := map[string]int{
+			"duration_ms": durationMS,
+			"num_rows":    len(rows),
+		}
+		w.Header().Set("Content-Type", "application/json")
+		encoder := json.NewEncoder(w)
+		if err := encoder.Encode(header); err != nil {
+			WriteError(w, err, 500)
+			return
+		}
+		for i, row := range rows {
+			if err := encoder.Encode(row); err != nil {
+				WriteError(w, err, 500)
+				return
+			}
+			if i%1000 == 0 {
+				if f, ok := w.(http.Flusher); ok {
+					f.Flush()
+				}
+			}
+		}
+		return
+	}
 	results := map[string]interface{}{
 		"results":     rows,
-		"duration_ms": int(elapsed.Seconds() * 1000),
+		"duration_ms": durationMS,
 	}
 	WriteJSONResponse(w, results)
 }
@@ -196,7 +223,7 @@ func NewServer(conf *config.Config, schema *gumshoe.Schema) *Server {
 	mux.Get("/statusz", s.HandleStatusz)
 	mux.Get("/", s.HandleRoot)
 
-	s.Handler = apachelog.NewDefaultHandler(mux)
+	s.Handler = mux
 
 	go s.RunPeriodicFlushes()
 	go s.RunPeriodicStatsChecks()
