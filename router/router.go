@@ -24,14 +24,12 @@ import (
 	"sort"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/philc/gumshoedb/gumshoe"
 	"github.com/philc/gumshoedb/internal/config"
 	"github.com/philc/gumshoedb/internal/github.com/cespare/hutil/apachelog"
 	"github.com/philc/gumshoedb/internal/github.com/cespare/wait"
-	"github.com/philc/gumshoedb/internal/github.com/dustin/go-humanize"
 	"github.com/philc/gumshoedb/internal/github.com/gorilla/pat"
 )
 
@@ -113,6 +111,11 @@ func (r *Router) Hash(row gumshoe.RowMap) int {
 	return int(crc.Sum32()) % len(r.Shards)
 }
 
+type Result struct {
+	Results    []gumshoe.RowMap `json:"results"`
+	DurationMS int              `json:"duration_ms"`
+}
+
 func (r *Router) HandleQuery(w http.ResponseWriter, req *http.Request) {
 	start := time.Now()
 	queryID := randomID() // used to make tracking a single query throught he logs easier
@@ -129,7 +132,7 @@ func (r *Router) HandleQuery(w http.ResponseWriter, req *http.Request) {
 	for _, agg := range query.Aggregates {
 		if agg.Type == gumshoe.AggregateAvg {
 			// TODO(caleb): Handle as described in the doc.
-			WriteError(w, errors.New("average aggregates not handled by the router"), http.StatusInternalServerError)
+			WriteError(w, errors.New("average aggregates not handled by the router"), 500)
 			return
 		}
 		if !r.validColumnName(agg.Column) {
@@ -149,66 +152,83 @@ func (r *Router) HandleQuery(w http.ResponseWriter, req *http.Request) {
 			return
 		}
 	}
-	convertGroupingColToIntegral := false
-	if len(query.Groupings) > 0 {
-		convertGroupingColToIntegral = r.convertColumnToIntegral(query.Groupings[0].Column)
-	}
 	b, err := json.Marshal(query)
 	if err != nil {
 		panic("unexpected marshal error")
 	}
 	var wg wait.Group
-	results := make([]Result, len(r.Shards))
-	var totalSize uint64 // atomic
+	readers := make([]io.ReadCloser, len(r.Shards))
 	for i := range r.Shards {
 		i := i
 		wg.Go(func(_ <-chan struct{}) error {
 			shard := r.Shards[i]
-			resp, err := r.Client.Post("http://"+shard+"/query", "application/json", bytes.NewReader(b))
+			url := "http://" + shard + "/query?format=stream"
+			resp, err := r.Client.Post(url, "application/json", bytes.NewReader(b))
 			if err != nil {
 				return err
 			}
-			defer resp.Body.Close()
 			if resp.StatusCode != 200 {
+				resp.Body.Close()
 				return NewHTTPError(resp, shard)
 			}
-			var result Result
-			cr := &countReader{r: resp.Body}
-			if err := json.NewDecoder(cr).Decode(&result); err != nil {
-				return err
-			}
-			atomic.AddUint64(&totalSize, uint64(cr.N))
-			if convertGroupingColToIntegral {
-				col := query.Groupings[0].Name
-				for _, row := range result.Results {
-					val := row[col]
-					if val != nil {
-						row[col] = int64(val.(float64))
-					}
-				}
-			}
-			results[i] = result
+			readers[i] = resp.Body
 			return nil
 		})
 	}
-	if err := wg.Wait(); err != nil {
+	err = wg.Wait()
+	defer func() {
+		for _, reader := range readers {
+			if reader != nil {
+				reader.Close()
+			}
+		}
+	}()
+	if err != nil {
 		WriteError(w, err, http.StatusInternalServerError)
 		return
 	}
-	Log.Printf("[%s] loaded partial query results from %d shards in %s (total size: %s)",
-		queryID, len(r.Shards), time.Since(start), humanize.Bytes(totalSize))
+	Log.Printf("[%s] fetched partial query results from %d shards in %s",
+		queryID, len(r.Shards), time.Since(start))
 	combineStart := time.Now()
+
+	decoders := make([]*json.Decoder, len(readers))
+	for i, reader := range readers {
+		decoder := json.NewDecoder(reader)
+		decoders[i] = decoder
+		var m map[string]int
+		if err := decoder.Decode(&m); err != nil {
+			WriteError(w, err, http.StatusInternalServerError)
+			return
+		}
+	}
 
 	var finalResult []gumshoe.RowMap
 	if len(query.Groupings) > 0 {
-		resultMap := make(map[interface{}]gumshoe.RowMap)
-		for _, result := range results {
-			for _, row := range result.Results {
-				groupByValue := row[query.Groupings[0].Name]
+		var (
+			groupingCol                  = query.Groupings[0].Name
+			convertGroupingColToIntegral = r.convertColumnToIntegral(query.Groupings[0].Column)
+			resultMap                    = make(map[interface{}]gumshoe.RowMap)
+			rowSize                      int
+		)
+		for _, decoder := range decoders {
+			for {
+				row := make(gumshoe.RowMap, rowSize)
+				if err := decoder.Decode(&row); err != nil {
+					if err == io.EOF {
+						break
+					}
+					WriteError(w, err, http.StatusInternalServerError)
+					return
+				}
+				rowSize = len(row)
+				groupByValue := row[groupingCol]
+				if convertGroupingColToIntegral {
+					groupByValue = int64(groupByValue.(float64))
+				}
 				cur := resultMap[groupByValue]
 				if cur == nil {
-					cur = make(gumshoe.RowMap)
-					cur[query.Groupings[0].Name] = groupByValue
+					resultMap[groupByValue] = row
+					continue
 				}
 				r.mergeRows(cur, row, query)
 				resultMap[groupByValue] = cur
@@ -218,9 +238,25 @@ func (r *Router) HandleQuery(w http.ResponseWriter, req *http.Request) {
 			finalResult = append(finalResult, row)
 		}
 	} else {
-		finalResult = []gumshoe.RowMap{results[0].Results[0]}
-		for _, result := range results[1:] {
-			r.mergeRows(finalResult[0], result.Results[0], query)
+		for _, decoder := range decoders {
+			row := make(gumshoe.RowMap)
+			if err := decoder.Decode(&row); err != nil {
+				WriteError(w, err, http.StatusInternalServerError)
+				return
+			}
+			if len(finalResult) == 0 {
+				finalResult = []gumshoe.RowMap{row}
+			} else {
+				r.mergeRows(finalResult[0], row, query)
+			}
+			if err := decoder.Decode(&row); err != io.EOF {
+				if err == nil {
+					WriteError(w, errors.New("got multiple results for a non-group-by query"), http.StatusInternalServerError)
+					return
+				}
+				WriteError(w, err, http.StatusInternalServerError)
+				return
+			}
 		}
 	}
 
@@ -300,11 +336,6 @@ func (r *Router) sumColumn(row1, row2 gumshoe.RowMap, col string, typ gumshoe.Ty
 		return val1.(float64) + val2.(float64)
 	}
 	panic("unexpected type")
-}
-
-type Result struct {
-	Results    []gumshoe.RowMap `json:"results"`
-	DurationMS int              `json:"duration_ms"`
 }
 
 func (r *Router) HandleSingleDimension(w http.ResponseWriter, req *http.Request) {
@@ -513,17 +544,6 @@ func main() {
 	}
 	Log.Println("Now serving on", addr)
 	Log.Fatal(server.ListenAndServe())
-}
-
-type countReader struct {
-	r io.Reader
-	N int
-}
-
-func (r *countReader) Read(b []byte) (int, error) {
-	n, err := r.r.Read(b)
-	r.N += n
-	return n, err
 }
 
 func randomID() string {
