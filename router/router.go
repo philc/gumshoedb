@@ -223,7 +223,7 @@ func (r *Router) HandleQuery(w http.ResponseWriter, req *http.Request) {
 				}
 				rowSize = len(row)
 				groupByValue := row[groupingCol]
-				if groupingColIntConv {
+				if groupingColIntConv && groupByValue != nil {
 					groupByValue = int64(groupByValue.(float64))
 				}
 				mu.Lock()
