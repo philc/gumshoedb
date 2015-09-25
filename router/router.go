@@ -156,8 +156,19 @@ func (r *Router) HandleQuery(w http.ResponseWriter, req *http.Request) {
 	if err != nil {
 		panic("unexpected marshal error")
 	}
-	var wg wait.Group
-	readers := make([]io.ReadCloser, len(r.Shards))
+	var (
+		wg     wait.Group
+		mu     sync.Mutex // protects result, resultMap
+		result []gumshoe.RowMap
+		// rest only for grouping case
+		groupingCol        string
+		groupingColIntConv bool
+		resultMap          = make(map[interface{}]*lockedRowMap)
+	)
+	if len(query.Groupings) > 0 {
+		groupingCol = query.Groupings[0].Name
+		groupingColIntConv = r.convertColumnToIntegral(query.Groupings[0].Column)
+	}
 	for i := range r.Shards {
 		i := i
 		wg.Go(func(_ <-chan struct{}) error {
@@ -167,105 +178,94 @@ func (r *Router) HandleQuery(w http.ResponseWriter, req *http.Request) {
 			if err != nil {
 				return err
 			}
+			defer resp.Body.Close()
 			if resp.StatusCode != 200 {
-				resp.Body.Close()
 				return NewHTTPError(resp, shard)
 			}
-			readers[i] = resp.Body
-			return nil
-		})
-	}
-	err = wg.Wait()
-	defer func() {
-		for _, reader := range readers {
-			if reader != nil {
-				reader.Close()
+
+			decoder := json.NewDecoder(resp.Body)
+			var m map[string]int
+			if err := decoder.Decode(&m); err != nil {
+				return err
 			}
-		}
-	}()
-	if err != nil {
-		WriteError(w, err, http.StatusInternalServerError)
-		return
-	}
-	Log.Printf("[%s] fetched partial query results from %d shards in %s",
-		queryID, len(r.Shards), time.Since(start))
-	combineStart := time.Now()
 
-	decoders := make([]*json.Decoder, len(readers))
-	for i, reader := range readers {
-		decoder := json.NewDecoder(reader)
-		decoders[i] = decoder
-		var m map[string]int
-		if err := decoder.Decode(&m); err != nil {
-			WriteError(w, err, http.StatusInternalServerError)
-			return
-		}
-	}
+			if len(query.Groupings) == 0 {
+				// non-grouping case
+				row := make(gumshoe.RowMap)
+				if err := decoder.Decode(&row); err != nil {
+					return err
+				}
+				mu.Lock()
+				if len(result) == 0 {
+					result = []gumshoe.RowMap{row}
+				} else {
+					r.mergeRows(result[0], row, query)
+				}
+				mu.Unlock()
+				if err := decoder.Decode(&row); err != io.EOF {
+					if err == nil {
+						return errors.New("got multiple results for a non-group-by query")
+					}
+					return err
+				}
+				return nil
+			}
 
-	var finalResult []gumshoe.RowMap
-	if len(query.Groupings) > 0 {
-		var (
-			groupingCol                  = query.Groupings[0].Name
-			convertGroupingColToIntegral = r.convertColumnToIntegral(query.Groupings[0].Column)
-			resultMap                    = make(map[interface{}]gumshoe.RowMap)
-			rowSize                      int
-		)
-		for _, decoder := range decoders {
+			// grouping case
+			var rowSize int
 			for {
 				row := make(gumshoe.RowMap, rowSize)
 				if err := decoder.Decode(&row); err != nil {
 					if err == io.EOF {
 						break
 					}
-					WriteError(w, err, http.StatusInternalServerError)
-					return
+					return err
 				}
 				rowSize = len(row)
 				groupByValue := row[groupingCol]
-				if convertGroupingColToIntegral {
+				if groupingColIntConv {
 					groupByValue = int64(groupByValue.(float64))
 				}
+				mu.Lock()
 				cur := resultMap[groupByValue]
 				if cur == nil {
-					resultMap[groupByValue] = row
+					resultMap[groupByValue] = &lockedRowMap{row: row}
+					mu.Unlock()
 					continue
 				}
-				r.mergeRows(cur, row, query)
-				resultMap[groupByValue] = cur
+				// downgrade lock
+				cur.mu.Lock()
+				mu.Unlock()
+				r.mergeRows(cur.row, row, query)
+				cur.mu.Unlock()
 			}
-		}
-		for _, row := range resultMap {
-			finalResult = append(finalResult, row)
-		}
-	} else {
-		for _, decoder := range decoders {
-			row := make(gumshoe.RowMap)
-			if err := decoder.Decode(&row); err != nil {
-				WriteError(w, err, http.StatusInternalServerError)
-				return
-			}
-			if len(finalResult) == 0 {
-				finalResult = []gumshoe.RowMap{row}
-			} else {
-				r.mergeRows(finalResult[0], row, query)
-			}
-			if err := decoder.Decode(&row); err != io.EOF {
-				if err == nil {
-					WriteError(w, errors.New("got multiple results for a non-group-by query"), http.StatusInternalServerError)
-					return
-				}
-				WriteError(w, err, http.StatusInternalServerError)
-				return
-			}
+			return nil
+		})
+	}
+	if err := wg.Wait(); err != nil {
+		WriteError(w, err, http.StatusInternalServerError)
+		return
+	}
+
+	// For the grouping case, we need to flatten the results from resultMap.
+	if len(query.Groupings) > 0 {
+		for _, lr := range resultMap {
+			result = append(result, lr.row)
 		}
 	}
 
-	Log.Printf("[%s] combined query results in %s (%s elapsed since query start)",
-		queryID, time.Since(combineStart), time.Since(start))
+	Log.Printf("[%s] fetched and merged query results from %d shards in %s (%d combined rows)",
+		queryID, len(r.Shards), time.Since(start), len(result))
+
 	WriteJSONResponse(w, Result{
-		Results:    finalResult,
+		Results:    result,
 		DurationMS: int(time.Since(start).Seconds() * 1000),
 	})
+}
+
+type lockedRowMap struct {
+	mu  sync.Mutex
+	row gumshoe.RowMap
 }
 
 func (r *Router) convertColumnToIntegral(name string) bool {
