@@ -2,6 +2,7 @@ package gumshoe
 
 import (
 	"fmt"
+	"runtime"
 	"time"
 
 	"github.com/philc/gumshoedb/internal/github.com/dustin/go-humanize"
@@ -122,7 +123,7 @@ func (c *RunConfig) fillDefaults() {
 		c.Retention = 7 * 24 * time.Hour
 	}
 	if c.QueryParallelism == 0 {
-		c.QueryParallelism = 2
+		c.QueryParallelism = runtime.NumCPU()
 	}
 }
 

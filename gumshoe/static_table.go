@@ -15,9 +15,9 @@ import (
 type StaticTable struct {
 	*Schema         `json:"-"`
 	Intervals       IntervalMap
-	DimensionTables []*DimensionTable // Same length as the number of dimensions; non-string columns are nil
-	requests        chan *Request     // The request workers pull from this channel
-	wg              *sync.WaitGroup   // For outstanding requests, to know when we can GC this StaticTable
+	DimensionTables []*DimensionTable // Same length as the number of dimensions; non-string columns are nil.
+	scanRequests    chan *scanRequest // Handle to DB's worker pool.
+	wg              *sync.WaitGroup   // For outstanding requests, to know when we can GC this StaticTable.
 }
 
 // IntervalMap is a type that implements JSON conversions for map[time.Time]*Interval. (This doesn't work
@@ -77,7 +77,6 @@ func NewStaticTable(schema *Schema) *StaticTable {
 		Schema:          schema,
 		Intervals:       make(map[time.Time]*Interval),
 		DimensionTables: NewDimensionTablesForSchema(schema),
-		requests:        make(chan *Request),
 		wg:              new(sync.WaitGroup),
 	}
 	return staticTable
@@ -117,27 +116,14 @@ func (s *StaticTable) initialize(schema *Schema) error {
 	return nil
 }
 
-// numRequestWorkers controls the number of workers servicing requests for a StaticTable.
-const numRequestWorkers = 16
-
-func (s *StaticTable) startRequestWorkers() {
-	s.requests = make(chan *Request)
-	for i := 0; i < numRequestWorkers; i++ {
-		go s.handleRequests()
-	}
-}
-
-func (s *StaticTable) stopRequestWorkers() {
-	close(s.requests)
-}
-
-func (s *StaticTable) handleRequests() {
-	done := make(chan struct{})
-	for req := range s.requests {
+func (s *StaticTable) handleRequest(req *Request) {
+	s.wg.Add(1)
+	go func() {
+		done := make(chan struct{})
 		req.Resp <- &Response{StaticTable: s, done: done}
 		<-done
 		s.wg.Done()
-	}
+	}()
 }
 
 func (s *StaticTable) debugPrint() {

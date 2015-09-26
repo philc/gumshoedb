@@ -26,13 +26,16 @@ type DB struct {
 
 	shutdown chan struct{} // To tell goroutines to exit by closing
 
-	// The inserter reads from these two chans
+	// The inserter reads from these two chans.
 	inserts      chan *InsertRequest
 	flushSignals chan chan error
 
-	// The request goroutine reads from these two chans
+	// The request goroutine reads from these two chans.
 	requests chan *Request
 	flushes  chan *FlushInfo
+
+	// A fixed-size worker pool for running query scans.
+	scanRequests chan *scanRequest
 
 	latestTimestampLock *sync.Mutex
 	// Latest inserted row timestamp.
@@ -139,8 +142,12 @@ func (db *DB) initialize() error {
 	db.flushSignals = make(chan chan error)
 	db.requests = make(chan *Request)
 	db.flushes = make(chan *FlushInfo)
+	db.scanRequests = make(chan *scanRequest)
 	db.latestTimestampLock = new(sync.Mutex)
 
+	for i := 0; i < db.Schema.QueryParallelism; i++ {
+		go db.RunQueryWorker()
+	}
 	go db.HandleRequests()
 	go db.HandleInserts()
 	return nil
@@ -193,34 +200,15 @@ type FlushInfo struct {
 	AllRequestsFinishedChan chan chan struct{}
 }
 
-func when(pred bool, c chan *Request) chan *Request {
-	if pred {
-		return c
-	}
-	return nil
-}
-
 func (db *DB) HandleRequests() {
-	db.StaticTable.startRequestWorkers()
-	var req *Request
+	db.StaticTable.scanRequests = db.scanRequests
 	for {
 		select {
 		case <-db.shutdown:
-			db.StaticTable.stopRequestWorkers()
 			return
-		// Use the nil channel trick (nil chans are excluded from selects) to avoid blocking on pushing a
-		// request to the StaticTable's request chan.
-		case req = <-when(req == nil, db.requests):
-			db.StaticTable.wg.Add(1)
-		case when(req != nil, db.StaticTable.requests) <- req:
-			req = nil
+		case req := <-db.requests:
+			db.StaticTable.handleRequest(req)
 		case flushInfo := <-db.flushes:
-			if req != nil {
-				// We'll grandfather req to the next StaticTable. Mark it as done for now and increment wg once the
-				// new StaticTable is in place.
-				db.StaticTable.wg.Done()
-			}
-			db.StaticTable.stopRequestWorkers()
 			// Spin up a goroutine that waits for all requests on the current StaticTable to finish and pass the
 			// chan back to the inserter goroutine.
 			requestsFinished := make(chan struct{})
@@ -231,10 +219,7 @@ func (db *DB) HandleRequests() {
 			// Swap out the old StaticTable for the new -- the inserter goroutine can garbage collect the old one
 			// once all requests have been processed.
 			db.StaticTable = flushInfo.NewStaticTable
-			db.StaticTable.startRequestWorkers()
-			if req != nil {
-				db.StaticTable.wg.Add(1)
-			}
+			db.StaticTable.scanRequests = db.scanRequests
 			flushInfo.AllRequestsFinishedChan <- requestsFinished
 		}
 	}
