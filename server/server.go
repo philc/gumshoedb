@@ -6,6 +6,7 @@ package main
 import (
 	"encoding/json"
 	"flag"
+	"fmt"
 	"log"
 	"net/http"
 	_ "net/http/pprof"
@@ -52,7 +53,7 @@ func WriteJSONResponse(w http.ResponseWriter, objectToSerialize interface{}) {
 }
 
 func WriteError(w http.ResponseWriter, err error, status int) {
-	Log.Print(err)
+	Log.Output(2, fmt.Sprint(err))
 	http.Error(w, err.Error(), status)
 }
 
