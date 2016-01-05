@@ -70,8 +70,8 @@ type DimensionBytes []byte
 // MetricBytes is the serialized form of the metrics of a single GumshoeDB row.
 type MetricBytes []byte
 
-func (d DimensionBytes) setNil(index int)     { d[index/8] |= 1 << byte(index%8) }
-func (d DimensionBytes) IsNil(index int) bool { return d[index/8]&(1<<byte(index%8)) > 0 }
+func (d DimensionBytes) setNil(index int)     { d[index>>3] |= 1 << byte(index&7) }
+func (d DimensionBytes) IsNil(index int) bool { return d[index>>3]&(1<<byte(index&7)) > 0 }
 
 // count retrieves a row's count (the number of collapsed logical rows).
 func (r RowBytes) count(s *Schema) uint32 { return *(*uint32)(unsafe.Pointer(&r[0])) }

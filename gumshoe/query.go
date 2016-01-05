@@ -354,8 +354,8 @@ func (s *StaticTable) scanSliceGrouping(stats *scanStats, params *scanParams, _ 
 
 	var (
 		i                          = params.Grouping.ColumnIndex
-		nilOffset                  = s.DimensionStartOffset + i/8
-		nilMask                    = byte(1) << byte(i%8)
+		nilOffset                  = s.DimensionStartOffset + i>>3
+		nilMask                    = byte(1) << byte(i&7)
 		valueOffset                = s.DimensionStartOffset + s.DimensionOffsets[i]
 		getDimensionValueAsIntFunc = makeGetDimensionValueAsIntFuncGen(groupingColumn.Type)
 		filterFuncs                = params.FilterFuncs
@@ -461,8 +461,8 @@ func (s *StaticTable) scanMapGrouping(stats *scanStats, params *scanParams, time
 	)
 	if !groupOnTimestampColumn {
 		i := params.Grouping.ColumnIndex
-		nilOffset = s.DimensionStartOffset + i/8
-		nilMask = 1 << byte(i%8)
+		nilOffset = s.DimensionStartOffset + i>>3
+		nilMask = 1 << byte(i&7)
 		valueOffset = s.DimensionStartOffset + s.DimensionOffsets[i]
 	}
 	var (
@@ -659,8 +659,8 @@ func (s *StaticTable) makeDimensionFilterFunc(filter QueryFilter, index int) (fi
 	}
 
 	col := s.DimensionColumns[index]
-	mask := byte(1) << byte(index%8)
-	nilOffset := s.DimensionStartOffset + index/8
+	mask := byte(1) << byte(index&7)
+	nilOffset := s.DimensionStartOffset + index>>3
 	valueOffset := s.DimensionStartOffset + s.DimensionOffsets[index]
 
 	// Comparison table: (x is some not-nil value, OP is some operator that is not '=' or '!=')
@@ -712,8 +712,8 @@ func (s *StaticTable) makeDimensionFilterFuncIn(filter QueryFilter, index int) (
 	}
 
 	col := s.DimensionColumns[index]
-	mask := byte(1) << byte(index%8)
-	nilOffset := s.DimensionStartOffset + index/8
+	mask := byte(1) << byte(index&7)
+	nilOffset := s.DimensionStartOffset + index>>3
 	valueOffset := s.DimensionStartOffset + s.DimensionOffsets[index]
 	acceptNil := false
 	isString := false
