@@ -243,11 +243,11 @@ func PreparePartials(source balanceSource, dests []balanceDest, db *gumshoe.DB, 
 		if err != nil {
 			return nil, err
 		}
-		defer session.Close()
 		scpCmd := fmt.Sprintf("scp -o StrictHostKeyChecking=no %s %s:%s", dir+".tgz", dests[i].host, targetPath)
 		if err := session.Run(scpCmd); err != nil {
 			return nil, err
 		}
+		session.Close()
 	}
 
 	return partialDests, nil
