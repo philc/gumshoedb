@@ -239,21 +239,15 @@ func PreparePartials(source balanceSource, dests []balanceDest, db *gumshoe.DB, 
 			return nil, err
 		}
 		targetPath := path.Join(workDir, partialName+".tgz")
-		// We need forwarding for this session so that scp works on the remote host.
-		// NOTE(caleb): We can't request forwarding for every session
-		// because (for reasons I don't understand) it only works once per client.
 		session, err := s.getSession(source.host)
 		if err != nil {
 			return nil, err
 		}
-		if err := agent.RequestAgentForwarding(session); err != nil {
-			return nil, err
-		}
+		defer session.Close()
 		scpCmd := fmt.Sprintf("scp -o StrictHostKeyChecking=no %s %s:%s", dir+".tgz", dests[i].host, targetPath)
 		if err := session.Run(scpCmd); err != nil {
 			return nil, err
 		}
-		session.Close()
 	}
 
 	return partialDests, nil
@@ -380,7 +374,6 @@ type balanceDest struct {
 type SSH struct {
 	config          *ssh.ClientConfig
 	clientCache     map[string]*ssh.Client
-	sessionCache    map[string]*ssh.Session
 	sftpClientCache map[string]*sftp.Client
 	agent           agent.Agent
 }
@@ -399,7 +392,6 @@ func NewSSH(username string) *SSH {
 	return &SSH{
 		config:          config,
 		clientCache:     make(map[string]*ssh.Client),
-		sessionCache:    make(map[string]*ssh.Session),
 		sftpClientCache: make(map[string]*sftp.Client),
 		agent:           ag,
 	}
@@ -426,6 +418,17 @@ func (s *SSH) getClient(host string) (*ssh.Client, error) {
 		if err := agent.ForwardToAgent(client, s.agent); err != nil {
 			return nil, err
 		}
+		// NOTE(mikeq): We can only enable forwarding once per client (for reasons we don't understand). We
+		// open an initial session here and enable forwarding so that it is enabled for all sessions going
+		// forward on this host.
+		session, err := client.NewSession()
+		if err != nil {
+			return nil, err
+		}
+		if err := agent.RequestAgentForwarding(session); err != nil {
+			return nil, err
+		}
+		session.Close()
 	}
 	return client, nil
 }
